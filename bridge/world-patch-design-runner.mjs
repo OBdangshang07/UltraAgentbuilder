@@ -123,10 +123,17 @@ export async function createWorldPatchDesignRunner({dataDir, contexts, adapterFo
       const writer = running.get(id);
       try { record = await recordAt(saved, writer?.phase === 'preparing'); }
       catch (error) {
-        // A bounded read-only re-observation is safe only while this exact
-        // controller still owns the active writer. Never adopt a crash remnant,
-        // recreate a missing call, reserve budget or dispatch on a query race.
-        if (error.code !== 'PATCH_JOURNAL_READ_RACE' || !writer || running.get(id) !== writer || i === 2) throw error;
+        // Re-observe only a writer captured by THIS query. Its legitimate
+        // final rename may finish just as the controller retires. Waiting for
+        // that exact local controller to settle does not adopt an inactive
+        // crash remnant or dispatch a call. The next read still verifies all
+        // source, owner, journal and budget pins; corruption never gets here.
+        if (error.code !== 'PATCH_JOURNAL_READ_RACE' || !writer || i === 2) throw error;
+        if (running.get(id) !== writer) {
+          if (running.has(id) || owned.get(id) !== saved.value.ownerReferenceHash || before === (revisions.get(id) ?? 0)) throw error;
+          await writer.done;
+          if (running.has(id) || owned.get(id) !== saved.value.ownerReferenceHash) throw error;
+        }
         continue;
       }
       active = running.has(id);

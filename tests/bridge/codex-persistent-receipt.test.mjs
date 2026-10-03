@@ -110,3 +110,57 @@ test('pending journal rejects changed inputs, binding reassignments, and receipt
  await assert.rejects(journal.invoke(prompt,1,options,async()=>assert.fail('No dispatch'),async()=>assert.fail('No recovery without turn id')),/receipt unknown/);
  await assert.rejects(journal.invoke('changed',1,options,async()=>assert.fail('No dispatch'),async()=>assert.fail('No foreign recovery')),/diverged/);
 });
+
+const capacityMessage='Selected model is at capacity. Please try a different model.';
+function failedCapacity(text='',commentary=false){
+  const result=stored('failed',text),turn=result.thread.turns[0];
+  turn.error={message:capacityMessage,codexErrorInfo:'PRIVATE',additionalDetails:'PRIVATE'};
+  if(!commentary)turn.items=turn.items.filter(i=>i.type!=='agentMessage'||i.phase!=='commentary');
+  return result;
+}
+
+test('failed full history retains answer data and output presence without reasoning or commentary contents',()=>{
+  for(const [text,commentary] of [['{"partial":',false],['',false],['',true],[' ',false]]){
+    const checked=inspectPersistedCodexTurn(failedCapacity(text,commentary),ids);
+    assert.equal(checked.turn.outputObserved,text!==''||commentary);
+    assert.equal(checked.turn.items.map(i=>i.text).join(''),text);assert.ok(!JSON.stringify(checked).includes('PRIVATE'));
+  }
+  const missing=failedCapacity();missing.thread.turns[0].items.push({type:'agentMessage',phase:'final_answer'});
+  assert.equal(inspectPersistedCodexTurn(missing,ids).turn.outputObserved,true);
+  const large=failedCapacity('x'.repeat(2*1024*1024+1));
+  assert.throws(()=>inspectPersistedCodexTurn(large,ids),/evidence quota/);
+});
+
+test('read-only recovery classifies only a closed empty capacity receipt and never submits a new turn',async()=>{
+  for(const [text,commentary] of [['',false],['{"partial":',false],['',true]]){
+    const cwd=await fs.mkdtemp(path.join(os.tmpdir(),'voxel-capacity-receipt-')),adapter=new CodexAdapter({observationIntervalMs:5});
+    adapter.connect=async()=>assert.fail('No writer connection');adapter.generate=async()=>assert.fail('No replacement generation');
+    adapter.request=async()=>assert.fail('No dispatch or mutation');adapter.readStoredTurn=async()=>failedCapacity(text,commentary);let error;
+    await assert.rejects(adapter.recoverOriginal({binding:await binding(),prompt,model,effort,outputSchema,cwd,signal:new AbortController().signal}),e=>{error=e;return e.message===capacityMessage;});
+    const d=error.diagnostic;
+    assert.equal(d.reason,'failed');assert.equal(d.completionSource,'stored-original-turn');assert.equal(d.automaticRetries,0);
+    assert.equal(d.failureKind,text===''&&!commentary?'model-capacity':null);
+    if(d.providerFailure)assert.equal(d.providerFailure.closureSource,'closed-original-full-history');
+    assert.equal(d.receivedTextSha256,hash(text));assert.equal(d.receivedTextBytes,Buffer.byteLength(text));
+    assert.equal(await fs.readFile(path.join(cwd,d.responseEvidence.directory,d.responseEvidence.file),'utf8'),text);
+    assert.ok(!JSON.stringify(d).includes('PRIVATE'));
+  }
+});
+
+test('capacity classification survives durable error replay without another reservation, recovery or call',async()=>{
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'voxel-capacity-journal-'));
+  const args={directory,requestHash:'request',runtimeHash:'runtime',policy:{assembly:{maximumCalls:26}}};
+  const options={outputSchema,stageName:'plan',stageCount:26};let invocations=0;
+  const adapter=new CodexAdapter({observationIntervalMs:5});adapter.readStoredTurn=async()=>failedCapacity();
+  let journal=await openAssemblyJournal(args);
+  await assert.rejects(journal.invoke(prompt,1,options,async(p,i,o)=>{
+    invocations++;await o.onProviderBinding(await binding());
+    return adapter.recoverOriginal({binding:await binding(),prompt,model,effort,outputSchema,cwd:directory,signal:new AbortController().signal});
+  }),e=>e.diagnostic.failureKind==='model-capacity');
+  const file=path.join(directory,'assembly-journal/call-1.json'),before=await fs.readFile(file,'utf8');
+  assert.equal(JSON.parse(before).value.state,'error');
+  journal=await openAssemblyJournal(args);
+  await assert.rejects(journal.invoke(prompt,1,options,async()=>assert.fail('No repeated invocation'),async()=>assert.fail('Closed original error must not be recovered again')),
+    e=>e.diagnostic.failureKind==='model-capacity');
+  assert.equal(journal.reserved,1);assert.equal(invocations,1);assert.equal(await fs.readFile(file,'utf8'),before);
+});

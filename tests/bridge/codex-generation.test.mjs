@@ -208,3 +208,69 @@ test('Codex binds thread before dispatch and acknowledged turn before delivering
  assert.deepEqual(result.spec,{early:true});assert.equal(bindings.length,2);assert.equal(bindings[1].turnId,'turn-fixture');
  assert.equal(bindings[0].requestHash,bindings[1].requestHash);assert.equal(result.diagnostic.turnId,'turn-fixture');
 });
+
+const capacityMessage='Selected model is at capacity. Please try a different model.';
+const capacityEvent=(a,changes={})=>a.emit('notification',{method:'turn/completed',params:{threadId:'thread-fixture',
+  turn:{id:'turn-fixture',status:'failed',error:{message:capacityMessage,codexErrorInfo:'PRIVATE',additionalDetails:'PRIVATE'},...changes}}});
+
+test('exact original capacity failure is classified, persisted and still stops after one model turn',async()=>{
+  const f=await fixture(a=>capacityEvent(a));let error;
+  await assert.rejects(f.generate(new AbortController().signal),e=>{error=e;return e.message===capacityMessage;});
+  const d=error.diagnostic;
+  assert.equal(d.reason,'failed');assert.equal(d.failureKind,'model-capacity');assert.equal(d.providerFailure.outputObserved,false);
+  assert.equal(d.receivedTextBytes,0);assert.equal(d.receivedTextSha256,hash(''));assert.equal(d.automaticRetries,0);
+  const directory=path.join(f.cwd,d.responseEvidence.directory);
+  assert.equal(await fs.readFile(path.join(directory,d.responseEvidence.file),'utf8'),'');
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(directory,'receipt.json'),'utf8')),d);
+  assert.ok(!JSON.stringify(d).includes('PRIVATE'));
+  assert.equal(f.requests.filter(r=>r.method==='turn/start').length,1);
+  assert.equal(f.requests.filter(r=>r.method==='turn/interrupt').length,0);
+});
+
+test('partial, commentary, malformed and terminal-only output rule out empty capacity classification',async()=>{
+  for(const variant of ['delta','empty-item-after-delta','commentary','malformed','terminal-final','terminal-commentary','whitespace']){
+    const f=await fixture(a=>{
+      if(['delta','empty-item-after-delta'].includes(variant))a.emit('notification',{method:'item/agentMessage/delta',params:{threadId:'thread-fixture',turnId:'turn-fixture',delta:'{"partial":'}});
+      if(variant==='empty-item-after-delta')a.emit('notification',{method:'item/completed',params:{threadId:'thread-fixture',turnId:'turn-fixture',item:{type:'agentMessage',phase:'final_answer',text:''}}});
+      if(['commentary','malformed'].includes(variant))a.emit('notification',{method:'item/completed',params:{threadId:'thread-fixture',turnId:'turn-fixture',item:{type:'agentMessage',phase:'commentary',...(variant==='commentary'?{text:'PRIVATE'}:{})}}});
+      const items=variant==='terminal-final'?[{type:'agentMessage',phase:'final_answer',text:'{"partial":'}]:
+        variant==='terminal-commentary'?[{type:'agentMessage',phase:'commentary',text:'PRIVATE'}]:variant==='whitespace'?[{type:'agentMessage',phase:'final_answer',text:' '}]:[];
+      capacityEvent(a,{items});
+    });let error;
+    await assert.rejects(f.generate(new AbortController().signal),e=>{error=e;return true;});
+    assert.equal(error.diagnostic.reason,'failed');assert.equal(error.diagnostic.failureKind,null,variant);assert.equal(error.diagnostic.providerFailure,undefined);
+    const expected=['delta','empty-item-after-delta','terminal-final'].includes(variant)?'{"partial":':variant==='whitespace'?' ':'';
+    assert.equal(await fs.readFile(path.join(f.cwd,error.diagnostic.responseEvidence.directory,'answer-1.txt'),'utf8'),expected,variant);
+    assert.equal(error.diagnostic.receivedTextSha256,hash(expected));assert.equal(error.diagnostic.automaticRetries,0);
+    assert.equal(f.requests.filter(r=>r.method==='turn/start').length,1);
+  }
+});
+
+test('capacity-like transport/start errors and unclosed history cannot be mistaken for capacity completion',async()=>{
+  for(const variant of ['turn-start-error','timeout','unclosed-history','nonexact-message','interrupted']){
+    const f=await fixture(a=>{
+      if(variant==='nonexact-message')capacityEvent(a,{error:{message:capacityMessage+' '}});
+      if(variant==='interrupted')capacityEvent(a,{status:'interrupted'});
+    },{generationTimeoutMs:40,observationIntervalMs:5});
+    if(variant==='turn-start-error'){
+      const request=f.a.request;f.a.request=async(method,params)=>{if(method==='turn/start'){f.requests.push({method,params});throw Error(capacityMessage);}return request(method,params);};
+    }
+    if(variant==='unclosed-history')f.a.readStoredTurn=async()=>({thread:{id:'thread-fixture',ephemeral:false,turns:[{id:'turn-fixture',status:'failed',startedAt:1,completedAt:null,itemsView:'full',error:{message:capacityMessage},items:[]}]}});
+    await assert.rejects(f.generate(new AbortController().signal),e=>e.diagnostic.providerFailure===undefined&&e.diagnostic.failureKind===null);
+    assert.equal(f.requests.filter(r=>r.method==='turn/start').length,1);
+  }
+});
+
+test('capacity event before acknowledgement is matched to the bound original turn before classification',async()=>{
+  const f=await fixture(()=>{}),request=f.a.request,bindings=[];
+  f.a.request=async(method,params)=>{
+    if(method==='turn/start'){f.requests.push({method,params});capacityEvent(f.a);return {turn:{id:'turn-fixture'}};}
+    return request(method,params);
+  };
+  await assert.rejects(f.a.generate({prompt:'Offline data-only fixture',model:'gpt-5.6-luna',effort:'max',cwd:f.cwd,
+    onProviderBinding:async b=>bindings.push(b)}),e=>{
+    assert.equal(bindings.length,2);assert.equal(e.diagnostic.turnId,bindings[1].turnId);assert.equal(e.diagnostic.requestHash,bindings[1].requestHash);
+    return e.diagnostic.failureKind==='model-capacity';
+  });
+  assert.equal(f.requests.filter(r=>r.method==='turn/start').length,1);
+});

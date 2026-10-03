@@ -9,6 +9,7 @@ import {parseModelJson,CompletedResponseFormatError} from './model-json.mjs';
 import {responseEvidence,safeCodexUsage} from './response-evidence.mjs';
 import {codexImageInput} from './codex-image-input.mjs';
 import {codexRequestHash,checkCodexBinding,observePersistedCodexTurn} from './codex-persistent-receipt.mjs';
+import {codexTerminalOutput,codexTerminalFailure} from './codex-terminal-failure.mjs';
 
 export function compareVersions(a, b) {
   const parts = v => (v.match(/\d+\.\d+\.\d+/)?.[0] ?? '0.0.0').split('.').map(Number);
@@ -145,12 +146,14 @@ export class CodexAdapter extends EventEmitter {
         if(settled)return;settled=true;watch?.stop();signal?.removeEventListener('abort',cancel);
         let text=turn?.items?.[0]?.text??'',parseFacts,diagnostic;
         const reason=turn?.status??'aborted';let failureKind=null,parsed;
+        const providerFailure=codexTerminalFailure({turn,answer:text,outputObserved:turn?.outputObserved,completionSource:'stored-original-turn'});
+        if(providerFailure)failureKind=providerFailure.kind;
         try{
           if(turn?.status==='completed'){
             parsed=parseModelJson(text);parseFacts=parsed.facts;evidence.save('candidate.txt',parsed.text);evidence.save('json-validation.json',JSON.stringify(parseFacts));
             if(!parsed.facts.valid){failureKind='answer-json';error=new CompletedResponseFormatError(parsed,'Codex');Object.defineProperty(error,'responseText',{value:text});}
           }else if(turn)error=new Error(turn.error?.message??`Turn ${turn.status}`);
-          diagnostic=evidence.finish(text,{reason,failureKind,json:parseFacts??null,...identity,completionSource:'stored-original-turn',requestHash,usage:null});
+          diagnostic=evidence.finish(text,{reason,failureKind,json:parseFacts??null,...identity,completionSource:'stored-original-turn',requestHash,usage:null,...(providerFailure?{providerFailure}:{})});
         }catch{error=Error('Codex 原回执证据落盘失败；停止，不重发');diagnostic={provider:'codex',reason,failureKind:'evidence-storage',automaticRetries:0};}
         if(error){error.diagnostic=diagnostic;reject(error);}else resolve({spec:parsed.spec,...identity,model,usage:null,diagnostic});
       };
@@ -208,7 +211,7 @@ export class CodexAdapter extends EventEmitter {
       throw error;
     }
     return new Promise((resolve, reject) => {
-      let turnId, text = '', settled = false, usage=null, reason='incomplete', failureKind=null, parseFacts,observer,earlyCompletion,identityReady=false,completionSource='notification';
+      let turnId, text = '', settled = false, usage=null, reason='incomplete', failureKind=null, parseFacts,observer,earlyCompletion,identityReady=false,completionSource='notification',outputObserved=false,providerFailure=null;
       // Large designs may spend a long time reasoning without text deltas.
       // Do not impose an arbitrary total-turn/token cap; cancellation remains
       // available. A caller may set a short timeout for offline lifecycle tests.
@@ -217,7 +220,7 @@ export class CodexAdapter extends EventEmitter {
         if (settled) return; settled = true; clearTimeout(timer);observer?.stop();
         this.off('notification', receive); this.off('disconnect', disconnect); signal?.removeEventListener('abort', cancel);
         let diagnostic;
-        try{diagnostic=evidence.finish(text,{reason,failureKind,usage,json:parseFacts??null,threadId,turnId:turnId??value?.turnId??null,completionSource,requestHash});}
+        try{diagnostic=evidence.finish(text,{reason,failureKind,usage,json:parseFacts??null,threadId,turnId:turnId??value?.turnId??null,completionSource,requestHash,...(providerFailure?{providerFailure}:{})});}
         catch{error=new Error('Codex 响应证据落盘失败；停止，不重发');diagnostic={provider:'codex',reason,failureKind:'evidence-storage',automaticRetries:0};}
         // Release our subscription after preserving the receipt. This starts
         // the server's idle-unload grace period; it neither deletes evidence
@@ -235,13 +238,23 @@ export class CodexAdapter extends EventEmitter {
         if (p?.threadId !== threadId) return;
         if(turnId&&p.turnId&&p.turnId!==turnId)return;
         if(method==='thread/tokenUsage/updated')usage=safeCodexUsage(p.tokenUsage?.last??p.tokenUsage?.total)??usage;
-        if (method === 'item/agentMessage/delta') { text += p.delta ?? ''; if (text.length > 2 * 1024 * 1024) abort(new Error('Model output quota exceeded')); }
-        if (method === 'item/completed' && p.item?.type === 'agentMessage' && p.item.phase!=='commentary') text = p.item.text ?? text;
+        if (method === 'item/agentMessage/delta') { outputObserved ||= typeof p.delta!=='string'||p.delta.length>0;text += p.delta ?? ''; if (text.length > 2 * 1024 * 1024) abort(new Error('Model output quota exceeded')); }
+        if (method === 'item/completed' && p.item?.type === 'agentMessage') {
+          outputObserved ||= typeof p.item.text!=='string'||p.item.text.length>0;
+          if(p.item.phase!=='commentary'&&typeof p.item.text==='string'&&(p.item.text.length||!text))text = p.item.text;
+        }
         if (method === 'turn/completed') {
           if(!identityReady){earlyCompletion=p;return;}
           if(turnId&&p.turn?.id!==turnId)return;
           reason=p.turn.status;
-          if (p.turn.status !== 'completed') return done(new Error(p.turn.error?.message ?? `Turn ${p.turn.status}`));
+          if (p.turn.status !== 'completed') {
+            const output=codexTerminalOutput(p.turn);outputObserved ||= output.observed||p.turn.outputObserved===true;
+            if(output.text)text=output.text;
+            if(Buffer.byteLength(text)>2*1024*1024)return done(new Error('Model output quota exceeded'));
+            providerFailure=codexTerminalFailure({turn:p.turn,answer:text,outputObserved,completionSource});
+            if(providerFailure)failureKind=providerFailure.kind;
+            return done(new Error(p.turn.error?.message ?? `Turn ${p.turn.status}`));
+          }
           const final=p.turn.items?.filter(i=>i.type==='agentMessage'&&i.phase!=='commentary').at(-1);
           if(final&&typeof final.text==='string')text=final.text;
           try {

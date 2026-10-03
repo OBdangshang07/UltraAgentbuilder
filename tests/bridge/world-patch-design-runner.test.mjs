@@ -178,6 +178,37 @@ test('active read race exhausts exactly three observations without dispatch or e
   assert.equal(race.changes(), 3); assert.equal((await load(file)).state, 'pending'); assert.equal(f.calls(), 1);
   f.release(); await wait(f.r, f.receipt.capsuleId, ['completed-checked']);
 });
+
+for (const corrupt of [false, true]) test('query sees exact writer retire during its atomic journal replacement'+(corrupt?' but still rejects corrupt retained evidence':''), async t => {
+  const f = await fixture(t); let release, bound, calls = 0;
+  const held = new Promise(resolve => {release = resolve;}), bindingSaved = new Promise(resolve => {bound = resolve;});
+  t.after(() => release());
+  const binding = {version:1,provider:'codex',storage:'persistent-single-turn',threadId:'retiring-thread',turnId:'retiring-turn',
+    model:f.intent.model,effort:f.intent.effort,requestHash:'d'.repeat(64)};
+  const r = await f.open({async generate(input) {
+    calls++;await input.onProviderBinding(binding);bound();await held;
+    const error = Error('Original outcome unknown');error.diagnostic={provider:'codex',reason:'unknown'};throw error;
+  }});
+  await r.submit(f.send);await bindingSaved;
+  const file=path.join(f.jobDir,'assembly-journal/call-1.json'),before=await fs.readFile(file,'utf8'),originalOpen=fs.open;let replacements=0;
+  const race=t.mock.method(fs,'open',async(target,flags,...rest)=>{
+    if(target===file&&flags==='r'&&replacements===0){
+      replacements++;const tmp=file+'.'+randomUUID()+'.tmp';
+      await fs.writeFile(tmp,before);await fs.rename(tmp,file);
+      release();while(r.busy())await delay(1);
+      if(corrupt){const envelope=JSON.parse(before);envelope.sha256='0'.repeat(64);await fs.writeFile(file,JSON.stringify(envelope));}
+    }
+    return originalOpen(target,flags,...rest);
+  });
+  if(corrupt)await assert.rejects(r.get(f.receipt.capsuleId),error=>error.code!=='PATCH_JOURNAL_READ_RACE'&&/integrity/.test(error.message));
+  else{
+    const observed=await r.get(f.receipt.capsuleId);
+    assert.equal(observed.state,'unknown');assert.equal(observed.canObserveOriginal,true);assert.equal(observed.callsReserved,1);
+    assert.equal(await fs.readFile(file,'utf8'),before);
+  }
+  race.mock.restore();assert.equal(replacements,1);assert.equal(calls,1);assert.equal((await load(file)).state,'pending');
+});
+
 test('inactive original journal replacement is not retried or adopted as a new call', async t => {
   const f = await pendingFixture(t); await f.r.close(); const next = await f.open(f.selected);
   const race = replaceBeforeRead(t, path.join(f.jobDir, 'assembly-journal/call-1.json'), 8);

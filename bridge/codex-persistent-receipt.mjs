@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import {hash} from '../src/generation/compiler.mjs';
+import {codexTerminalOutput} from './codex-terminal-failure.mjs';
 
 export async function codexRequestHash({prompt,model,effort,outputSchema,images=[],referenceBindingHash}){
  const imageHashes=[];for(const file of images)imageHashes.push(hash(await fs.readFile(file)));
@@ -41,9 +42,12 @@ export function inspectPersistedCodexTurn(result,{threadId,turnId,prompt}){
  if(users.length!==1||users[0].content?.filter(i=>i.type==='text').map(i=>i.text).join('')!==prompt)throw Error('Original receipt input mismatch');
  const finals=turn.items.filter(i=>i.type==='agentMessage'&&i.phase==='final_answer');
  if(turn.status==='completed'&&(finals.length!==1||typeof finals[0].text!=='string'||Buffer.byteLength(finals[0].text)>2*1024*1024))throw Error('Original completed answer unavailable or ambiguous');
+ const failedOutput=codexTerminalOutput(turn);
+ if(turn.status!=='completed'&&Buffer.byteLength(failedOutput.text)>2*1024*1024)throw Error('Original failed answer exceeds evidence quota');
  // Do not forward/store reasoning, tools, user contents, or session metadata.
  return {progress:{...progress,terminal:true,receiptState:'original-terminal-receipt'},
-  turn:{id:turn.id,status:turn.status,items:turn.status==='completed'?[{type:'agentMessage',phase:'final_answer',text:finals[0].text}]:[],
+  turn:{id:turn.id,status:turn.status,items:turn.status==='completed'?[{type:'agentMessage',phase:'final_answer',text:finals[0].text}]:failedOutput.text?[{type:'agentMessage',phase:'final_answer',text:failedOutput.text}]:[],
+   ...(turn.status!=='completed'?{outputObserved:failedOutput.observed}:{}),
    error:turn.error?{message:String(turn.error.message??'Original turn failed').slice(0,1000)}:null}};
 }
 
