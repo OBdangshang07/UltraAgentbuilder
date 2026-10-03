@@ -4,6 +4,7 @@ import {hash} from '../src/generation/compiler.mjs';
 import {safeEvidenceFile} from './native-evidence.mjs';
 import {auditAssemblyReferenceAnalysis} from './assembly-reference-analysis.mjs';
 import {REFERENCE_LIMITS} from '../contracts/reference-attachments.mjs';
+import {auditAssemblyProviderRecovery} from './assembly-provider-recovery-audit.mjs';
 
 // Historical reads deliberately use the ORIGINAL capsule runtime identity,
 // not the current process's runtime. They never recover/publish/run a task.
@@ -29,8 +30,11 @@ export async function readReferenceJobHistory({directory,intent,reference,imageI
       const branch=job.recovery?.branch;
       assert.ok(typeof branch==='string'&&/^assembly-run-[A-Za-z0-9_-]{6,32}$/.test(branch),'Original analysis branch missing or unsafe');
       const root=path.join(directory,branch,'assembly');
+      const providerRecoveryAudit=reference.preparation.policy.assembly.providerRecovery?await auditAssemblyProviderRecovery({directory,root,records,
+        policy:reference.preparation.policy,requestHash:job.requestHash,runtimeHash:intent.runtimeHash,model:job.model,effort:job.effort,
+        summary:job.assemblySummary}):null;
       const audit=await auditAssemblyReferenceAnalysis({directory,root,referenceInput:reference.input,records,
-        policy:reference.preparation.policy,prompt:reference.preparation.generation.prompt,runtimeHash:intent.runtimeHash});
+        policy:reference.preparation.policy,prompt:reference.preparation.generation.prompt,runtimeHash:intent.runtimeHash,providerRecoveryAudit});
       const evidence=JSON.parse((await safeEvidenceFile(root,'reference-analysis.json',16*1024*1024)).toString('utf8'));
       analysis={status:'accepted',evidence,audit};
     }catch(error){analysis={status:'unavailable',reason:'Original analysis audit did not pass: '+error.message};}

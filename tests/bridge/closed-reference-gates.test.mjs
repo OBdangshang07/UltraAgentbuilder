@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {checkClosedReferenceSnapshot, checkClosedReferenceExit, assertClosedOriginalProcesses, checkClosedReferenceCalls, checkClosedReferencePreview} from '../../scripts/closed-reference-gates.mjs';
+import path from 'node:path';
+import {hash} from '../../src/generation/compiler.mjs';
+import {runDurableAssembly} from '../../bridge/assembly-durability.mjs';
+import {auditAssemblyProviderRecovery} from '../../bridge/assembly-provider-recovery-audit.mjs';
+import {recoveryHarness,capacityMessage} from './assembly-provider-recovery-fixtures.mjs';
+import {checkClosedReferenceSnapshot, checkClosedReferenceExit, assertClosedOriginalProcesses, checkClosedReferenceCalls, checkClosedReferencePreview,checkClosedReferenceGeneration} from '../../scripts/closed-reference-gates.mjs';
 
 function snapshot(state = 'preview-ready', mode = 'single') {
   const authorization = {root: 'original-root', ownerId: 'original-owner', model: 'vision-fixture', effort: 'max', maximumCalls: 8, runtimeHash: 'r'.repeat(64)};
@@ -97,4 +102,36 @@ test('preview gates refuse cross-task identities and world-write or resubmission
     v => { v.audit.requestResent = true; }, v => { v.exit.bridge.signal = 'SIGTERM'; }]) {
     const value = preview(); change(value); assert.throws(() => checkClosedReferencePreview(value));
   }
+});
+
+test('only independently audited closed capacity/format chains can replace the all-response preview condition',async t=>{
+  const h=await recoveryHarness(t,{choose:({index})=>index===1||index===3?{failure:capacityMessage}:index===2?{text:'{"fixture":'}:{}});
+  const result=await runDurableAssembly(h.options),audit=await auditAssemblyProviderRecovery({...h.options,
+    root:path.join(h.directory,h.events.findLast(e=>e.branch).branch,'assembly'),records:result.records,summary:result.summary});
+  const journal=await h.journal(),calls=journal.map(c=>({index:c.index,state:c.state,unresolved:c.state==='pending',
+    originalResponseVerified:c.state==='response',originalProviderReceiptVerified:true,errorClosureReason:c.error?.diagnostic?.reason}));
+  const job={requestHash:h.options.requestHash,preflight:h.options.policy,assemblyStages:result.records,assemblySummary:result.summary,assemblyCallsReserved:calls.length};
+  const parameters={calls,job,runtimeHash:h.options.runtimeHash,providerRecoveryAudit:audit.report};
+  checkClosedReferenceGeneration(parameters);
+  assert.equal(calls.filter(c=>c.state==='error').length,3);assert.equal(calls.length,8);
+  assert.throws(()=>checkClosedReferenceGeneration({...parameters,providerRecoveryAudit:undefined}),/audit required/);
+  for(const change of [v=>v.relationships.pop(),v=>v.formatCorrections.pop(),v=>v.allReservedCallsClosed=false,
+    v=>v.relationships[0].receiptHash=hash('foreign'),v=>v.relationships[0].retryIndex++,v=>v.canAuthorizeRetry=true,
+    v=>v.runtimeHash=hash('foreign'),v=>v.stagesHash=hash([]),v=>v.summary.unknownOutcomeRetries=1]){
+    const report=structuredClone(audit.report);change(report);const {auditHash,...content}=report;report.auditHash=hash(content);
+    assert.throws(()=>checkClosedReferenceGeneration({...parameters,providerRecoveryAudit:report}));
+  }
+  for(const change of [v=>v.calls[1].unresolved=true,v=>v.calls[3].state='pending',v=>v.calls[0].errorClosureReason='aborted',
+    v=>v.job.assemblyStages[1].task='foreign',v=>v.job.assemblyStages[1].providerRetryOf=3]){
+    const p=structuredClone(parameters);change(p);assert.throws(()=>checkClosedReferenceGeneration(p));
+  }
+  assert.equal(h.calls.length,8);
+});
+
+test('legacy preview condition cannot adopt error closure or invented bounded recovery authority',()=>{
+  const value=preview(),parameters={calls:value.audit.calls,job:value.job,runtimeHash:value.authorization.runtimeHash};
+  checkClosedReferenceGeneration(parameters);
+  assert.throws(()=>checkClosedReferenceGeneration({...parameters,providerRecoveryAudit:{verified:true}}),/Legacy/);
+  const calls=[{...response,state:'error',errorClosureReason:'failed'}];
+  assert.throws(()=>checkClosedReferenceGeneration({...parameters,calls}),/entirely accepted/);
 });

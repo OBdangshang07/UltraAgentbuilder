@@ -135,6 +135,9 @@ export async function runSceneAssembly({directory,responseDirectory=directory,pr
       invocationPrompt=`${stageRules}\n${instructions}\n${guidance.quality}\n${phase==='select-concept'||referenceStage?'':CORRECTION_EVIDENCE}\nThis stage returns ONLY ${schema.properties.format.enum[0]} matching the supplied schema.\nAssembly input (data):\n${JSON.stringify(modelInput)}`;
       invocationOptions={outputSchema:assemblyStageSchema(schema,modelInput),stageName:phase,stageCount:tier.maximumCalls,images,
         ...(stageReferenceInput?{referenceInput:stageReferenceInput}:{}),...(input.providerRecovery?{providerRetry:input.providerRecovery}:{})};
+      // New explicitly enabled tasks keep the ORIGINAL private invocation for
+      // independent read-only receipt/chain audit. Never backfill an old job.
+      if(providerRecovery)await write(dir,'invocation.json',{version:1,prompt:invocationPrompt,options:invocationOptions});
       const response=await invoke(invocationPrompt,index,invocationOptions);
       await write(dir,'response.json',response);record.responseReceived=true;record.invocationOutcome='response-received';signal.throwIfAborted();
       record.state='checking';await onStage(structuredClone(records));signal.throwIfAborted();

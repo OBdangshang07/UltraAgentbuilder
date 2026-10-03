@@ -5,7 +5,7 @@ import {hash} from '../../src/generation/compiler.mjs';
 import {generationPreflight} from '../../bridge/generation-policy.mjs';
 import {CodexAdapter} from '../../bridge/codex-adapter.mjs';
 import {assemblyProviderRecoveryPolicy} from '../../contracts/assembly-provider-recovery.mjs';
-import {assemblyPlan,packageEdit,acceptReview,planEdit} from '../design/assembly-fixtures.mjs';
+import {assemblyPlan,packageEdit,packageResponse,acceptReview,planEdit} from '../design/assembly-fixtures.mjs';
 import {setupStaged,stagedRequest} from './decomposed-assembly-fixtures.mjs';
 
 export const capacityMessage='Selected model is at capacity. Please try a different model.';
@@ -22,13 +22,13 @@ const response=(input,options)=>{
     case 'SceneConceptReview':return {format:'SceneConceptReview',version:1,planHash:input.planHash,sourceHash:input.sourceHash,
       evidenceHash:input.designEvidence.evidenceHash,verdict:'accept',summary:'Synthetic engineering acceptance only',issues:[]};
     case 'SceneAssemblyReview':return acceptReview(input);
-    default:return packageEdit(input);
+    default:return packageResponse(input,packageEdit(input));
   }
 };
 
 // Actual adapter, persisted answer files and actual durable journal. ONLY the
 // app-server transport/model answers are synthetic; no account or model calls.
-export async function recoveryHarness(t,{staged=false,enabled=true,requestDelta={},choose=()=>({})}={}){
+export async function recoveryHarness(t,{staged=false,enabled=true,requestDelta={},choose=()=>({}),loadAdapter=async()=>CodexAdapter}={}){
   const request={...(staged?stagedRequest:recoveryRequest),model:recoveryModel,effort:recoveryEffort,...requestDelta};
   let directory,base,options;
   if(staged){const h=await setupStaged(null,request);directory=await fs.realpath(h.directory);base=h.options.invoke;options=h.options;}
@@ -49,7 +49,7 @@ export async function recoveryHarness(t,{staged=false,enabled=true,requestDelta=
     const selected=choose({index,input,stage,answer,calls,directory})??{};
     calls.push({index,phase:stage.stageName,input,prompt,outputSchema:structuredClone(stage.outputSchema),
       referenceInput:stage.referenceInput,answer:structuredClone(answer),images:[...(stage.images??[])]});
-    const adapter=new CodexAdapter({observationIntervalMs:5}),threadId='fixture-thread-'+index,turnId='fixture-turn-'+index;
+    const Adapter=await loadAdapter(),adapter=new Adapter({observationIntervalMs:5}),threadId='fixture-thread-'+index,turnId='fixture-turn-'+index;
     adapter.connect=async()=>{};adapter.models=async()=>[{id:recoveryModel,supportsImages:true,efforts:[{reasoningEffort:recoveryEffort}],defaultEffort:recoveryEffort}];
     adapter.readStoredTurn=async()=>{throw Error('Synthetic unavailable original observation');};
     adapter.request=async(method,params)=>{

@@ -17,6 +17,12 @@ export async function assessReferenceTerminalEvidence({runtime,directory,root,jo
   const {auditAssemblyReferenceAnalysis}=await mod('bridge/assembly-reference-analysis.mjs');
   const {safeEvidenceFile}=await mod('bridge/native-evidence.mjs');
   const runtimeHash=await assemblyRuntimeIdentity(pathToFileURL(runtime+path.sep));
+  let providerRecoveryAudit=null;
+  if(job.preflight?.assembly?.providerRecovery){
+    const {auditAssemblyProviderRecovery}=await mod('bridge/assembly-provider-recovery-audit.mjs');
+    providerRecoveryAudit=await auditAssemblyProviderRecovery({directory,root,records:job.assemblyStages??[],policy:job.preflight,
+      requestHash:job.requestHash,runtimeHash,model:job.model,effort:job.effort,summary:job.assemblySummary});
+  }
   const original=await referenceGenerationOperation({dataDir:path.dirname(path.dirname(directory)),operation:'recover',jobId:job.id,runtimeHash});
   assert.equal(original.requestHash,job.requestHash,'Reference original SEND request changed');
   assert.equal(hash(original.policy),hash(job.preflight),'Reference original shared budget changed');
@@ -32,7 +38,7 @@ export async function assessReferenceTerminalEvidence({runtime,directory,root,jo
   let audit=null;
   if(accepted){
     audit=await auditAssemblyReferenceAnalysis({root,directory,records,referenceInput:original.referenceInput,
-      policy:original.policy,prompt:original.request.prompt,runtimeHash});
+      policy:original.policy,prompt:original.request.prompt,runtimeHash,providerRecoveryAudit});
     if(job.state==='preview-ready'){
       const summary=job.assemblySummary?.referenceAnalysis;assert.ok(summary,'Published reference task has no reference summary');
       assert.deepEqual(summary,{version:1,analysisHash:audit.analysisHash,briefHash:audit.briefHash,
@@ -58,6 +64,7 @@ export async function assessReferenceTerminalEvidence({runtime,directory,root,jo
   }
   return {version:1,originalSendAndJobImagesVerified:true,assemblyRuntimeHash:runtimeHash,
     originalMaximumCalls:original.policy.maximumCalls,reservedCalls:records.length,analysisAccepted:!!accepted,
+    providerRecoveryAudit:providerRecoveryAudit?.report??null,
     analysisAudit:audit,realImageUnderstandingVerified:false,referenceAngleComparisonVerified:false,
     additionalModelCalls:0,worldWrites:0,canAuthorizePlacement:false};
 }

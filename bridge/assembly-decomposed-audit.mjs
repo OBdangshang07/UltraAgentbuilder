@@ -9,11 +9,13 @@ import {decompositionBlueprintBudget,createDecompositionSchedule,PROTOTYPE_ROLES
 import {inspectDecomposedRepresentatives,decompositionTailBudget,decompositionRoleCorrectionBudget} from './assembly-decomposed-stages.mjs';
 import {readAssemblyPrototypeCandidate} from './assembly-prototypes.mjs';
 import {readAssemblyBaseline,checkPackageGeometry} from '../src/design/assembly-scope.mjs';
+import {isAssemblyProviderRecoveryAudit} from './assembly-provider-recovery-audit.mjs';
 
 const read=async file=>JSON.parse(await fs.readFile(file,'utf8'));
 /** READ ONLY terminal reconstruction. No provider, render, compile, repair,
  * normalization, world load/write or substitution of a saved baseline. */
-export function createDecomposedAudit(assemblyRoot){
+export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}={}){
+ if(providerRecoveryAudit&&!isAssemblyProviderRecoveryAudit(providerRecoveryAudit))throw Error('Decomposed audit requires opaque verified recovery proof');
  let state=null,previousDiagnostic=null,previousFeedback=null,previousExpanded=null,blueprintStage=null,schedule=null,revisedPlan=null;
  let tier=null,allocationReceipt=null,allocatedPrototype=null;
  const roles=[];
@@ -35,11 +37,14 @@ export function createDecomposedAudit(assemblyRoot){
    return {candidateSetHash:saved.candidateSetHash,candidates};
   },
   async reconstruct({stage,input,response,scene,feedback}){
+   if(input.tier.providerRecovery&&(!providerRecoveryAudit||!providerRecoveryAudit.inputVerified(stage,input)))
+    throw Error('Decomposed stage lacks its original verified recovery input');
+   const preparedIndex=providerRecoveryAudit?.preparedStageIndex(stage)??stage.index;
    if(tier&&hash(tier)!==hash(input.tier))throw Error('Decomposed stage changed its original policy');
    const dir=path.join(assemblyRoot,String(stage.index));let candidate,requiredAfterCall;
    const config=decompositionConfiguration(input.tier);
    if(['assembly-blueprint','correct-blueprint'].includes(stage.phase)){
-    const budget=decompositionBlueprintBudget(config,{reservedCalls:stage.index-1,completedCandidates:config.candidateCount,selectionAccepted:true,
+    const budget=decompositionBlueprintBudget(config,{reservedCalls:preparedIndex-1,completedCandidates:config.candidateCount,selectionAccepted:true,
       ...(config.preludeCalls?{completedPrelude:1}:{})});
     if(hash(input.callBudget)!==hash(budget)||input.decompositionStageId!=='blueprint')throw Error('Decomposed blueprint call budget mismatch');
     requiredAfterCall=6+budget.maximumPackages;
@@ -51,19 +56,20 @@ export function createDecomposedAudit(assemblyRoot){
     if(hash(task)!==hash(input.task)||hash(state.plan.scene)!==hash(input.previousDraft))throw Error('Decomposed role changed its authority baseline');
     if([3,4,5].includes(input.tier.prototypes.version)){
      let primaryAttempts=0;
-     for(let index=1;index<stage.index;index++){
-      const previous=await read(path.join(assemblyRoot,String(index),'input.json'));
-      if(previous.decompositionStageId===input.decompositionStageId&&!previous.formatCorrection)primaryAttempts++;
+     for(let index=1;index<preparedIndex;index++){
+      const previous=providerRecoveryAudit?providerRecoveryAudit.inputAt(index):await read(path.join(assemblyRoot,String(index),'input.json'));
+      if(previous.decompositionStageId===input.decompositionStageId&&!previous.formatCorrection&&
+        !(providerRecoveryAudit?.isProviderRetryIndex(index)))primaryAttempts++;
      }
      if((stage.formatCorrectionOf??null)!==(input.formatCorrection?.stage??null))throw Error('Decomposed role format correction identity mismatch');
      const correction=primaryAttempts-(input.formatCorrection?1:0);
-     const expected=decompositionRoleCorrectionBudget(input.tier,Array(stage.index-1).fill(null),{
+     const expected=decompositionRoleCorrectionBudget(input.tier,Array(preparedIndex-1).fill(null),{
       roleIndex:state.completedRoles.length,packageCount:state.plan.packages.length,correction});
      if(!expected.canStart||hash(expected)!==hash(input.prototypeCorrectionBudget))throw Error('Decomposed role correction protected-tail budget mismatch');
     }
     candidate=applyPrototypeRoleEdit(state,response,input.tier);
    }
-   const expectedBudget=decompositionTailBudget(input.tier,Array(stage.index-1).fill(null),requiredAfterCall);
+   const expectedBudget=decompositionTailBudget(input.tier,Array(preparedIndex-1).fill(null),requiredAfterCall);
    if(hash(expectedBudget)!==hash(input.decompositionBudget))throw Error('Decomposed mandatory tail budget mismatch');
    if(hash(candidate)!==hash(await read(path.join(dir,'decomposition-state.json')))||hash(candidate.plan)!==hash(await read(path.join(dir,'plan.json')))||
     hash(candidate.plan.scene)!==hash(scene)||feedback.sourceHash!==hash(scene))throw Error('Decomposed delta/state/source mismatch');

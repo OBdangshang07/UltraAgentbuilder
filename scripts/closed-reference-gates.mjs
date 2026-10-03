@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {hash} from '../src/generation/compiler.mjs';
 
 const terminal = new Set(['preview-ready', 'failed', 'cancelled', 'interrupted']);
 const publicJob = value => Object.fromEntries(Object.entries(value).filter(([key]) => !['requestHash', 'prompt', 'spec', 'repairOriginalPrompt'].includes(key)));
@@ -76,6 +77,60 @@ export function checkClosedReferenceCalls(calls, dispatchedCount) {
   }
 }
 
+/** The caller must have just recomputed the read-only recovery audit against
+ * its pinned original runtime/files. A report hash is an integrity check, not
+ * permission to retry or proof of image/design quality. Every retained error
+ * must lead through the verified immediate chain to a closed response. */
+export function checkClosedReferenceGeneration({calls,job,runtimeHash,providerRecoveryAudit}) {
+  checkClosedReferenceCalls(calls,job.assemblyCallsReserved);
+  if(!job.preflight?.assembly?.providerRecovery){
+    assert.ok(!providerRecoveryAudit,'Legacy task cannot acquire recovery proof');
+    assert.ok(calls.every(call=>call.state==='response'),'Preview requires an entirely accepted original generation');return;
+  }
+  const report=providerRecoveryAudit;assert.ok(report,'Original recovery audit required');
+  const {auditHash,...content}=report;
+  assert.equal(report.kind,'read-only-assembly-provider-recovery-audit');assert.equal(report.version,1);
+  assert.equal(hash(content),auditHash,'Original recovery audit changed');
+  assert.equal(report.requestHash,job.requestHash);assert.equal(report.runtimeHash,runtimeHash);
+  assert.equal(report.policyHash,hash(job.preflight));assert.equal(report.stagesHash,hash(job.assemblyStages));
+  assert.equal(report.maximumCalls,job.preflight.assembly.maximumCalls);
+  assert.equal(report.reservedCalls,calls.length);assert.equal(report.dispatchedCalls,calls.length);
+  assert.equal(report.allReservedCallsClosed,true,'Unknown recovery cannot certify a final asset');
+  assert.equal(report.additionalModelCalls,0);assert.equal(report.worldWrites,0);
+  assert.equal(report.canAuthorizeRetry,false);assert.equal(report.canAuthorizePlacement,false);
+  assert.deepEqual(report.summary,job.assemblySummary.providerRecovery,'Original recovery summary differs');
+  assert.equal(report.summary.retriesReserved,report.relationships.length);
+  assert.ok(report.relationships.length<=job.preflight.assembly.providerRetries,'Original recovery ceiling exceeded');
+  assert.equal(report.summary.allFailedReservationsRetained,true);assert.equal(report.summary.unknownOutcomeRetries,0);
+  assert.equal(report.summary.additionalAuthority,false);assert.equal(report.summary.canAuthorizePlacement,false);
+  const records=job.assemblyStages;assert.equal(records.length,calls.length);
+  const edges=new Map();
+  for(const relation of report.relationships){
+    const failed=records[relation.failedIndex-1],retry=records[relation.retryIndex-1];
+    assert.ok(failed&&retry&&relation.retryIndex===relation.failedIndex+1);
+    assert.equal(calls[failed.index-1].state,'error');assert.equal(calls[failed.index-1].errorClosureReason,'failed');
+    assert.equal(failed.state,'failed');assert.equal(failed.invocationOutcome,'completed-empty-capacity');
+    assert.equal(failed.capacityReceiptHash,relation.receiptHash);assert.equal(retry.providerRetryOf,failed.index);
+    assert.equal(retry.providerRecoveryHash,relation.markerHash);assert.equal(retry.phase,failed.phase);assert.equal(retry.task,failed.task);
+    assert.ok(!edges.has(failed.index),'Duplicate failed-call recovery edge');edges.set(failed.index,retry.index);
+  }
+  for(const relation of report.formatCorrections){
+    const failed=records[relation.originalIndex-1],correction=records[relation.correctionIndex-1];
+    assert.ok(failed&&correction&&relation.correctionIndex===relation.originalIndex+1);
+    assert.equal(calls[failed.index-1].state,'error');assert.equal(calls[failed.index-1].errorClosureReason,'completed');
+    assert.equal(failed.state,'failed');assert.equal(failed.invocationOutcome,'completed-invalid-json');
+    assert.equal(correction.formatCorrectionOf,failed.index);assert.equal(correction.phase,failed.phase);assert.equal(correction.task,failed.task);
+    assert.ok(!edges.has(failed.index),'Overlapping format/capacity edges');edges.set(failed.index,correction.index);
+  }
+  for(const call of calls)if(call.state==='error'){
+    let index=call.index;
+    while(calls[index-1]?.state==='error'){
+      assert.ok(edges.has(index),'Unrecovered original failure cannot certify a preview');index=edges.get(index);
+    }
+    assert.equal(calls[index-1]?.state,'response','Recovery chain lacks a closed final response');
+  }
+}
+
 /** Rendering eligibility is not image quality or permission to place blocks. */
 export function checkClosedReferencePreview({audit, authorization, job, exit}) {
   assert.equal(audit.type, 'read-only-closed-original-reference-terminal-audit');
@@ -93,8 +148,7 @@ export function checkClosedReferencePreview({audit, authorization, job, exit}) {
   assert.equal(audit.runtimeHash, authorization.runtimeHash);
   assert.equal(audit.final.nativeSourceIdentityVerified, true); assert.equal(audit.final.finalTextReviewAccepted, true);
   assert.equal(audit.final.assetHash, job.assetHash); assert.equal(audit.final.sourceHash, job.assemblySummary.sourceHash);
-  checkClosedReferenceCalls(audit.calls, job.assemblyCallsReserved);
-  assert.ok(audit.calls.every(call => call.state === 'response'), 'Preview requires an entirely accepted original generation');
+  checkClosedReferenceGeneration({calls:audit.calls,job,runtimeHash:authorization.runtimeHash,providerRecoveryAudit:audit.providerRecoveryAudit});
   assert.equal(exit.originalExited, true); assert.equal(exit.bridge.code, 0); assert.equal(exit.sentinel.code, 0);
   assert.ok(exit.bridge.signal === undefined || exit.bridge.signal === null); assert.ok(exit.sentinel.signal === undefined || exit.sentinel.signal === null);
   assert.equal(exit.worldWrites, 0);

@@ -28,6 +28,21 @@ const job=await read(path.join(r.assetDirectory,'job.json'));
 if(job.state!==r.state||job.assemblyCallsReserved!==r.assemblyCallsReserved||hash(job.assemblyStages)!==hash(r.assemblyStages))throw new Error('Job/ledger mismatch');
 if(job.recoveryEnabled&&!/^assembly-run-[a-zA-Z0-9_-]+$/.test(job.recovery?.branch??''))throw new Error('Invalid durable evidence branch');
 const assemblyRoot=path.join(r.assetDirectory,...(job.recoveryEnabled?[job.recovery.branch]:[]),'assembly');
+let providerRecoveryAudit=null;
+if(job.preflight?.assembly?.providerRecovery){
+ const {auditAssemblyProviderRecovery}=await mod('bridge/assembly-provider-recovery-audit.mjs');
+ const {assemblyRuntimeIdentity}=await mod('bridge/assembly-durability.mjs');
+ providerRecoveryAudit=await auditAssemblyProviderRecovery({directory:r.assetDirectory,root:assemblyRoot,records:job.assemblyStages,
+  policy:job.preflight,requestHash:job.requestHash,runtimeHash:await assemblyRuntimeIdentity(),model:job.model,effort:job.effort,
+  summary:job.assemblySummary});
+}
+const predecessorIndex=stage=>{
+ let prepared=providerRecoveryAudit?.preparedStageIndex(stage)??stage.index;
+ const original=job.assemblyStages[prepared-1];
+ if(original.formatCorrectionOf){const malformed=job.assemblyStages[original.formatCorrectionOf-1];
+  prepared=providerRecoveryAudit?.preparedStageIndex(malformed)??malformed.index;}
+ return prepared-1;
+};
 const referenceAudit=await assessReferenceTerminalEvidence({runtime:ledger.runtime,directory:r.assetDirectory,root:assemblyRoot,job});
 let cumulativeBudget;
 if(referenceAudit){
@@ -46,7 +61,7 @@ for(const stage of job.assemblyStages??[]){
  let response=rawResponse;
  const stagedPrototype=input.tier?.prototypes?.mode==='staged',decomposedStage=stagedPrototype&&['assembly-blueprint','correct-blueprint','prototype-role','correct-prototype-role'].includes(stage.phase);
  const prototypeEnabled=['verified','staged'].includes(input.tier?.prototypes?.mode);
- if(stagedPrototype&&!decomposedAudit){const {createDecomposedAudit}=await mod('bridge/assembly-decomposed-audit.mjs');decomposedAudit=createDecomposedAudit(assemblyRoot);}
+ if(stagedPrototype&&!decomposedAudit){const {createDecomposedAudit}=await mod('bridge/assembly-decomposed-audit.mjs');decomposedAudit=createDecomposedAudit(assemblyRoot,{providerRecoveryAudit});}
  if(stagedPrototype&&['concept-review','correct-concept-review','revise-design','correct-design'].includes(stage.phase)&&decomposedAudit.verifyAllocationInput){
   await decomposedAudit.verifyAllocationInput(input,plan,acceptedPrototype);
  }
@@ -120,7 +135,7 @@ for(const stage of job.assemblyStages??[]){
   }
   if(input.repairBase?.candidatePlanHash){
    if(!designRevision||stage.phase!=='correct-design'||input.repairBase.authorityPlanHash!==hash(plan))throw new Error('Design candidate repair has no matching original plan');
-   const previous=job.assemblyStages[(stage.formatCorrectionOf??stage.index)-2];
+   const previous=job.assemblyStages[predecessorIndex(stage)-1];
    if(!previous||previous.state!=='rejected'||!['revise-design','correct-design'].includes(previous.phase))throw new Error('Design candidate repair lacks rejected predecessor');
    const previousDir=path.join(assemblyRoot,String(previous.index));
    const {planCandidateBase,applyPlanCandidateCorrection}=await mod('contracts/scene-plan-candidate.mjs');
@@ -141,7 +156,7 @@ for(const stage of job.assemblyStages??[]){
  if(scene){
   let reconstructed;
   if(response?.format==='ScenePackageRepair'){
-   const previous=job.assemblyStages[(stage.formatCorrectionOf??stage.index)-2];
+   const previous=job.assemblyStages[predecessorIndex(stage)-1];
    if(!previous||previous.state!=='rejected'||previous.task!==stage.task)throw new Error('Package repair lacks its immediately rejected predecessor');
    const previousDir=path.join(assemblyRoot,String(previous.index));
    const previousEdit=await optional(path.join(previousDir,'effective-edit.json'))??await read(path.join(previousDir,'response.json'));
@@ -242,7 +257,7 @@ for(const stage of job.assemblyStages??[]){
   }
  }
  const receipt=job.generations?.find(g=>g.stage===stage.index),failureUsage=stage.index===job.assemblyCallsReserved&&!receipt?job.generationDiagnostic?.usage:null;
- const diagnostic=receipt?.diagnostic??(stage.index===job.assemblyCallsReserved?job.generationDiagnostic:null),e=diagnostic?.responseEvidence;
+ const diagnostic=providerRecoveryAudit?providerRecoveryAudit.diagnosticFor(stage.index):receipt?.diagnostic??(stage.index===job.assemblyCallsReserved?job.generationDiagnostic:null),e=diagnostic?.responseEvidence;
  let rawEvidence=null;
  if(e?.persisted){
   if(!/^(?:deepseek|codex|claude)-response-[\w-]+$/.test(e.directory)||!/^answer-\d+\.txt$/.test(e.file))throw new Error('Unsafe response evidence path');
@@ -256,11 +271,13 @@ for(const stage of job.assemblyStages??[]){
   const previous=stages.find(s=>s.index===stage.formatCorrectionOf),correction=input.formatCorrection;
   if(!previous?.rawEvidence?.verified||previous.invocationOutcome!=='completed-invalid-json'||correction.stage!==previous.index||hash(correction.originalText)!==previous.rawEvidence.sha256)throw new Error('Unverified format correction source');
  }
- stages.push({...stage,responsePreserved:!!rawResponse,sourcePreserved:!!scene,responseHash:rawResponse?hash(rawResponse):null,rawEvidence,feedback,geometry,usage:receipt?.usage??failureUsage??null});
+ stages.push({...stage,responsePreserved:!!rawResponse,sourcePreserved:!!scene,responseHash:rawResponse?hash(rawResponse):null,rawEvidence,diagnostic,
+  generationObservations:job.generations?.filter(g=>g.stage===stage.index)??[],feedback,geometry,usage:diagnostic?.usage??receipt?.usage??failureUsage??null});
 }
 if(recordedPrototypeTransition&&!verifiedPrototypeTransition)throw Error('Prototype transition review was not verified');
 let final=null;
 if(job.state==='preview-ready'){
+ if(providerRecoveryAudit&&!providerRecoveryAudit.report.allReservedCallsClosed)throw Error('Unknown original recovery call cannot produce an accepted final asset');
  const compiled=await readNativeBundle(r.nativeDirectory??r.assetDirectory),geometryHash=checkpointGeometryHash(compiled);
  if(compiled.manifest.assetHash!==job.assetHash||compiled.manifest.scene.sourceHash!==hash(acceptedSource)||geometryHash!==acceptedGeometry)throw new Error('Final output differs from accepted saved assembly');
  if(job.visualEvidenceBinding){const binding=job.visualEvidenceBinding;if(binding.finalAssetHash!==job.assetHash||binding.sourceHash!==hash(acceptedSource)||binding.cellsHash!==compiled.manifest.cellsHash||binding.evidenceHash!==job.assemblySummary.finalVisualReview.evidenceHash||binding.canAuthorizePlacement!==false)throw new Error('Final native image/placement identity mismatch');}
@@ -276,8 +293,9 @@ if(job.state==='preview-ready'){
  final={assetHash:job.assetHash,sourceHash:hash(acceptedSource),geometryHash,dimensions:compiled.manifest.dimensions,solidCount:compiled.manifest.setCount,quality:compiled.manifest.quality,components:compiled.scene.components.length,modules:compiled.scene.modules.length};
 }
 const known=stages.filter(s=>Number.isSafeInteger(s.usage?.totalTokens));
+await providerRecoveryAudit?.verifyUnchanged();
 const report={type:'single-ultra-cbd-assessment',jobId:job.id,state:job.state,error:job.error??null,protocolHash:ledger.protocolHash,runtimeHash:ledger.runtimeHash,runtimeFilesVerified:snapshot.files.length,seconds:(Date.parse(r.finishedAt)-Date.parse(r.startedAt))/1000,maximumCalls:ledger.maximumCalls,reservedCalls:stages.length,returnedGenerationReceipts:job.generations?.length??0,knownUsageCalls:known.length,knownReportedTokens:known.reduce((n,s)=>n+s.usage.totalTokens,0),allReservedCallsHaveUsage:known.length===stages.length,model:job.model,effort:job.effort,additionalModelCalls:0,geometryChangedByAssessment:false,worldLoaded:false,resumedFrom:ledger.resumedFrom??null,inheritedCalls:ledger.inheritedCalls??0,newKnownReportedTokens:known.filter(s=>s.index>(ledger.inheritedCalls??0)).reduce((n,s)=>n+s.usage.totalTokens,0),
- modelChange:ledger.modelChange??null,interruptionObservation:ledger.interruptionObservation??null,replacement:ledger.replacement??null,cumulativeBudget,goalAuthorization:ledger.protocol.goalAuthorization??null,referenceAudit,
+ modelChange:ledger.modelChange??null,interruptionObservation:ledger.interruptionObservation??null,replacement:ledger.replacement??null,cumulativeBudget,goalAuthorization:ledger.protocol.goalAuthorization??null,referenceAudit,providerRecoveryAudit:providerRecoveryAudit?.report??null,
  plan:plan?{designIntent:plan.designIntent,packages:plan.packages.map(p=>({id:p.id,name:p.name,purpose:p.purpose,dependsOn:p.dependsOn})),bounds:plan.scene.bounds}:null,proposedPlans,conceptStudies,conceptDecision,assemblySummary:job.assemblySummary??null,stages,final,aestheticQualityConfirmed:false,realisticCoreVerified:false,
  limitations:['This is one exploratory multi-call task, not an A/B or first-attempt single-call success rate.','Model text acceptance is not a visual or building-code certificate.','No usage receipt does not prove a call was free; actual fees are not estimated.','Failed diagnostics remain unplaceable; assessment does not repair or relabel them.']};
 await fs.writeFile(target,JSON.stringify(report,null,2),{flag:'wx'});
