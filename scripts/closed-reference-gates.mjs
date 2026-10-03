@@ -75,3 +75,27 @@ export function checkClosedReferenceCalls(calls, dispatchedCount) {
     }
   }
 }
+
+/** Rendering eligibility is not image quality or permission to place blocks. */
+export function checkClosedReferencePreview({audit, authorization, job, exit}) {
+  assert.equal(audit.type, 'read-only-closed-original-reference-terminal-audit');
+  assert.equal(audit.result, 'passed'); assert.equal(audit.root, authorization.root);
+  assert.equal(audit.jobId, job.id); assert.equal(audit.state, 'preview-ready', 'Closed task has no successful final asset');
+  assert.equal(job.state, 'preview-ready'); assert.ok(job.error === undefined || job.error === null);
+  assert.equal(job.key, authorization.ownerId); assert.equal(job.model, authorization.model); assert.equal(job.effort, authorization.effort);
+  assert.ok(['single', 'multi'].includes(authorization.mode));
+  assert.equal(authorization.syntheticTransportFixture === true, false, 'Synthetic fixture is not a real final preview subject');
+  assert.equal(audit.syntheticTransportFixture, false, 'Synthetic fixture is not a real final preview subject');
+  assert.equal(audit.observationSource, 'original-runner-terminal-get-and-exited-lifetimes');
+  for (const field of ['originalProcessesRetired', 'originalFilesUnchanged', 'jobTerminal']) assert.equal(audit[field], true);
+  assert.equal(audit.originalServiceRestarted, false); assert.equal(audit.requestResent, false);
+  assert.equal(audit.additionalModelCalls, 0); assert.equal(audit.worldWrites, 0); assert.equal(audit.canAuthorizePlacement, false);
+  assert.equal(audit.runtimeHash, authorization.runtimeHash);
+  assert.equal(audit.final.nativeSourceIdentityVerified, true); assert.equal(audit.final.finalTextReviewAccepted, true);
+  assert.equal(audit.final.assetHash, job.assetHash); assert.equal(audit.final.sourceHash, job.assemblySummary.sourceHash);
+  checkClosedReferenceCalls(audit.calls, job.assemblyCallsReserved);
+  assert.ok(audit.calls.every(call => call.state === 'response'), 'Preview requires an entirely accepted original generation');
+  assert.equal(exit.originalExited, true); assert.equal(exit.bridge.code, 0); assert.equal(exit.sentinel.code, 0);
+  assert.ok(exit.bridge.signal === undefined || exit.bridge.signal === null); assert.ok(exit.sentinel.signal === undefined || exit.sentinel.signal === null);
+  assert.equal(exit.worldWrites, 0);
+}

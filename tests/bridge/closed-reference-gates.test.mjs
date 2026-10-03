@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {checkClosedReferenceSnapshot, checkClosedReferenceExit, assertClosedOriginalProcesses, checkClosedReferenceCalls} from '../../scripts/closed-reference-gates.mjs';
+import {checkClosedReferenceSnapshot, checkClosedReferenceExit, assertClosedOriginalProcesses, checkClosedReferenceCalls, checkClosedReferencePreview} from '../../scripts/closed-reference-gates.mjs';
 
 function snapshot(state = 'preview-ready', mode = 'single') {
   const authorization = {root: 'original-root', ownerId: 'original-owner', model: 'vision-fixture', effort: 'max', maximumCalls: 8, runtimeHash: 'r'.repeat(64)};
@@ -67,4 +67,34 @@ test('only independently verified closed original calls can be certified', () =>
   for (const call of [{...response, state: 'pending'}, {...response, unresolved: true}, {...response, originalProviderReceiptVerified: false},
     {...response, index: 2}, {...response, originalResponseVerified: false}, {...response, state: 'error', errorClosureReason: 'incomplete'}]) assert.throws(() => checkClosedReferenceCalls([call], 1));
   assert.throws(() => checkClosedReferenceCalls([response], 0));
+});
+
+function preview(mode = 'multi') {
+  const base = snapshot('preview-ready', mode), job = base.savedJob;
+  base.authorization.mode = mode;
+  job.assetHash = 'a'.repeat(64); job.assemblySummary = {sourceHash: 's'.repeat(64)}; job.assemblyCallsReserved = 1;
+  return {authorization: base.authorization, job, exit: lifecycle().exit,
+    audit: {type: 'read-only-closed-original-reference-terminal-audit', result: 'passed', root: base.authorization.root,
+      jobId: job.id, state: 'preview-ready', syntheticTransportFixture: false, observationSource: 'original-runner-terminal-get-and-exited-lifetimes',
+      originalProcessesRetired: true, originalFilesUnchanged: true, jobTerminal: true, originalServiceRestarted: false,
+      requestResent: false, additionalModelCalls: 0, worldWrites: 0, canAuthorizePlacement: false, runtimeHash: base.authorization.runtimeHash,
+      calls: [structuredClone(response)], final: {nativeSourceIdentityVerified: true, finalTextReviewAccepted: true, assetHash: job.assetHash, sourceHash: job.assemblySummary.sourceHash}}};
+}
+test('normal single and multi closures can authorize read-only rendering, never placement', () => {
+  for (const mode of ['single', 'multi']) checkClosedReferencePreview(preview(mode));
+});
+test('synthetic, restarted, failed, live or unverified assets cannot become original final previews', () => {
+  for (const change of [v => { v.audit.syntheticTransportFixture = true; }, v => { v.authorization.syntheticTransportFixture = true; },
+    v => { v.audit.originalServiceRestarted = true; }, v => { v.audit.originalProcessesRetired = false; },
+    v => { v.audit.jobTerminal = false; }, v => { v.job.state = 'failed'; }, v => { v.audit.final.nativeSourceIdentityVerified = false; },
+    v => { v.audit.final.finalTextReviewAccepted = false; }, v => { v.audit.calls[0].originalProviderReceiptVerified = false; }]) {
+    const value = preview(); change(value); assert.throws(() => checkClosedReferencePreview(value));
+  }
+});
+test('preview gates refuse cross-task identities and world-write or resubmission claims', () => {
+  for (const change of [v => { v.job.assetHash = 'different'; }, v => { v.job.key = 'different'; }, v => { v.audit.runtimeHash = 'different'; },
+    v => { v.audit.additionalModelCalls = 1; }, v => { v.audit.worldWrites = 1; }, v => { v.audit.canAuthorizePlacement = true; },
+    v => { v.audit.requestResent = true; }, v => { v.exit.bridge.signal = 'SIGTERM'; }]) {
+    const value = preview(); change(value); assert.throws(() => checkClosedReferencePreview(value));
+  }
 });
