@@ -216,7 +216,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
           throw Error('Selected model no longer advertises reference-image input; no model invoked');
         if(['images','native'].includes(job.preflight.assembly.designReview?.mode)&&!(await selectedAgent.models()).some(m=>m.id===request.model&&m.supportsImages===true))throw new Error('所选模型未明确声明图像能力，没有调用模型；请显式选择文本复核或图像模型');
         const runner=job.recoveryEnabled?runDurableAssembly:runSceneAssembly;
-        const result=await runner({directory:jobDir(job.id),requestHash:job.requestHash,runtimeHash:job.recoveryEnabled?await runtimeHash():undefined,referenceInput:job.referenceGeneration?.input,prompt:request.prompt,rules:sceneRules,policy:job.preflight,signal:controller.signal,invoke,
+        const result=await runner({directory:jobDir(job.id),requestHash:job.requestHash,runtimeHash:job.recoveryEnabled?await runtimeHash():undefined,referenceInput:job.referenceGeneration?.input,prompt:request.prompt,rules:sceneRules,policy:job.preflight,signal:controller.signal,invoke,model:request.model,effort:request.effort,
           recoverInvocation:(p,i,o,binding)=>invoke(p,i,{...o,recoverProviderBinding:binding}),
           nativeEvidence:options=>requestNativeEvidence({...options,jobDirectory:jobDir(job.id),onWaiting:nativeEvidence=>event(job,'validating',{nativeEvidence})}),
           onRecovery:recovery=>event(job,recovery.state==='replaying'?'recovering':'validating',{recovery:{...job.recovery,...recovery}}),

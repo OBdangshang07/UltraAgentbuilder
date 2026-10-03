@@ -76,7 +76,7 @@ export function decompositionConfiguration(tier){
   ...(tier.referenceAnalysis?{preludeCalls:tier.referenceAnalysis.requiredCalls}:{})};
 }
 
-export function decompositionPreludeProgress(tier,records){
+export function decompositionPreludeProgress(tier,records,isCapacityRetry=()=>false){
  if(!tier.referenceAnalysis)return {};
  const prefix=[];
  for(const record of records){
@@ -84,8 +84,9 @@ export function decompositionPreludeProgress(tier,records){
   prefix.push(record);
  }
  if(!prefix.length||prefix.at(-1).state!=='accepted'||prefix.filter(r=>r.state==='accepted').length!==1||
-  prefix.some(r=>r.decompositionStageId!=='reference-analysis'||
-    !['accepted','rejected'].includes(r.state)&&!(r.state==='failed'&&r.invocationOutcome==='completed-invalid-json')))
+  prefix.some((r,i)=>r.decompositionStageId!=='reference-analysis'||
+    !['accepted','rejected'].includes(r.state)&&!(r.state==='failed'&&r.invocationOutcome==='completed-invalid-json')&&
+    !(r.state==='failed'&&r.invocationOutcome==='completed-empty-capacity'&&typeof isCapacityRetry==='function'&&isCapacityRetry(r,prefix[i+1])===true)))
   throw Error('Decomposition requires one accepted durable reference prelude');
  return {completedPrelude:1};
 }

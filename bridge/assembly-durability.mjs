@@ -6,6 +6,7 @@ import {hash} from '../src/generation/compiler.mjs';
 import {CompletedResponseFormatError} from './model-json.mjs';
 import {runSceneAssembly} from './scene-assembly.mjs';
 import {assemblyInvocationFingerprint} from './assembly-invocation.mjs';
+import {createAssemblyProviderRecovery} from './assembly-provider-recovery.mjs';
 
 // A write-ahead invocation ledger, not a retry queue. A pending invocation is
 // ambiguous and must NEVER be sent again. Replay only a saved, hashed receipt.
@@ -77,7 +78,8 @@ export async function openAssemblyJournal({directory,requestHash,policy,runtimeH
   catch(e){if(e.code!=='ENOENT')throw e;}
   if(!Number.isSafeInteger(dispatched)||dispatched<0||dispatched>records.length||records.length>dispatched+1||records.length>dispatched&&records.at(-1).state!=='pending')throw new Error('Recovery dispatched ledger missing/truncated');
   let busy=false;
-  return {get reserved(){return records.length;},async invoke(prompt,index,options,invoke,recoverInvocation){
+  return {get reserved(){return records.length;},peek:index=>structuredClone(records[index-1]??null),
+    snapshot:()=>structuredClone(records),async invoke(prompt,index,options,invoke,recoverInvocation,validateProviderRetry){
     if(busy)throw new Error('Concurrent assembly invocation forbidden');busy=true;
     try{
       const images=[];for(const file of options.images??[])images.push(hash(await fs.readFile(file)));
@@ -85,6 +87,11 @@ export async function openAssemblyJournal({directory,requestHash,policy,runtimeH
         stageName:options.stageName,stageCount:options.stageCount,imageHashes:images,referenceInput:options.referenceInput});
       const saved=records[index-1];
       let recovering=false;
+      if(options.providerRetry!==undefined||saved?.providerRetry!==undefined){
+        if(typeof validateProviderRetry!=='function'||saved&&hash(saved.providerRetry??null)!==hash(options.providerRetry??null))
+          throw Error('Recovery invocation lacks verified original capacity authority');
+        await validateProviderRetry({prompt,index,options,saved:saved?structuredClone(saved):null});
+      }
       if(saved){
         if(saved.fingerprint!==fingerprint)throw new Error('Recovery replay diverged from saved input; no model called');
         if(saved.state==='pending'){
@@ -100,7 +107,8 @@ export async function openAssemblyJournal({directory,requestHash,policy,runtimeH
         }
       }
       if(!recovering&&(index!==records.length+1||index>meta.maximumCalls))throw new Error('Recovery call budget/order violated');
-      const file=path.join(root,`call-${index}.json`);let record=saved??{index,fingerprint,state:'pending',reservedAt:new Date().toISOString()};
+      const file=path.join(root,`call-${index}.json`);let record=saved??{index,fingerprint,state:'pending',reservedAt:new Date().toISOString(),
+        ...(options.providerRetry!==undefined?{providerRetry:structuredClone(options.providerRetry)}:{})};
       if(!recovering){
         await durableJson(file,identity(record));records.push(record);
         await durableJson(path.join(root,'dispatched.json'),identity({count:index}));
@@ -139,10 +147,11 @@ export async function runDurableAssembly(options){
     // Rebuild deterministic local checks in a fresh evidence branch; neither
     // original responses nor half-written checkpoints are overwritten.
     const branch=await fs.mkdtemp(path.join(directory,'assembly-run-'));
+    const providerRecovery=createAssemblyProviderRecovery({...options,journal});
     await onRecovery({version:1,state:journal.reserved?'replaying':'running',branch:path.basename(branch),reservedCalls:journal.reserved});
     try{
-      const result=await runSceneAssembly({...options,directory:branch,responseDirectory:directory,
-        invoke:(p,i,o)=>journal.invoke(p,i,o,invoke,options.recoverInvocation),
+      const result=await runSceneAssembly({...options,directory:branch,responseDirectory:directory,providerRecovery,
+        invoke:(p,i,o)=>journal.invoke(p,i,o,invoke,options.recoverInvocation,providerRecovery?.beforeInvocation),
         onStage:r=>onStage(r,{reservedCalls:Math.max(journal.reserved,r.length),replaying:r.length<journal.reserved})});
       await onRecovery({version:1,state:'complete',branch:path.basename(branch),reservedCalls:journal.reserved});return result;
     }catch(e){

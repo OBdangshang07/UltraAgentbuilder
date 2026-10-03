@@ -21,6 +21,7 @@ const ids=(values,label)=>{check(Array.isArray(values)&&values.length<=16&&new S
  * saved invocations, never from a new guessed plan or a UI progress counter. */
 export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,providerRetriesUsed=0,
   formatCorrectionsUsed=0,originalCallIndex=reservedCalls,originalFormatCorrectionsUsed=formatCorrectionsUsed,
+  originalBudgetCallIndex=originalCallIndex,
   packageIds=[],completedPackages=[]}){
   if(!tier?.providerRecovery)return {version:1,enabled:false,canStart:false,
     stopReason:'provider-recovery-disabled',additionalModelCalls:0,canAuthorizeRetry:false,canAuthorizePlacement:false};
@@ -45,6 +46,10 @@ export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,p
     'original completed package progress changed');
   if(input.formatCorrection!==undefined)check(originalFormatCorrectionsUsed===1,'original format correction reservation missing');
   const staged=tier.prototypes?.mode==='staged',design=!!tier.designReview;
+  integer(originalBudgetCallIndex,1,originalCallIndex,'original prepared budget prefix');
+  if(originalBudgetCallIndex!==originalCallIndex)check(!staged&&input.formatCorrection&&
+    Number.isSafeInteger(input.formatCorrection.stage)&&input.formatCorrection.stage>=originalBudgetCallIndex&&
+    input.formatCorrection.stage<originalCallIndex,'only a verified non-staged format correction retains an earlier prepared budget');
   if(staged){
     integer(tier.prototypes.candidateCount,1,3,'candidate count');
     integer(tier.prototypes.recoveryReserve,0,26,'original decomposition reserve');
@@ -57,7 +62,7 @@ export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,p
   const fullPackageScope=()=>countPackages(packageIds.length,tier,'original package scope count');
   const originalCallBudget=()=>{
     check(input.callBudget&&typeof input.callBudget==='object'&&!Array.isArray(input.callBudget)&&
-      input.callBudget.canStart===true&&input.callBudget.remaining===tier.maximumCalls-originalCallIndex+1,
+      input.callBudget.canStart===true&&input.callBudget.remaining===tier.maximumCalls-originalBudgetCallIndex+1,
       'original funded plan/revision call budget required');
     return countPackages(input.callBudget.maximumPackages,tier,'original plan/revision package ceiling');
   };
@@ -181,6 +186,7 @@ export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,p
   const remaining=tier.maximumCalls-reservedCalls,mandatoryCalls=1+requiredAfterCall+protectedHeadroom;
   const canStart=providerRetriesUsed<recovery.maximumRetries&&remaining>=mandatoryCalls;
   return {version:1,enabled:true,phase,maximumCalls:tier.maximumCalls,reservedCalls,remaining,originalCallIndex,
+    originalBudgetCallIndex,
     originalFormatCorrectionsUsed,formatCorrectionsUsed,providerRetriesUsed,
     maximumRetries:recovery.maximumRetries,requiredAfterCall,requiredRoleCalls,protectedPackageCeiling,
     pendingFirstConstruction,remainingPackageIds:[...pending],reserve,protectedHeadroom,mandatoryCalls,

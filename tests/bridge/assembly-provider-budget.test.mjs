@@ -174,6 +174,19 @@ test('a longer replay journal consumes real remaining calls but does not rewrite
   assert.equal(later.originalCallIndex,1);assert.equal(later.reservedCalls,4);
 });
 
+test('an explicitly verified serialization correction keeps its earlier prepared plan ceiling without refunding either call',()=>{
+  const t=tier({assemblyDesignReview:'text'}),args=plan(t),input={...args.input,formatCorrection:{stage:2}};
+  const values={...args,input,reservedCalls:3,originalCallIndex:3,originalBudgetCallIndex:1,
+    providerRetriesUsed:1,formatCorrectionsUsed:1,originalFormatCorrectionsUsed:1};
+  const result=calculate(values);assert.equal(result.originalBudgetCallIndex,1);assert.equal(result.originalCallIndex,3);
+  assert.equal(result.reservedCalls,3);assert.equal(result.remaining,23);assert.equal(result.reserve.formatCorrection,0);
+  assert.equal(result.originalCallBudgetHash,hash(input.callBudget));assert.equal(result.protectedPackageCeiling,input.callBudget.maximumPackages);
+  for(const originalBudgetCallIndex of [0,2,4,'1',null])assert.throws(()=>calculate({...values,originalBudgetCallIndex}));
+  for(const formatCorrection of [undefined,{}, {stage:0},{stage:3},{stage:'2'}])
+    assert.throws(()=>calculate({...values,input:{...input,formatCorrection}}));
+  assert.throws(()=>calculate({...values,originalBudgetCallIndex:3}));
+});
+
 for(const phase of ['concept-candidate','correct-concept-candidate'])test(phase+' protects remaining independent candidates, four roles, every package and both reviews',()=>{
   const t=staged();
   for(let slot=1;slot<=3;slot++){

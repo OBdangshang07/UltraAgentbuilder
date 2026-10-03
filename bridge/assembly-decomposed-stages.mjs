@@ -62,9 +62,9 @@ const cameras=scene=>[-35,145,55,235].map((yaw,i)=>({id:'concept-'+i,purpose:'ex
 
 /** Independently received small concepts, not a synthetic model answer that
  * merges partial JSON. Aggregate data retains each ORIGINAL stage receipt. */
-export async function runDecomposedConcepts({root,evidenceDirectory,prompt,policy,signal,stage,nativeEvidence,records}){
+export async function runDecomposedConcepts({root,evidenceDirectory,prompt,policy,signal,stage,nativeEvidence,records,capacityProgress}){
  const tier=policy.assembly,config=configuration(tier),count=config.candidateCount;
- const initial=decompositionBlueprintBudget(config,{reservedCalls:records.length,...decompositionPreludeProgress(tier,records)});
+ const initial=decompositionBlueprintBudget(config,{reservedCalls:records.length,...decompositionPreludeProgress(tier,records,capacityProgress)});
  if(!initial.canStart)throw Error('Unfunded decomposed concept workflow');
  const candidates=[],checked=[],bindings=[],seenGeometry=new Set();
  for(let slot=0;slot<count;slot++){
@@ -137,11 +137,11 @@ export async function inspectDecomposedRepresentatives(state,directory,feedback)
 
 /** Shares the caller's one durable stage dispatcher and budget. Never invokes
  * a second provider adapter, adopts invalid output or grants placement rights. */
-export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,policy,signal,stage,records,inspect=inspectCheckpoint}){
+export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,policy,signal,stage,records,inspect=inspectCheckpoint,capacityProgress}){
  const tier=policy.assembly,config=configuration(tier),selected=selectedConcept.selected;
  let state,checked,stageDirectory,blueprintStage,prior=null;
  for(let attempt=0;attempt<=tier.maximumPlanCorrections;attempt++){
-  const callBudget=decompositionBlueprintBudget(config,{reservedCalls:records.length,completedCandidates:config.candidateCount,selectionAccepted:true,...decompositionPreludeProgress(tier,records)});
+  const callBudget=decompositionBlueprintBudget(config,{reservedCalls:records.length,completedCandidates:config.candidateCount,selectionAccepted:true,...decompositionPreludeProgress(tier,records,capacityProgress)});
   if(!callBudget.canStart)throw Error('Unfunded decomposition blueprint; no complete-task work omitted');
   const result=await stage(attempt?'correct-blueprint':'assembly-blueprint',null,{description:prompt,tier,selectedConcept,sourceHash:hash(selected.scene),callBudget,prior,
    minimumHeight:policy.minimumHeight,maximumBounds:policy.maximumBounds,decompositionBudget:decompositionTailBudget(tier,records,6+callBudget.maximumPackages),decompositionStageId:'blueprint'},
