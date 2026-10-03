@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import {startBridge} from '../../bridge/server.mjs';
+import {generationPreflight} from '../../bridge/generation-policy.mjs';
 
 function ownedProcess(args, options = {}) {
   const child = spawn(process.execPath, args, {
@@ -52,6 +53,7 @@ test('normal companion CLI exposes reference SEND without preparing, generating 
     catch (error) { if (error.code !== 'ENOENT') throw error; await delay(100); }
   }
   assert.equal(connection.protocol, 1);
+  assert.equal(connection.pid, cli.child.pid);
   assert.ok(Number.isSafeInteger(connection.port) && connection.port > 0 && connection.port <= 65535);
   assert.match(connection.token, /^[a-f0-9]{64}$/);
   const request = async (route, input, authorized = true) => {
@@ -70,6 +72,32 @@ test('normal companion CLI exposes reference SEND without preparing, generating 
     assert.equal(capabilities.value[key], true, key);
   assert.equal(capabilities.value.ordinaryJobsAcceptReferences, false);
   assert.equal(capabilities.value.canAuthorizePlacement, false);
+  // Normal CLI parsing must expose the same NEW bounded Ultra policy as the
+  // imported server, without model discovery, a budget confirmation or SEND.
+  // This synthetic model ID is not a statement of real provider availability.
+  const bounded = {key: 'synthetic-cli-preflight', agent: 'codex', model: 'synthetic-cli-model', effort: 'max',
+    prompt: '在64×224×64格边界内设计高224米办公楼，免费预检夹具', generationMode: 'scene', sceneWorkflow: 'components',
+    qualityTier: 'ultra', assemblyCalls: 26, assemblyRecovery: 'safe', assemblyQuality: 'v4',
+    assemblyPrototypes: 'staged', assemblyDesignReview: 'native', assemblyProviderRecovery: 'bounded',
+    maxRepairs: 0, worldHeight: 384};
+  const preflight = await request('/v1/preflight', bounded);
+  assert.equal(preflight.status, 200);
+  assert.deepEqual(preflight.value, generationPreflight(bounded));
+  assert.equal(preflight.value.minimumHeight, 224);
+  assert.deepEqual(preflight.value.maximumBounds, {width: 64, height: 224, length: 64});
+  assert.equal(preflight.value.maximumCalls, 26);
+  assert.equal(preflight.value.maxOutputTokens, null);
+  assert.equal(preflight.value.assembly.providerRetries, 2);
+  assert.deepEqual(preflight.value.assembly.providerRecovery.waitMs, [10000, 30000]);
+  assert.equal(preflight.value.assembly.intermediateAssetsPlaceable, false);
+  const legacy = {...bounded}; delete legacy.assemblyProviderRecovery;
+  const legacyPreflight = await request('/v1/preflight', legacy);
+  assert.equal(legacyPreflight.status, 200);
+  assert.deepEqual(legacyPreflight.value, generationPreflight(legacy));
+  assert.equal(legacyPreflight.value.assembly.providerRetries, 0);
+  assert.ok(!Object.hasOwn(legacyPreflight.value.assembly, 'providerRecovery'));
+  assert.equal((await request('/v1/preflight', {...bounded, effort: undefined})).status, 400);
+  assert.equal((await request('/v1/preflight', bounded, false)).status, 401);
   assert.equal((await request('/v1/reference-generation-jobs', {})).status, 400);
   assert.equal((await request('/v1/reference-generation-jobs', {}, false)).status, 401);
   assert.deepEqual((await request('/v1/jobs')).value.jobs, []);
