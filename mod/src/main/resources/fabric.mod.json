@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "voxel_studio",
+  "version": "${version}",
+  "name": "Voxel Studio",
+  "description": "Local-agent building generation, world projection and reversible creative placement.",
+  "authors": ["Voxel Studio contributors"],
+  "environment": "*",
+  "mixins": ["voxel-studio.mixins.json"],
+  "entrypoints": {
+    "main": ["dev.voxelstudio.VoxelStudio"],
+    "client": ["dev.voxelstudio.client.StudioClient"]
+  },
+  "depends": {"fabricloader": ">=0.16.10", "fabric-api": "*", "minecraft": "1.20.1", "java": ">=17"}
+}

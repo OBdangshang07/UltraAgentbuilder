@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "voxel_installed_acceptance",
+  "version": "1.0.0-test-only",
+  "name": "Voxel Installed Acceptance — TEST ONLY",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.voxelstudio.client.InstalledPatchAcceptanceEntrypoint"] },
+  "depends": { "fabricloader": "=0.16.10", "minecraft": "=1.20.1", "fabric-api": "*", "voxel_studio": "=0.4.10-alpha" }
+}

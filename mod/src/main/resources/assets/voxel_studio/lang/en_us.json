@@ -1,0 +1,20 @@
+{
+  "key.categories.voxel_studio": "Voxel Studio",
+  "key.voxel_studio.open": "Open building studio",
+  "key.voxel_studio.lock": "Lock / follow projection",
+  "key.voxel_studio.snap": "Snap projection to crosshair surface and lock",
+  "key.voxel_studio.rotate": "Rotate projection 90 degrees",
+  "key.voxel_studio.mirror": "Mirror projection X",
+  "key.voxel_studio.hide": "Hide projection",
+  "key.voxel_studio.west": "Move -X",
+  "key.voxel_studio.east": "Move +X",
+  "key.voxel_studio.north": "Move -Z",
+  "key.voxel_studio.south": "Move +Z",
+  "key.voxel_studio.up": "Move +Y",
+  "key.voxel_studio.down": "Move -Y",
+  "key.voxel_studio.confirm": "Review placement confirmation",
+  "key.voxel_studio.axis": "Cycle scroll nudge axis",
+  "key.voxel_studio.draft_undo": "Undo projection transform (not world blocks)",
+  "key.voxel_studio.draft_redo": "Redo projection transform (not world blocks)",
+  "key.voxel_studio.selection": "Open read-only environment selection"
+}

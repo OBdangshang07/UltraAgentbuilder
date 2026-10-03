@@ -1,0 +1,177 @@
+plugins {
+    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'maven-publish'
+}
+
+version = '0.4.10-alpha'
+group = 'dev.voxelstudio'
+base { archivesName = 'voxel-studio' }
+repositories { mavenCentral() }
+dependencies {
+    minecraft 'com.mojang:minecraft:1.20.1'
+    mappings 'net.fabricmc:yarn:1.20.1+build.10:v2'
+    modImplementation 'net.fabricmc:fabric-loader:0.16.10'
+    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.92.5+1.20.1'
+    // Minecraft 1.20.1 already supplies these versions. Declare the native
+    // file-handle dependency explicitly for strict private patch journals.
+    implementation 'net.java.dev.jna:jna-platform:5.12.1'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation 'net.fabricmc:fabric-loader-junit:0.16.10'
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 17 }
+processResources { inputs.property 'version', project.version; filesMatching('fabric.mod.json') { expand 'version': project.version } }
+processResources { from('../contracts') { include 'context-analysis-protocol.json', 'world-patch-design-review-protocol.json'; into 'voxelstudio' } }
+test {
+    useJUnitPlatform()
+    // JUnit also extracts the bundled runtime. Keep free regression temporary
+    // data on the project drive, not a potentially full system drive.
+    def explicitTestTemp = findProperty('studioJavaTestTemp')
+    def studioTestTemp = explicitTestTemp ? file(explicitTestTemp) : layout.buildDirectory.dir('java-test-temp').get().asFile
+    if (explicitTestTemp) {
+        // Only a newly owned sibling on this source fork's physical build
+        // drive. Preserve the Chinese single-JAR test without a 265-char
+        // executable path manufactured by nested test directories.
+        def ownerFile = new File(studioTestTemp, 'owner.json')
+        if (studioTestTemp.canonicalFile.parentFile != projectDir.parentFile.canonicalFile.parentFile ||
+            !(studioTestTemp.name ==~ /java-temp-[a-f0-9]{32}/) || !ownerFile.isFile()) {
+            throw new GradleException('Exact owned new Java test directory required')
+        }
+        def owner = new groovy.json.JsonSlurper().parse(ownerFile)
+        if (owner.developmentRoot != projectDir.parentFile.canonicalPath || owner.newTemporaryFilesOnly != true ||
+            owner.modelCalls != 0 || owner.worldWrites != 0) throw new GradleException('Java temporary directory ownership mismatch')
+    }
+    doFirst { studioTestTemp.mkdirs() }
+    systemProperty 'java.io.tmpdir', studioTestTemp.absolutePath
+    systemProperty 'jna.tmpdir', studioTestTemp.absolutePath
+    environment 'TEMP', studioTestTemp.absolutePath
+    environment 'TMP', studioTestTemp.absolutePath
+    environment 'TMPDIR', studioTestTemp.absolutePath
+    if(file('build/ime-qa/IMBlocker-4.0.5.jar').exists())systemProperty 'voxelstudio.imblockerApiJar',file('build/ime-qa/IMBlocker-4.0.5.jar').absolutePath
+}
+tasks.register('prepareJavaFixtures', Exec) {
+    workingDir projectDir.parentFile
+    commandLine 'node', 'scripts/studio-java-fixtures.mjs'
+    inputs.files(fileTree('../src/generation'),fileTree('../src/design'),fileTree('../src/world'),fileTree('../tests/design'),fileTree('../tests/fixtures'),fileTree('../contracts'),fileTree('../bridge'),file('../scripts/studio-java-fixtures.mjs'),file('../scripts/reference-player-fixtures.mjs'),file('../scripts/world-patch-before-fixtures.mjs'),file('../scripts/world-patch-safety-fixtures.mjs'),file('../scripts/world-patch-journal-fixtures.mjs'))
+    outputs.dir layout.buildDirectory.dir('test-fixtures')
+}
+test.dependsOn tasks.named('prepareJavaFixtures')
+def bundleDir = layout.buildDirectory.dir('generated/studio-bundle')
+tasks.register('prepareBuiltin', Exec) {
+    workingDir projectDir.parentFile
+    commandLine 'node', 'packaging/prepare-builtin.mjs', project.version.toString()
+    inputs.files(fileTree('../bridge'), fileTree('../contracts'), fileTree('../prompts'), fileTree('../src/core'), fileTree('../src/generation'), fileTree('../src/design'), fileTree('../src/world'), fileTree('../.agents/skills/voxel-studio'), file('../packaging/prepare-builtin.mjs'))
+    inputs.property 'releaseVersion', project.version
+    outputs.dir bundleDir
+}
+sourceSets.main.resources.srcDir bundleDir
+processResources.dependsOn tasks.named('prepareBuiltin')
+tasks.named('sourcesJar') { dependsOn tasks.named('prepareBuiltin'); exclude 'voxelstudio-bundle/**' }
+loom { runs { client { runDir 'run'; programArgs '--width', '1280', '--height', '800' }; server { runDir 'run-server' } } }
+if (project.hasProperty('studioTestJob')) {
+    loom.runs.client.vmArg '-Dvoxelstudio.selftest=true'
+    loom.runs.client.vmArg "-Dvoxelstudio.testJob=${project.property('studioTestJob')}"
+}
+if (project.hasProperty('studioTestFixture')) {
+    loom.runs.client.vmArg '-Dvoxelstudio.selftest=true'
+    loom.runs.client.vmArg "-Dvoxelstudio.testFixture=${project.property('studioTestFixture')}"
+}
+if (project.hasProperty('studioFlowTest')) {
+    loom.runs.client.vmArg '-Dvoxelstudio.selftest=true'
+    loom.runs.client.vmArg "-Dvoxelstudio.flowTestRoot=${project.property('studioFlowTest')}"
+}
+if (project.hasProperty('studioFlowFreshWorld')) {
+    if (!project.hasProperty('studioFlowTest') || !project.hasProperty('studioFlowSourceProject')) throw new GradleException('Fresh world requires explicit player-flow fixture and original source binding')
+    loom.runs.client.vmArg "-Dvoxelstudio.flowFreshWorld=${project.property('studioFlowFreshWorld')}"
+    loom.runs.client.vmArg "-Dvoxelstudio.flowSourceProject=${project.property('studioFlowSourceProject')}"
+}
+if (project.hasProperty('studioRealAssetTest')) {
+    if (!project.hasProperty('studioTestFixture') || !project.hasProperty('studioTestRunId') ||
+        !project.hasProperty('studioRealAssetSourceProject') || !project.hasProperty('studioRealAssetAuthorizationHash') ||
+        project.hasProperty('studioFlowTest') || project.hasProperty('studioTestJob') ||
+        project.findProperty('studioTestWindowHideMode') != 'visible') {
+        throw new GradleException('Real asset test requires one pinned fixture, explicit source and a visible NEW world')
+    }
+    loom.runs.client.vmArg "-Dvoxelstudio.realAssetTestRoot=${project.property('studioRealAssetTest')}"
+    loom.runs.client.vmArg "-Dvoxelstudio.realAssetSourceProject=${project.property('studioRealAssetSourceProject')}"
+    loom.runs.client.vmArg "-Dvoxelstudio.realAssetAuthorizationHash=${project.property('studioRealAssetAuthorizationHash')}"
+}
+if (project.hasProperty('studioTestNavigationAcknowledged')) { loom.runs.client.vmArg '-Dvoxelstudio.testNavigationAcknowledged=true' }
+if (project.hasProperty('studioTestAnchor')) { loom.runs.client.vmArg "-Dvoxelstudio.testAnchor=${project.property('studioTestAnchor')}" }
+if (project.hasProperty('studioTestRunId')) { loom.runs.client.vmArg "-Dvoxelstudio.testRunId=${project.property('studioTestRunId')}" }
+if (project.hasProperty('studioTestWindowHideMode')) { loom.runs.client.vmArg "-Dvoxelstudio.testWindowHideMode=${project.property('studioTestWindowHideMode')}" }
+if (project.hasProperty('studioPresentationProbe')) { loom.runs.client.vmArg '-Dvoxelstudio.presentationProbe=true' }
+if (project.hasProperty('studioPresentationVisible')) { loom.runs.client.vmArg '-Dvoxelstudio.presentationVisible=true' }
+if (project.hasProperty('studioPresentationNoVsync')) { loom.runs.client.vmArg '-Dvoxelstudio.presentationNoVsync=true' }
+if (project.hasProperty('studioTestRecoverLightJournal')) { loom.runs.client.vmArg "-Dvoxelstudio.testRecoverLightJournal=${project.property('studioTestRecoverLightJournal')}" }
+if (project.hasProperty('studioUiTest')) {
+    loom.runs.client.vmArg '-Dvoxelstudio.uitest=true'
+}
+if (project.hasProperty('studioAssetTest')) { loom.runs.client.vmArg '-Dvoxelstudio.assettest=true' }
+if (project.hasProperty('studioAssetTestRoot')) { loom.runs.client.vmArg "-Dvoxelstudio.assetTestRoot=${project.property('studioAssetTestRoot')}" }
+if (project.hasProperty('studioEvidenceTestRoot')) { loom.runs.client.vmArg "-Dvoxelstudio.evidenceTestRoot=${project.property('studioEvidenceTestRoot')}" }
+if (project.hasProperty('studioAssetFixtures')) { loom.runs.client.vmArg "-Dvoxelstudio.assetFixtures=${project.property('studioAssetFixtures')}" }
+if (project.hasProperty('studioAssetFloors')) { loom.runs.client.vmArg "-Dvoxelstudio.assetFloors=${project.property('studioAssetFloors')}" }
+if (project.hasProperty('studioOnboardingTest')) { loom.runs.client.vmArg '-Dvoxelstudio.onboardingtest=true' }
+if (project.hasProperty('studioProjectionTest')) { loom.runs.client.vmArg '-Dvoxelstudio.projectiontest=true' }
+if (project.hasProperty('studioProjectionFixture')) { loom.runs.client.vmArg "-Dvoxelstudio.projectionFixture=${project.property('studioProjectionFixture')}" }
+if (project.hasProperty('studioProjectionBaseline')) { loom.runs.client.vmArg '-Dvoxelstudio.projectionbaseline=true' }
+if (project.hasProperty('studioIrisTest')) {
+    dependencies { modRuntimeOnly files('build/iris-qa-mods/iris-1.7.6+mc1.20.1.jar', 'build/iris-qa-mods/sodium-fabric-0.5.13+mc1.20.1.jar') }
+    dependencies { runtimeOnly fileTree('build/iris-qa-libraries') { include '*.jar'; exclude 'fabric-*.jar' } }
+    loom.runs.client.vmArg '-Dvoxelstudio.iristest=true'
+}
+if (project.hasProperty('studioIrisDhTest')) { dependencies { modRuntimeOnly files('build/iris-qa-mods/DistantHorizons-fabric-forge-2.3.0-b-1.20.1.jar', 'build/iris-qa-mods/indium-1.0.36+mc1.20.1.jar') } }
+if (project.hasProperty('studioUiAsset')) {
+    loom.runs.client.vmArg "-Dvoxelstudio.uiAsset=${project.property('studioUiAsset')}"
+}
+if (project.hasProperty('studioSelectionTestRoot')) {
+    loom.runs.client.vmArg "-Dvoxelstudio.selectionTestRoot=${project.property('studioSelectionTestRoot')}"
+}
+if (project.hasProperty('studioSelectionAnalysisFixtures')) {
+    loom.runs.client.vmArg '-Dvoxelstudio.selectionAnalysisFixtures=true'
+}
+if (project.hasProperty('studioPatchPreviewFixtures')) {
+    if (!project.hasProperty('studioSelectionTestRoot')) throw new GradleException('Patch fixtures require the explicit new-world selection test')
+    loom.runs.client.vmArg '-Dvoxelstudio.patchPreviewFixtures=true'
+}
+if (project.hasProperty('studioPatchTransactionTestRoot')) {
+    loom.runs.client.vmArg "-Dvoxelstudio.patchTransactionTestRoot=${project.property('studioPatchTransactionTestRoot')}"
+}
+if (project.hasProperty('studioPatchDelayedSend')) {
+    if (!project.hasProperty('studioPatchTransactionTestRoot')) throw new GradleException('Delayed offline SEND requires a new-world transaction fixture')
+    loom.runs.client.vmArg '-Dvoxelstudio.patchDelayedSend=true'
+}
+
+// A separate, opt-in QA mod drives the INSTALLED production JAR. It is never
+// included in the user JAR, its sources or the built-in companion. No dev-mode
+// overrides, replacement Bridge or widened production self-test gates.
+if (project.hasProperty('studioBuildInstalledQa')) {
+    sourceSets {
+        installedQa {
+            compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+            runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+        }
+    }
+    tasks.named('compileInstalledQaJava') { dependsOn tasks.named('classes') }
+    tasks.register('installedQaJar', Jar) {
+        dependsOn tasks.named('installedQaClasses')
+        archiveFileName = 'voxel-installed-acceptance-dev.jar'
+        destinationDirectory = layout.buildDirectory.dir('installed-qa')
+        from sourceSets.installedQa.output
+    }
+    tasks.register('remapInstalledQaJar', net.fabricmc.loom.task.RemapJarTask) {
+        dependsOn tasks.named('installedQaJar')
+        inputFile = tasks.named('installedQaJar', Jar).flatMap { it.archiveFile }
+        archiveFileName = 'voxel-installed-acceptance.jar'
+        destinationDirectory = layout.buildDirectory.dir('installed-qa')
+        // Include production superclass bytecode so inherited Minecraft
+        // methods on custom widgets remap to intermediary names correctly.
+        classpath.from(sourceSets.main.compileClasspath, sourceSets.main.output)
+        addNestedDependencies = false
+    }
+}

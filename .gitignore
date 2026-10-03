@@ -1,0 +1,52 @@
+# Dependencies and generated outputs
+node_modules/
+**/node_modules/
+build/
+**/build/
+dist/
+**/dist/
+coverage/
+**/.gradle/
+.voxel-cache/
+*.log
+*.tmp
+
+# Accounts, connection credentials and model history
+.env
+.env.*
+!.env.example
+.codex/
+.claude/
+.dsh/
+.studio-data/
+data/
+**/data/
+**/connection.json
+**/auth.json
+**/credentials.json
+**/sessions/
+**/jobs/
+**/client-state/
+**/world-context/
+**/reference-archives/
+
+# Game instances, private captures and exports
+mod/run/
+mod/run-server/
+mod/mods/
+mod/logs/
+**/saves/
+**/worlds/
+**/screenshots/
+**/crash-reports/
+*.schem
+*.schematic
+*.zip
+*.exe
+*.jar
+!mod/gradle/wrapper/gradle-wrapper.jar
+
+# Local editors
+.idea/
+.vscode/
+*.iml

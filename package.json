@@ -1,0 +1,22 @@
+{
+  "name": "ultraagentbuilder",
+  "version": "0.4.10-alpha",
+  "private": true,
+  "type": "module",
+  "description": "Minecraft Fabric mod for local-agent building generation, world projection and bounded environment-aware editing.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "studio:bridge": "node bridge/server.mjs",
+    "test:studio": "node scripts/studio-tests.mjs",
+    "check": "node scripts/check-syntax.mjs",
+    "check:public": "node scripts/publication-check.mjs",
+    "test": "node --test tests/bridge/publication-guard.test.mjs",
+    "test:full": "npm run check && npm test && npm run test:studio"
+  },
+  "dependencies": {
+    "prismarine-nbt": "^2.8.0",
+    "puppeteer-core": "^25.9.0"
+  }
+}

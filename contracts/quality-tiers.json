@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "tiers": [
+    {"id":"lite","maxPackages":4,"reviewRounds":1,"maximumCalls":8,"maximumPlanCorrections":1,"maximumComponentCorrections":1,"description":"大组件协调：完整体量、核心空间、立面与室内；保留全部请求功能，不缩小建筑。"},
+    {"id":"pro","maxPackages":8,"reviewRounds":2,"maximumCalls":14,"maximumPlanCorrections":2,"maximumComponentCorrections":1,"description":"功能分区与代表模块：典型楼层、幕墙单元、家具组合；强化比例、材质和通路接口。"},
+    {"id":"max","maxPackages":12,"reviewRounds":3,"maximumCalls":20,"maximumPlanCorrections":3,"maximumComponentCorrections":2,"description":"重点节点定制：入口、转角、特殊楼层、核心筒连接、灯光和收口；控制主次细节。"},
+    {"id":"ultra","maxPackages":16,"reviewRounds":4,"maximumCalls":26,"maximumPlanCorrections":4,"maximumComponentCorrections":2,"description":"多尺度精修：复杂节点、关键空间与组件变体；根据证据定向修订，不强行堆装饰。"}
+  ]
+}

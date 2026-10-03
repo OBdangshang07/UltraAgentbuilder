@@ -1,0 +1,20 @@
+{
+  "key.categories.voxel_studio": "体素建筑工作室",
+  "key.voxel_studio.open": "打开建筑工作室",
+  "key.voxel_studio.lock": "锁定 / 跟随准星",
+  "key.voxel_studio.snap": "投影吸附准星表面并锁定",
+  "key.voxel_studio.rotate": "旋转投影 90 度",
+  "key.voxel_studio.mirror": "镜像投影 X 轴",
+  "key.voxel_studio.hide": "隐藏投影",
+  "key.voxel_studio.west": "沿 -X 平移",
+  "key.voxel_studio.east": "沿 +X 平移",
+  "key.voxel_studio.north": "沿 -Z 平移",
+  "key.voxel_studio.south": "沿 +Z 平移",
+  "key.voxel_studio.up": "沿 +Y 升高",
+  "key.voxel_studio.down": "沿 -Y 降低",
+  "key.voxel_studio.confirm": "打开建造确认",
+  "key.voxel_studio.axis": "切换滚轮微调轴",
+  "key.voxel_studio.draft_undo": "撤回投影定位（不撤销方块）",
+  "key.voxel_studio.draft_redo": "重做投影定位（不重做方块）",
+  "key.voxel_studio.selection": "打开只读环境选区"
+}

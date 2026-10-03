@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "status": "predeclared-evaluation-not-results",
+  "modelCallsAuthorizedByThisFile": 0,
+  "comparison": {"repetitions": 2, "sameModelAndEffort": true, "sameBriefAndCallCeiling": true, "frozenVersions": true, "blindViewLabels": true, "suggestedPreferenceGate": "new preferred in at least 4 of 6 pairs; no safety or required-function regression"},
+  "criteria": ["massing-proportion", "design-language", "facade-resolution", "interior-spatial-organization", "core-and-circulation-evidence", "site-coherence"],
+  "cases": [
+    {"id":"cbd224","prompt":"设计一座实际建筑高度224米、64×64格范围内的CBD办公写字楼，具有独特且统一的设计语言、精致的立面与塔冠、清晰入口和公共大厅、合理比例的连续核心筒与双楼梯、完整办公内饰、会议和服务空间，以及可俯瞰中庭的特殊公共层。本题重点提升外观：远看轮廓比例、街景立面层次、近看入口/转角/塔冠细部都应成立；不要默认采用大面积铜块、氧化铜与铜色条带，材质选择应服务整体设计，玻璃必须使用真正的玻璃而非同色混凝土。保留完整内饰，不通过牺牲室内质量换取外观。不要机械玻璃盒子、外围摆桌子或满墙灯带；保证功能与实际高度，不宣称通过现实建筑规范认证。","requiredEvidence":["exterior","entry","typical-floor","special-floor","section"],"knownFailures":["atrium-capped-by-slab","unstructured-perimeter-desks","oversized-core","repetitive-heavy-window-grid","unjustified-copper-default","opaque-concrete-labelled-glazing"]},
+    {"id":"museum","prompt":"在80×40×64格范围内设计一座当代城市博物馆，组织两个不同尺度的展厅、共享中庭、公共大厅、连桥、教育空间和服务区。体量、采光和立面有一致的设计语言；内饰有真实空间分区和连续参观路线，入口有近人尺度细节，不以随机雕塑和灯带代替建筑设计。","requiredEvidence":["exterior","entry","typical-floor","special-floor","section"],"knownFailures":["blocked-bridge-interface","unresolved-hall-scale","decorations-without-space-program"]},
+    {"id":"mixed-use","prompt":"在72×64×64格范围内设计一座街角复合建筑，包含首层商业、上层办公、共享露台和清晰分流的公共入口。保持街道与庭院空间，核心筒与服务空间合理，立面转角和首层有定制细节，室内有不同类型房间而非重复家具阵列。","requiredEvidence":["exterior","entry","typical-floor","special-floor","section"],"knownFailures":["sealed-terrace-access","identical-floor-layouts","unresolved-street-entry"]}
+  ],
+  "safetyRegression": ["diagnostic-never-placeable", "unchanged-legacy-policy", "unknown-request-not-resent", "frozen-asset-identity", "budget-not-raised", "reject-stale-image", "reject-image-path-escape", "protected-owner-unchanged", "shared-module-consumers-explicit", "coordinate-refinement-does-not-authorize-world-write", "cancel-retains-original", "navigation-acknowledgement-preserved"]
+}

@@ -1,0 +1,3074 @@
+{
+  "format": "UltraAgentbuilderSourceBaseline",
+  "version": 1,
+  "inheritedVersion": "0.4.10-alpha",
+  "scope": "source-only Minecraft mod and companion with offline tests",
+  "manifestHash": "bd510d5047dc342314c3a59ac7ce3efa5b7572643b532e98239ec4f7a8751a10",
+  "files": [
+    {
+      "path": ".agents/skills/voxel-studio/SKILL.md",
+      "bytes": 4282,
+      "sha256": "53095b4045fb2c552f88eefa346c26ac442d5fedfd1576a2761122ac02c1e5e6"
+    },
+    {
+      "path": "bridge/agent-discovery.mjs",
+      "bytes": 2474,
+      "sha256": "2413a31a384d7dce486507979eaf938e59188e847dfee600c04627a425a06279"
+    },
+    {
+      "path": "bridge/agent-paths.mjs",
+      "bytes": 957,
+      "sha256": "bd39461f4746c2750c48bd2e4e8e38337bd5fe9624a58306b629170768c17784"
+    },
+    {
+      "path": "bridge/assembly-budget.mjs",
+      "bytes": 6350,
+      "sha256": "15882490f880f7adc738b6e6f6560a999065d94495251565ac907e2b4401249c"
+    },
+    {
+      "path": "bridge/assembly-concepts.mjs",
+      "bytes": 7960,
+      "sha256": "64e4e28418925e06355b1b3cfb6fbc3de948818814a3465bc88fcf4188cff823"
+    },
+    {
+      "path": "bridge/assembly-decomposed-audit.mjs",
+      "bytes": 12618,
+      "sha256": "5fdbba9231a5725749be9db6387fd830743126a9eca8ffc4fa920b1a2d50a896"
+    },
+    {
+      "path": "bridge/assembly-decomposed-stages.mjs",
+      "bytes": 22665,
+      "sha256": "3359564b4b8ba1d03d57b7d520c6a73340fe50e3722462c52e20157ab97e1ac6"
+    },
+    {
+      "path": "bridge/assembly-decomposition-budget.mjs",
+      "bytes": 6711,
+      "sha256": "65aab83529508ab7f48dff697a700ac8527310ec90ffe6ce700c06a07ca7c158"
+    },
+    {
+      "path": "bridge/assembly-design-allocation.mjs",
+      "bytes": 7540,
+      "sha256": "e4ff15a61002a749152c27d16996e5a7cded350b7f68451fabdd80504a6ee4eb"
+    },
+    {
+      "path": "bridge/assembly-design-review.mjs",
+      "bytes": 8175,
+      "sha256": "ac34141e05edf2f0e001d5aadde82232b5bd0c4c07c2c79c8d523efc07b2d195"
+    },
+    {
+      "path": "bridge/assembly-durability.mjs",
+      "bytes": 10816,
+      "sha256": "5fe4d2e36ef1abee40ac61556be550c5214251365d0e127a78e97f8fd5f49ca7"
+    },
+    {
+      "path": "bridge/assembly-preview-worker.mjs",
+      "bytes": 336,
+      "sha256": "de54b3c8b6fc1939d200868153b0aba9a3df765e28e8fb510fc1d38691d36bf1"
+    },
+    {
+      "path": "bridge/assembly-preview.mjs",
+      "bytes": 1001,
+      "sha256": "36fdc1a8473481cbfffbbfcd3f3108d13e0399a55cde636d9478e760f0eb3ed1"
+    },
+    {
+      "path": "bridge/assembly-prototypes.mjs",
+      "bytes": 7878,
+      "sha256": "d9df905aebff24bf46006e92d7026df7e34e9385c4f076d07ed51c560b739b90"
+    },
+    {
+      "path": "bridge/assembly-reference-analysis.mjs",
+      "bytes": 9605,
+      "sha256": "cb97b26a4dbf6063056a873d93a1a21e05b3c033f9722d086135b5475234b327"
+    },
+    {
+      "path": "bridge/assembly-stage-prompts.mjs",
+      "bytes": 2803,
+      "sha256": "9b1a5fff9c4b7e0239200378273ef7885fb7f0f6172494c494cc9ad7da10975e"
+    },
+    {
+      "path": "bridge/claude-adapter.mjs",
+      "bytes": 5727,
+      "sha256": "ff82ac2413899dd04c270c57ae7f37499b911ce6d9f6eaf4763408de5f07440b"
+    },
+    {
+      "path": "bridge/codex-adapter.mjs",
+      "bytes": 21210,
+      "sha256": "186d4621a200cff321654d5702dfeafbe9a1a902fdcfc0fc16fe0cf9d963a7b8"
+    },
+    {
+      "path": "bridge/codex-image-input.mjs",
+      "bytes": 809,
+      "sha256": "39f34843c75c49c4238bf4436b1fcb3972330a97631ce9101906fbfb21b31263"
+    },
+    {
+      "path": "bridge/codex-persistent-receipt.mjs",
+      "bytes": 4726,
+      "sha256": "196701a2b10efddf3c20f5678d9e17c2f532b64dd6df846e424bda7adbb4947c"
+    },
+    {
+      "path": "bridge/codex-turn-observer.mjs",
+      "bytes": 1957,
+      "sha256": "22786c0a75000738f5450a4f06a0a194c323ea33952720b31c018d15e4a500d3"
+    },
+    {
+      "path": "bridge/compile-worker.mjs",
+      "bytes": 5298,
+      "sha256": "20fbf825aeb01ea14b15ea8a18be674ceb8f68ccc1607ccd1d35b821f373802e"
+    },
+    {
+      "path": "bridge/deepseek-adapter.mjs",
+      "bytes": 18168,
+      "sha256": "54f56df32b4dc36394e511bbbf1d06533c670b45022398c39efe800d486d3817"
+    },
+    {
+      "path": "bridge/design-component-continuation.mjs",
+      "bytes": 11933,
+      "sha256": "bb4b92710cf6b7de2badc8fe78ea362e426a1c589c51a839bb144cc164c4d253"
+    },
+    {
+      "path": "bridge/design-revision-context.mjs",
+      "bytes": 5392,
+      "sha256": "dc9e6b1cde5b7fe1386a6d1c5c15fd374237a0790a5ad5e7c12e76c39e463509"
+    },
+    {
+      "path": "bridge/failed-scene-repair.mjs",
+      "bytes": 6826,
+      "sha256": "2126a7317ead7d5bead5208d84b88e7b7e3e7e4e1fcaf64482c549d9632cc196"
+    },
+    {
+      "path": "bridge/generation-policy.mjs",
+      "bytes": 8118,
+      "sha256": "2ae4f5232e503894b1230d2cc679d454726bb97382efa6b6d9c30799cb1244bc"
+    },
+    {
+      "path": "bridge/generation-prompt.mjs",
+      "bytes": 1569,
+      "sha256": "801489d9914e7d200d6deff0adf6258e338fe321ea9f707e309ead399adcf962"
+    },
+    {
+      "path": "bridge/layered-generation.mjs",
+      "bytes": 4583,
+      "sha256": "29b7756e09fbcdc8373722f5d3501c2b8ea42af57ac573c2ecf1091a926cbfde"
+    },
+    {
+      "path": "bridge/model-json.mjs",
+      "bytes": 3210,
+      "sha256": "77ff6b91dd09072f64a4d93fa26e16f1b4836816b06c8d7d4723d80a40df6f53"
+    },
+    {
+      "path": "bridge/native-evidence.mjs",
+      "bytes": 21440,
+      "sha256": "d874b53b025bd73878b4451edd2e8c26388efcbf72b5c3c3c06e38e13915f292"
+    },
+    {
+      "path": "bridge/quality-review-v4.mjs",
+      "bytes": 10864,
+      "sha256": "3b3246c5e41e9a388a8889e7dea9f4a8e8f7eee18a2f7399c1f0f1fbcb4c9119"
+    },
+    {
+      "path": "bridge/quality-tiers.mjs",
+      "bytes": 5548,
+      "sha256": "b10a322b46c746d650720033f97829f09ad4f50f4a13dfdef98730314a6f2136"
+    },
+    {
+      "path": "bridge/reference-archive-maintenance.mjs",
+      "bytes": 18374,
+      "sha256": "4bd483cec08c4199544715211b6d08af5caf004c15a48636cf2ddeece69cf309"
+    },
+    {
+      "path": "bridge/reference-archive.mjs",
+      "bytes": 21531,
+      "sha256": "59d6df9e068cfc07fa765b1e374e500f5c9adc3a565f29c644ba0aff75ed186e"
+    },
+    {
+      "path": "bridge/reference-assembly-policy.mjs",
+      "bytes": 1980,
+      "sha256": "9f2d5190011ccb353b4126e7f923da2dd98f1579b32f4ac108f7d04a16804654"
+    },
+    {
+      "path": "bridge/reference-attachments.mjs",
+      "bytes": 6249,
+      "sha256": "7758953b44caabd3785b556ad008bfdac3b8851ac446eae6d2b691c051b74abf"
+    },
+    {
+      "path": "bridge/reference-generation-binding.mjs",
+      "bytes": 8553,
+      "sha256": "bfb933599f24caeb4969ae94ce42091f3317b300ec2dd53d62d93eaec502494e"
+    },
+    {
+      "path": "bridge/reference-generation-store.mjs",
+      "bytes": 2079,
+      "sha256": "1dc8034fed20a2c81f5d11e172cabffe907d8e38575f5242edbc543628907a78"
+    },
+    {
+      "path": "bridge/reference-generation-worker.mjs",
+      "bytes": 8961,
+      "sha256": "98e6d2eaf7b378ce99fe3e23637e980d78049c0a7da1294c62c6b673bf1e0c87"
+    },
+    {
+      "path": "bridge/reference-job-history.mjs",
+      "bytes": 3326,
+      "sha256": "228c76fc323f3f1f2ffe739ec1de9c14606b49226500fa232c9496c74ac904ae"
+    },
+    {
+      "path": "bridge/reference-pixels.mjs",
+      "bytes": 5258,
+      "sha256": "434fef7ae3f669da2737564344c7760319858b0d67ffe90db96aba2a19aa0c66"
+    },
+    {
+      "path": "bridge/reference-preparation-data.mjs",
+      "bytes": 2927,
+      "sha256": "57587ab1a56359e49719d42ccb62adb009eb3acc8a93fdac8b7dc65ff0e2c63d"
+    },
+    {
+      "path": "bridge/reference-preparation-worker.mjs",
+      "bytes": 7624,
+      "sha256": "7737e793b2ce65eb16d13cad27ee41c834f71168802ffbfb4bf251a0a3795b59"
+    },
+    {
+      "path": "bridge/reference-preparation.mjs",
+      "bytes": 2391,
+      "sha256": "f1b97ea0fb7b8e168e289b612fc8d8da7eaff84ac3e8c9a24f420f407e6249bb"
+    },
+    {
+      "path": "bridge/release.mjs",
+      "bytes": 202,
+      "sha256": "cfd4250fa79807383f73e28aac64edd162f234f1630bf4a144d2aede058fe0a5"
+    },
+    {
+      "path": "bridge/response-evidence.mjs",
+      "bytes": 1876,
+      "sha256": "bba0d0bb8e429e203cab3835c6ffdc777b5eac66cfeef15b7cb31268645c40f4"
+    },
+    {
+      "path": "bridge/scene-assembly-resume.mjs",
+      "bytes": 11064,
+      "sha256": "215694a6d39ed94595da02b27366b6a7bb110d8018a36183681a6699877d8f56"
+    },
+    {
+      "path": "bridge/scene-assembly.mjs",
+      "bytes": 82796,
+      "sha256": "634630b1a93de6396ee5ac0e8beee08f609c5fa1b127027af1313cd6e0d3f0ef"
+    },
+    {
+      "path": "bridge/scene-checkpoint-worker.mjs",
+      "bytes": 2139,
+      "sha256": "083964fe38e73fbdfa165a88ee721f2c5b3587d94193f691802558bbf0f9ad5d"
+    },
+    {
+      "path": "bridge/scene-checkpoints.mjs",
+      "bytes": 11778,
+      "sha256": "022f10512fe62bfe1544bc6593c4706b6eaa141befcfff48424b9e1de7e88d4f"
+    },
+    {
+      "path": "bridge/scene-concept-worker.mjs",
+      "bytes": 2202,
+      "sha256": "1f150f04737d4730df4f3d562c1edc12513d2ab24614ed20cf68ae995a79fa4f"
+    },
+    {
+      "path": "bridge/server.mjs",
+      "bytes": 72078,
+      "sha256": "af9188f49639956b32078025d0a3db54558b07a0a0efd93bc756376e017e7165"
+    },
+    {
+      "path": "bridge/visual-review.mjs",
+      "bytes": 5312,
+      "sha256": "04960af45333c1dd8d0044b86c6e950c4af3b54ca1a4e6869b985c38958770b0"
+    },
+    {
+      "path": "bridge/world-context-analysis-input.mjs",
+      "bytes": 1160,
+      "sha256": "49a655dcec8140e20a232cc6d0b12d936ffa6aa3a5411c65b690de9b75409a4b"
+    },
+    {
+      "path": "bridge/world-context-analysis-runner.mjs",
+      "bytes": 21204,
+      "sha256": "90957088a427b342a71e087d5acdf7b89967b668d4cc73f791822c6d5c1da1a5"
+    },
+    {
+      "path": "bridge/world-context-consent.mjs",
+      "bytes": 4015,
+      "sha256": "44f0e734f878a3501f4739e03187553eed4dcf8c03cbd1e9c59c75fe53881173"
+    },
+    {
+      "path": "bridge/world-context-store.mjs",
+      "bytes": 5561,
+      "sha256": "bcc1f27e9a2ef1f3542df6d58eb0aa2f09fea16889be97382667b2909e10a64a"
+    },
+    {
+      "path": "bridge/world-context-task.mjs",
+      "bytes": 2445,
+      "sha256": "4502401d16fc65b836d907cad455001afd17e420b23f774b870b0c56c61b535d"
+    },
+    {
+      "path": "bridge/world-context-worker.mjs",
+      "bytes": 14540,
+      "sha256": "c54e813f31855309213a80a2c660589435c3ca8a927f51a2ea73e64ee8c477da"
+    },
+    {
+      "path": "bridge/world-patch-capabilities.mjs",
+      "bytes": 1420,
+      "sha256": "b15b404911f31ddd3b5c65a9d8871925860b9da54043e07db87833547938adb2"
+    },
+    {
+      "path": "bridge/world-patch-compiler.mjs",
+      "bytes": 4601,
+      "sha256": "b1637add5afbe1a6bcc3a8f31ca469cd797a2294fd389ae32cbd85db0d42739f"
+    },
+    {
+      "path": "bridge/world-patch-design-runner.mjs",
+      "bytes": 31094,
+      "sha256": "bbba263a08ad21bb56624161df471ee09275c8db08e1eaeb37139544b88228d7"
+    },
+    {
+      "path": "bridge/world-patch-owner-observation.mjs",
+      "bytes": 12707,
+      "sha256": "32e7ef9c4232eae6f911ef6a82a84f3cb549440fe1d49e5a609e3b07e8d79450"
+    },
+    {
+      "path": "bridge/world-patch-preview-download-worker.mjs",
+      "bytes": 592,
+      "sha256": "493cc189357ce5f62f94d7caeba9265a7f95883851042775df1c3b23e1b6d2c7"
+    },
+    {
+      "path": "bridge/world-patch-preview-download.mjs",
+      "bytes": 2922,
+      "sha256": "58c3c23e4cc732f49de7d6b072547445ff7baded2dfed55f99348fe4993225b4"
+    },
+    {
+      "path": "bridge/world-patch-response-candidate.mjs",
+      "bytes": 6610,
+      "sha256": "504083b37dbc62d8791b59de9e757c2dc634f32fd2bb1965ca548880ea558222"
+    },
+    {
+      "path": "bridge/world-patch-response-worker.mjs",
+      "bytes": 2529,
+      "sha256": "22f70efffebeef71de530997cd5044aee08a03478cb6e15a2f5b78effd29d3c0"
+    },
+    {
+      "path": "bridge/world-patch-send-input.mjs",
+      "bytes": 1789,
+      "sha256": "452f0bb67096b4df9c67ac53fee4e38807bf3ab59586757a1622ed337c54b870"
+    },
+    {
+      "path": "bridge/world-patch-task-capsule.mjs",
+      "bytes": 20163,
+      "sha256": "b2d248b6170d5b8a4b1f6f5de76ebf7f95d29c24c27ae4d3560607c764a12690"
+    },
+    {
+      "path": "bridge/world-patch-task-disclosure.mjs",
+      "bytes": 7467,
+      "sha256": "726093d122714e4371ee2c80d1bd5e914bb7385f95abe67a450fe5f8c9d14bac"
+    },
+    {
+      "path": "bridge/world-patch-worker.mjs",
+      "bytes": 1812,
+      "sha256": "2cb49b7a5eb6c7ab451e71e6baa8284fcb0d2d5994de87f5c75e897c35b63998"
+    },
+    {
+      "path": "contracts/architecture-reference-brief.mjs",
+      "bytes": 5348,
+      "sha256": "b27546ff9ae2f2dc50da1cc1c357032aab79c1ba678baa058eedf5be2b00b32b"
+    },
+    {
+      "path": "contracts/building-limits.mjs",
+      "bytes": 256,
+      "sha256": "3bc81fd2ab4b64945306f7ea6de91e8a0d6c971541957df165c66b14768fb14c"
+    },
+    {
+      "path": "contracts/building-spec.schema.mjs",
+      "bytes": 6599,
+      "sha256": "13a3795323855dd5c7849d91bb878b2a2bd907024c23c1f96405f03d5d8470a8"
+    },
+    {
+      "path": "contracts/context-analysis-protocol.json",
+      "bytes": 2373,
+      "sha256": "7e3c84725f42a0c5e0a6cb6047af284661b409966bf6a5695d2f5ee98ebd69ff"
+    },
+    {
+      "path": "contracts/context-analysis-protocol.mjs",
+      "bytes": 731,
+      "sha256": "192575a54b88ed8187b7243443cba60fa50e4df00c47fa502c9bbc3bc5614d38"
+    },
+    {
+      "path": "contracts/context-analysis.schema.mjs",
+      "bytes": 1638,
+      "sha256": "8be15de310411261fbc9f14911a183d3c5a32d3135f377b6b30017d13722dbfd"
+    },
+    {
+      "path": "contracts/quality-tiers.json",
+      "bytes": 1067,
+      "sha256": "85e58d0d6e400eb9b4d1d357ecb69c5f842c997ff20108fb10a41c3ed7d5cea7"
+    },
+    {
+      "path": "contracts/reference-archive.mjs",
+      "bytes": 3227,
+      "sha256": "67fda2b0556b97b2f3a0e111f1b25ebafdfe7b1035fde87095309cae28848287"
+    },
+    {
+      "path": "contracts/reference-attachments.mjs",
+      "bytes": 3737,
+      "sha256": "5e1beda3f9ebbe399fe0b8658551f92c079d20137aa5d0645e6c0935348a9851"
+    },
+    {
+      "path": "contracts/reference-generation-job.mjs",
+      "bytes": 1549,
+      "sha256": "15b7245f0a2aa62640cd13ce34fa5491e6835142bb08ca46934f7ba7e97656dd"
+    },
+    {
+      "path": "contracts/reference-generation.mjs",
+      "bytes": 1556,
+      "sha256": "783099ace0f61485de1c3c23e33d383889ff21dc5cc00916c95bb20fbc342eef"
+    },
+    {
+      "path": "contracts/reference-preparation.mjs",
+      "bytes": 3163,
+      "sha256": "869335f99d3d8e8b908a8208fa013c8f96a1e900f7cb045bb4792beeba885ff1"
+    },
+    {
+      "path": "contracts/scene-assembly-stage.mjs",
+      "bytes": 6838,
+      "sha256": "9eeed94c455f8cbbc464cb67af315e1a1814c270535e6ad404593a8af160de43"
+    },
+    {
+      "path": "contracts/scene-assembly.schema.mjs",
+      "bytes": 17609,
+      "sha256": "1f422b0b82cf7c605de4b5936472861086c42c8d4cdd27d33bea1f3057337f9c"
+    },
+    {
+      "path": "contracts/scene-concepts.mjs",
+      "bytes": 6809,
+      "sha256": "d7e3045783f856cd279aed1540c7361f9be99bc51101a041412c7f32fbaf9d47"
+    },
+    {
+      "path": "contracts/scene-coordinated-edit.mjs",
+      "bytes": 2517,
+      "sha256": "d763509907fa43ba00c55b8e2acc960e9f0ec68d7b921eb872e1c2ee0bb754cd"
+    },
+    {
+      "path": "contracts/scene-decomposed-prototypes.mjs",
+      "bytes": 19647,
+      "sha256": "703bc08f9e74f6fa4967194c4888f84dbc0e526c4191bf025539a3fc54c6c8d2"
+    },
+    {
+      "path": "contracts/scene-decomposition-roles.mjs",
+      "bytes": 115,
+      "sha256": "ec0f729e0f9e7610fa4faee28854cbe55a1c4a03e28dd96ea7dfc0dc6b7ad57e"
+    },
+    {
+      "path": "contracts/scene-design-allocation.mjs",
+      "bytes": 6511,
+      "sha256": "c1978270dc168e788a0343c50c1a355215dcb1d9b3060d156f8c0522afca72bf"
+    },
+    {
+      "path": "contracts/scene-draft-edit.schema.mjs",
+      "bytes": 4722,
+      "sha256": "d8a76ccb229cc7a6c35b5561a8e6fa80e59d7980d43f70d234523c53d9af2274"
+    },
+    {
+      "path": "contracts/scene-limits.mjs",
+      "bytes": 374,
+      "sha256": "fb8de156c2839ef0573db21d7e33a9308baec71251845a3dbdf84e60f5d18f59"
+    },
+    {
+      "path": "contracts/scene-package-repair.mjs",
+      "bytes": 3407,
+      "sha256": "ff578b5fb47c8d7af11d78655a37031711c8aa64d8cac097220b1191fd6ba147"
+    },
+    {
+      "path": "contracts/scene-plan-candidate.mjs",
+      "bytes": 3393,
+      "sha256": "a6b36e3aeaa1bcb04911dafd436adaa3bb4a753fee0a8977d276fab6c26459f4"
+    },
+    {
+      "path": "contracts/scene-prototype-expansion.mjs",
+      "bytes": 6386,
+      "sha256": "9b85d3d92d92a2f0f71dccdd4f9e5393900117f7024494674e903c0f0a729293"
+    },
+    {
+      "path": "contracts/scene-prototype-plan.mjs",
+      "bytes": 4710,
+      "sha256": "21f477295ae64dac94ae191c24b501fead42c6687f71479dda6fe75cff03a27c"
+    },
+    {
+      "path": "contracts/scene-prototype-surface-guidance.mjs",
+      "bytes": 3586,
+      "sha256": "1204699a5b3f2d11a8219c4a914c8f38b8f41dbeafddb94123bee1966b28aa73"
+    },
+    {
+      "path": "contracts/scene-source-identity-guidance.mjs",
+      "bytes": 2987,
+      "sha256": "0198056d0a0926aa509529eca6757ec226b981adab5f00cf7eb4fad388aaf6f4"
+    },
+    {
+      "path": "contracts/scene-spec.schema.mjs",
+      "bytes": 11355,
+      "sha256": "8fb45c80ecb415e184b2ee9ca091835ed0c918fd267f80640fdffaed14973504"
+    },
+    {
+      "path": "contracts/schema-feedback.mjs",
+      "bytes": 3091,
+      "sha256": "c6d06f9592d0d3a49ccd2a4fd56f7977baa034d4a74b7aff6bd2698e40e6b8bd"
+    },
+    {
+      "path": "contracts/world-patch-design-review-protocol.json",
+      "bytes": 47872,
+      "sha256": "6df018209d0b693f9a038feb48fd77d59fdc149d08108d3e4c9b8cb76514929f"
+    },
+    {
+      "path": "contracts/world-patch-send.mjs",
+      "bytes": 1575,
+      "sha256": "94fc7bbb5a1ec0770c0744c0e5936a5f02e53774ef62aa1fd34be42826158845"
+    },
+    {
+      "path": "contracts/world-patch.mjs",
+      "bytes": 4072,
+      "sha256": "3e72daf265d32a06e6e22892ba344ebfcf748d522967d8636c1455ad41c42e3c"
+    },
+    {
+      "path": "contracts/world-selection-limits.json",
+      "bytes": 159,
+      "sha256": "2bdeedd349e8cc16932d254ae853ba5b096476d8450bdaedc801b1833e94781c"
+    },
+    {
+      "path": "contracts/world-selection.mjs",
+      "bytes": 6008,
+      "sha256": "fdd71fc2dfc1121fa83c7ce5a7ce3ba5c787028ab6efcb16f7f7afa632e0af71"
+    },
+    {
+      "path": "mod/build.gradle",
+      "bytes": 12318,
+      "sha256": "84af21dbe3b1cca19f5927648db4295b0a9585003437cd579105241227f53451"
+    },
+    {
+      "path": "mod/gradle.properties",
+      "bytes": 51,
+      "sha256": "ad1712c8d81281b65436660861d5f631d0ec90d159d3da62bd8a678e39c31135"
+    },
+    {
+      "path": "mod/gradle/wrapper/gradle-wrapper.jar",
+      "bytes": 43583,
+      "sha256": "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+    },
+    {
+      "path": "mod/gradle/wrapper/gradle-wrapper.properties",
+      "bytes": 253,
+      "sha256": "c1429f70e761715cb16567c7865f1c2f72752aca7810dbf0400ae25b3f53256e"
+    },
+    {
+      "path": "mod/gradlew",
+      "bytes": 8763,
+      "sha256": "c07475b363508dbe7cf7d1ded1b31f6d44bb97d98d069a455ab862b1fb9b25f0"
+    },
+    {
+      "path": "mod/gradlew.bat",
+      "bytes": 2966,
+      "sha256": "57931b17dd228e5c24dac90e815d0bf82477e831a4618dfab4136f5446b42a9f"
+    },
+    {
+      "path": "mod/settings.gradle",
+      "bytes": 186,
+      "sha256": "e54af683df1425ece28e48ed9355285775194e9e63a15c81919cdf86eb39bddb"
+    },
+    {
+      "path": "mod/src/installedQa/java/dev/voxelstudio/client/InstalledCompanionAcceptance.java",
+      "bytes": 13736,
+      "sha256": "9790217b8e3f9e913663325b020c8dd117202e7e039ff7971105d8ec8e3d4b7e"
+    },
+    {
+      "path": "mod/src/installedQa/java/dev/voxelstudio/client/InstalledPatchAcceptanceEntrypoint.java",
+      "bytes": 859,
+      "sha256": "bfef08b909475d3ac6dfa08c809c7358b4e681ea0ea28f831310e5a8c91097d2"
+    },
+    {
+      "path": "mod/src/installedQa/java/dev/voxelstudio/client/InstalledWorldPatchAcceptance.java",
+      "bytes": 19906,
+      "sha256": "439d077114f288a170d215212fc16a6637504beb15b18e2ae9642c425da67179"
+    },
+    {
+      "path": "mod/src/installedQa/resources/fabric.mod.json",
+      "bytes": 391,
+      "sha256": "6cee318cdf1e7c8d730a3dfa886196ff278953575f034e5f52c4d9bc91d2d15a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/Asset.java",
+      "bytes": 5632,
+      "sha256": "3f9c2bf42c065eb2f1b39516d12d79ef55e0d4d55daa53677565d3b7d6a31af0"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/AgentCatalog.java",
+      "bytes": 1439,
+      "sha256": "2060d0d4e6a5ca3acd482c95ea9d41c744ddce5dee3c646b345511829d72b26a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/AssetFloorBands.java",
+      "bytes": 933,
+      "sha256": "0eeb3c7dc3f4453b4d30a349a15d2c12134e005bc0f3b09b3fe5eaab442fc7e0"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/AssetReviewCapture.java",
+      "bytes": 5448,
+      "sha256": "aa4f6d7fec55991b60a75c2600bef768ea9c426059c1c72195720241a4dc9b69"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/BridgeClient.java",
+      "bytes": 49716,
+      "sha256": "f5fe07e5c6cc16c38d153fc89154eec48f0bf17bca1809b1b21cd37b9c81ba13"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/BuiltinCompanion.java",
+      "bytes": 9949,
+      "sha256": "16f901e48da91fbd214f6fc8ed362197ba8dccf320f176e4f6d63ba0529fe00d"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ClientChunkAvailability.java",
+      "bytes": 709,
+      "sha256": "68c19d5f1df6794d07eb00ef81e778a10ac9ec00ad05c353b86455f56c2f6b0b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextAnalysisHistoryScreen.java",
+      "bytes": 3209,
+      "sha256": "3ce93e4850c50257be9301cddb7e82ecb862c04d2df2724123a4e4aae17557b4"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextAnalysisObservationScreen.java",
+      "bytes": 2989,
+      "sha256": "c4664f993eb0e07c0b031ee2956e5f7753ba7cba76da2817e5d3a2cb1614689a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextAnalysisReceipt.java",
+      "bytes": 10670,
+      "sha256": "d5d59d6c1a235ac735894e700657b862451fe22aa3773a24eb8f8d9f1b0de4fc"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextAnalysisReferences.java",
+      "bytes": 7350,
+      "sha256": "cbd0c8e114f044c841a1c3260f567bae8075bdde984dfde14da4c34d25dfcca3"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextAnalysisResultScreen.java",
+      "bytes": 4202,
+      "sha256": "70012d39803b9ca895c13af06e736669732abf219d47b862ab79f1f4d8053db0"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextAnalysisSend.java",
+      "bytes": 1158,
+      "sha256": "14d348394bb66a68df70460ca5322f7f55fc7cecfc51f5885ddffd7c5d85a0b9"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextAnalysisSendScreen.java",
+      "bytes": 5240,
+      "sha256": "d2b2a1e72441b7358bd655c12f362ea74cf9ac90b55415c7ce8c4767a229f1a9"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextPublication.java",
+      "bytes": 1062,
+      "sha256": "81874e3e8a5c8d0f546a02143947d8f9da99258c2e92b5c7b24852c0e14113f8"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextReceipt.java",
+      "bytes": 7782,
+      "sha256": "288ccc1ae58e67628f44202950be0ba3901172ff5901765750a59c9ee49c0f1f"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextTaskReceipt.java",
+      "bytes": 11709,
+      "sha256": "1c838e673f27a8c62673c0c625cccc0148a9a483f2c1d89bcd5ec85315ce3b72"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ContextTaskScreen.java",
+      "bytes": 3181,
+      "sha256": "c03db984975cfe219763611f87a59632ac08da70a8f54d03fb4a8380f4e77671"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/IsolatedRandomTickGuard.java",
+      "bytes": 2727,
+      "sha256": "8960cb2524fc68803b6d446e8987fdf8f35ad8a3905aa60c9ae2a4f2e58435db"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/IsolatedTestWindow.java",
+      "bytes": 1121,
+      "sha256": "f1f07bda8552e0645598d65546184bf6c9e1209ee21927695c9f5b3cbe25be38"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ProjectionController.java",
+      "bytes": 19470,
+      "sha256": "401abb97ac52cc3329a9ed5277c8887ef5d6057eca024a0098ec524f17359738"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ProjectionRenderer.java",
+      "bytes": 10790,
+      "sha256": "cbed6791004eda2d9b168a166a833eb38a0a7a39617950f42053c496a875faaa"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ProjectionRenderSelfTest.java",
+      "bytes": 11575,
+      "sha256": "4b5bdd71dc582d9abdff71591cf46d7ebd866ca0c2e124b94595289807f47c31"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ProjectionRenderState.java",
+      "bytes": 1354,
+      "sha256": "81d21d50b2a9b4eb2dc1f7a7994cbe909b520a71e349ae59d70600099e3f6c18"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceArchiveActions.java",
+      "bytes": 7540,
+      "sha256": "c5f632229a2e02abd487429a89f6ebbc82b3f7cee917de256b4c7d1fa78c4e50"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceArchiveConfirmation.java",
+      "bytes": 993,
+      "sha256": "05d29d639ed92d509f545a98e86f380c1cca3e3b8d36a234c128e247dc89556f"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceArchiveReceipt.java",
+      "bytes": 22587,
+      "sha256": "ac27421d69e972de54f013b1e66eaa1bfad9b11dc53eb4c9b80231dd5671cb74"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceArchiveUiOperation.java",
+      "bytes": 839,
+      "sha256": "997d614583f5a6fb6ec67a539ce09d3c75f21f089bbf486d2f3c40742d11630d"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceDraftStore.java",
+      "bytes": 11137,
+      "sha256": "49256c54e9a627ca2aa357d8963360a6d16957294f8a9ba4d10453812d5bd38b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceImageDraft.java",
+      "bytes": 9120,
+      "sha256": "d2fb239261e3c7fe0c37be3feb101c71f4c00e1abd05eaac2bb3272da9875945"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceImageIO.java",
+      "bytes": 2886,
+      "sha256": "769ee7e3a6ce1e618fef622c4cdc1f85cac1f772e11b3d4f57c36da136f08c2b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceImageNormalizer.java",
+      "bytes": 7133,
+      "sha256": "10873e0c9f8a0931876cdbfc808ff7cc23a970ff644cab95c8fc1d0c6659a9e7"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceImageRestoreReceipt.java",
+      "bytes": 9562,
+      "sha256": "40099fde469777aaade502a49793d0f75aaf24461ccbc0b6aaa81fedc5e3f341"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferenceJobHistoryReceipt.java",
+      "bytes": 10713,
+      "sha256": "cda01b80f2f7b4bddaf30641650a4b9f3fd839f54b48b41fc474129ce2aa581b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/ReferencePreparationReceipt.java",
+      "bytes": 15492,
+      "sha256": "e8561b5cdd0f1e8b3bb0d20217fac8923e3c7d1465822e4d5f0ff8312b3f3384"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/SelectionController.java",
+      "bytes": 32027,
+      "sha256": "3c7039b9a9db6851b54d0d56b15ecd93f03ec6727e4b005a2708a03c776700dd"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/SelectionLineLayer.java",
+      "bytes": 795,
+      "sha256": "6871f3a35da91b3cf447db17f501f5f8871cff6525324e44105598b6692b5033"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/SelectionScreen.java",
+      "bytes": 8499,
+      "sha256": "3076e2f542418614fbe22005b42f72953c08fdb06b99d57755daea86618e7b51"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/SelectionSelfTest.java",
+      "bytes": 60047,
+      "sha256": "342ec28350238a11df180da34a9a46a7d6b8f0b266dc560c0f05282c9593290d"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/SelectionWorldScreen.java",
+      "bytes": 2616,
+      "sha256": "ac17a6164537eb6b823e32a4b8e2f0a839c17351d59c5464590175f961e04b98"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/SelfTestProgressWriter.java",
+      "bytes": 1919,
+      "sha256": "05dfe6ff57e8c2e908d6462c751863101356aa5b3724153ddb5fbaf955e71ac4"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/SpecialBlockWorldTest.java",
+      "bytes": 6695,
+      "sha256": "a931c3365023fc05ec70ef6eb9f6ceab88b551039dc7a44eb895d57d87d76c5e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioAssembly.java",
+      "bytes": 29543,
+      "sha256": "ece0e0eacfd3563aeb03205df93f1b40107128e7c63157e92e270fb21caf3a5c"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioAssetRenderSelfTest.java",
+      "bytes": 9458,
+      "sha256": "b52f565a707e6505f462f4d514cd8b5c22af301cc1bce46608ba4c47ffd89aa3"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioCheckpoints.java",
+      "bytes": 5338,
+      "sha256": "1246a35912afe902825626369377ae47526a171184bfbd67c84a8da0ede8854e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioChoiceScreen.java",
+      "bytes": 4610,
+      "sha256": "2abdef49e05c4c11f679702e584c997a218dad90d2e9601a846197033d726f32"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioClient.java",
+      "bytes": 9864,
+      "sha256": "014d9534a2720138a7bd8d7e615573cc205e3dd79ecbe5fe611dbe66a91d6745"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioDiagnosticsScreen.java",
+      "bytes": 4018,
+      "sha256": "bdecea37438938dc4a4a813a27e32de1bcc350157d620ea41edb383fe71d8a00"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioEditBoxWidget.java",
+      "bytes": 842,
+      "sha256": "36d6bd8f8b34be36eee2a57a5df3b2e9b63d4b0b0599c0a784915aefa4cae1f1"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioEvidenceSelfTest.java",
+      "bytes": 6554,
+      "sha256": "210d1c8fb1123b87d740fc74e00ce6fe77335c3fe66adee6190d2ff3838f2dcf"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioFailedDesignScreen.java",
+      "bytes": 7942,
+      "sha256": "bf3ac6b9abf811f6f085634c85226366253ce756b59a3d5da6167195bf8b5268"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioFlowSandbox.java",
+      "bytes": 4036,
+      "sha256": "f9a9b00916db02086d9297798de8c640d4893fc24650dbec32f4adad0c87edf3"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioFlowSelfTest.java",
+      "bytes": 8237,
+      "sha256": "bf6325ddf444e27f3b24b6a92a23ba0c1e7c90082df875523972148af7975f8a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioFlowWorkspace.java",
+      "bytes": 4798,
+      "sha256": "0265d8c0b5b898316b673d2340bae7bd6da260139f2f8d1703cb5f63caf769b2"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioHud.java",
+      "bytes": 2514,
+      "sha256": "f8e595433c988a0527403c1727f5cc6c0c548ec18abd4ea52b361ef19c2a4f29"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioImeCompat.java",
+      "bytes": 1554,
+      "sha256": "caec3462d5e5742e94f755724fc09fdd0607ad9b3be1f7e362bbea6385aff758"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioImportScreen.java",
+      "bytes": 1766,
+      "sha256": "2a3b347d820116772256e9e590f7046dd61d2346002134e5beee7cb4e6a2b342"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioInfoScreen.java",
+      "bytes": 4620,
+      "sha256": "ca1a7becfd6da96ddbca6e9415d94294c6779d819b35cda7fb5258babfd1db2b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioLayout.java",
+      "bytes": 1794,
+      "sha256": "abe59ef4ebeb2218f2d148dc6f6c82c7126d90fca748f0ebc38483f8884453af"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioMessages.java",
+      "bytes": 9832,
+      "sha256": "b0652ec20e10ad15cfcbe26487e44d6e216bd1acf575b376965a603883713a29"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioNativeEvidence.java",
+      "bytes": 6070,
+      "sha256": "28061e9a969580b08ba61d3af48a70666f3858a8c700576cb079db46e8bca655"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioOnboardingSelfTest.java",
+      "bytes": 3546,
+      "sha256": "5df59a816b80793635df3f522279604c61f088ec9502fc56e20a38244919db1e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioOutputBudgetScreen.java",
+      "bytes": 3297,
+      "sha256": "9634a1b00641d800fe8bfbf53a6b6639e00563d6ed8398b213756c87a70f28d0"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioPresentationSelfTest.java",
+      "bytes": 4884,
+      "sha256": "a2aee9b6667ddd71c8b84ce479d833cc58b7902cdaf68d6c5270f5a8c01fc270"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioRealAssetAuthorization.java",
+      "bytes": 7897,
+      "sha256": "6afd0134481e2407f88ef1d9baf36df6c9f429fbdf50a9d294bffe08590a7229"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioRealAssetSandbox.java",
+      "bytes": 3660,
+      "sha256": "a963c68c88bd9fde2a5fd87db250a98e47b1e268ff76949ddc7a92022b508d70"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioRecoveryScreen.java",
+      "bytes": 5911,
+      "sha256": "6e05906acce89b8c9fc827406eec2e9b21b7abb79c23c3f24cefa72083768498"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioReferenceArchiveConfirmScreen.java",
+      "bytes": 4147,
+      "sha256": "1b2dfed2892a1f44305b2425155a04a9efb1d38847f644a9c19e6f2498be73c9"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioReferenceArchiveScreen.java",
+      "bytes": 19682,
+      "sha256": "db42af7df2f2cd33f1f918b213a4fc722fb93d4d5af97d9a8d075d6110d32acf"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioReferenceConfirmationScreen.java",
+      "bytes": 7757,
+      "sha256": "311cbf5720b577abb3ac40ed3a7e9c60f456f29a2aada886bb5ac05ac62b46b0"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioReferenceHistory.java",
+      "bytes": 1963,
+      "sha256": "9974a54462b7aef0e00f3ea8465329d68a1e370159ec68f5cb8bdfa3845c708e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioReferenceHistoryScreen.java",
+      "bytes": 5495,
+      "sha256": "218eaf3ea07b1ea0898ae651ce09f68471a9a4594c611d8bc123cd8fdff3e848"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioReferenceRestoreScreen.java",
+      "bytes": 5581,
+      "sha256": "1268aae5a6d8d96203a8fb89ad55971a2a9aeaffaa9741999da27a003da4a340"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioReferenceScreen.java",
+      "bytes": 23952,
+      "sha256": "76667cc9addee574b15d67793d96f19641abfd26f8cc8f407f2e2ede235aa480"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioRuntimeVersion.java",
+      "bytes": 503,
+      "sha256": "ef80b85dd1b1f1ee900f252f4642bf0cb5355024af8a7b2dd3ab540f94f27fdb"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioScreen.java",
+      "bytes": 124633,
+      "sha256": "7d901dbbbfc9801b64491d486a349346b1868440d9b54e36b989c36d272ece81"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioSelfTest.java",
+      "bytes": 45019,
+      "sha256": "c9f6a28813bb8f206ba0504e20e1739a07a90768ecb60fe3aaeae445dd88ee91"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioStateStore.java",
+      "bytes": 4540,
+      "sha256": "e7112a2a7c58a701bfd531cf34b1c3ea12fdb33686e00982fadff7955998c20b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioTaskRecovery.java",
+      "bytes": 552,
+      "sha256": "00f91261f4855674b65711e53cb0034c4f13db8bc17bf60ec90defd80ad3afbf"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioTheme.java",
+      "bytes": 2242,
+      "sha256": "b69492dfe8dbc509f80bb7f2eff65ca142e441cc6282f922cc70247789e5dbc8"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioUiSelfTest.java",
+      "bytes": 12415,
+      "sha256": "8864dbd3cea0b23b563945df2bcbf9bd2db9710f47215e38c853dd4fe789daee"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/StudioVisualCaptureScreen.java",
+      "bytes": 2036,
+      "sha256": "f809122edde1f13dc5c99e4c126b482c4f3709620b66444d382d32b940ac556a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchAuditScreen.java",
+      "bytes": 5255,
+      "sha256": "190861feb8ed541b20e4df3f7d9bad930734d4d56e339efb8c46b297aaa58f17"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchBeforeScreen.java",
+      "bytes": 5441,
+      "sha256": "73ee066cbabc4f987b4a8c3a7b99928317b128b814697d6a4ccc29b0bae65c51"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchCandidateReceipt.java",
+      "bytes": 9065,
+      "sha256": "e75f0d1af79ce3265b1ce0ace1540080b4cbfc598ff53bde78aa378821ad170e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchHistoryScreen.java",
+      "bytes": 3719,
+      "sha256": "b683f9201c7622f8e687ed044a47016d689291744266455ff6618ebe7da75567"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchJobReceipt.java",
+      "bytes": 16285,
+      "sha256": "3f9a791eb27d9c8c5181e6621cd46f38a58616132428ad526969f859cc196383"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchOperationScreen.java",
+      "bytes": 4902,
+      "sha256": "0e1d640c56724575fb85c50bc8ea8719c848ba7b4a35a4d3429879647c3a1196"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchPageState.java",
+      "bytes": 1024,
+      "sha256": "f67d3d261a603e49721cdb6be0dadfbff8d3eaa9b37236435bae82c94d297411"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchPlacementScreen.java",
+      "bytes": 7992,
+      "sha256": "1bc4b00b990ed79ab079b2db593487e5e3b2c10ad5aabcc9c3fbab3ceef6fa4e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchPreviewController.java",
+      "bytes": 4547,
+      "sha256": "71ca4a6ea33561888ed9362291a555203e976bb83cb9b75f69292c1e60da1d74"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchPreviewRenderer.java",
+      "bytes": 11079,
+      "sha256": "5a61d17d04bb48786a1a75d8da5e2fe7038977c2c8b2bb6b7cbd8c773cf1ec1b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchPreviewScreen.java",
+      "bytes": 4958,
+      "sha256": "bd0b6c9e2a86a41ade99a7dae25cee97b083fb2a34eb611070278bd9f30309e4"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchPreviewSelfTest.java",
+      "bytes": 8857,
+      "sha256": "7d0f99322e4e2bbff24924e75791322cac8b280e5e33d538d1e8948f10e809d2"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchPromptPages.java",
+      "bytes": 929,
+      "sha256": "6b13dc760224e4d52888f326ae5085bada94c984d1a688f04733602c2f49f6e3"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchRecoveryScreen.java",
+      "bytes": 3694,
+      "sha256": "013ce7328ec1439e4e3110fa9ad4af330cb27771f8519ecbc7314fd880c0248f"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchReferences.java",
+      "bytes": 7420,
+      "sha256": "f260bf368592820c1eaac544b3523715e354be497a27dca72f3480878b8b13d8"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchResultScreen.java",
+      "bytes": 5188,
+      "sha256": "8e69d31470f72d32b2e86cba9c4ad0906d0eebb27be7342b8694df5c2b133f7a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchReviewScreen.java",
+      "bytes": 2892,
+      "sha256": "3a51836e7e06769da9931091964c0eab8f5f4a99b062ecb92e54a6c4dcb83432"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchSend.java",
+      "bytes": 1148,
+      "sha256": "69eaf6fd3bf8195a0b0dea9e6dd9b2e9a981c17d143d175699296c518fed2f26"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchSendScreen.java",
+      "bytes": 5789,
+      "sha256": "0adaf68c42795ece00db2122928d914f5899064502706b848205582cbcb83b9a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchSubmission.java",
+      "bytes": 567,
+      "sha256": "bcf9571f43a0d8383aba72972abb318d44ba6387ed3058a1815e9a262ea15704"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchTaskReceipt.java",
+      "bytes": 24980,
+      "sha256": "72be6f464f3772b30019601d1fad5f0e04feac512732963118fe55b4e3c8683a"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchTaskScreen.java",
+      "bytes": 2652,
+      "sha256": "b50e80d67edfd8f0ab97da9b3c60581821dce35f2d7cd8db867abe23baf880ff"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchTransactionSelfTest.java",
+      "bytes": 22283,
+      "sha256": "4e5354b9ff8e35afcfae6e8cec1ccb9e463c6b38c20367d863922683eb7b4ea9"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/client/WorldPatchUndoScreen.java",
+      "bytes": 6783,
+      "sha256": "909e2e1ac9f8348ac6caa5988c4ccd263f9435b867de26191e12effa9a6cf3c7"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/DraftHistory.java",
+      "bytes": 919,
+      "sha256": "bf050f7552b0d12f28d1e9a13de89419e160cc516cf4b1f9b31457eae42caae1"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/JournalRecovery.java",
+      "bytes": 4592,
+      "sha256": "7d07a9f3f15af3408ddcca036d257b5ef910acee5aa8e1ea0889f2e041627336"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/mixin/GameRendererMixin.java",
+      "bytes": 1360,
+      "sha256": "77a4f2c86dde28597ecc05ac959ca4896a89658d0f93f0a99c8e64fab552184e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/mixin/MouseMixin.java",
+      "bytes": 900,
+      "sha256": "f436d68c6082f85bae3870fbb923eab4f39102f67e8738e5d5a231ee9221dd16"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/mixin/WorldChunkMixin.java",
+      "bytes": 807,
+      "sha256": "780f3c24d95a9a62c2f5e2363ad02d3baa2e3bf795e7d22697730542a522ecb0"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/NativeEvidenceRequest.java",
+      "bytes": 3311,
+      "sha256": "0961bc7c21fa4ba4bffe34517da8520e3ee6e9bcf881ee649b6d075136484418"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/NavigationReview.java",
+      "bytes": 1244,
+      "sha256": "72ed90c9802064810a559e5821e15c82fa5f4f20e4eecfdbe6b06db06e113c91"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/Placement.java",
+      "bytes": 2545,
+      "sha256": "dc50b6d99b202a613b2b814203f69c934b828d7511e957ac3165578c45730fe8"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/PlacementService.java",
+      "bytes": 29326,
+      "sha256": "cec848b25e773689a3ff5fc324d0ca384fe2bd48f419f984d215d0e26352adcb"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/ProjectionTools.java",
+      "bytes": 1046,
+      "sha256": "26ed24b651ba2a90d1e48d91eeb956b87f8dff413b1f62d1493e47ebde360885"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/BlockStateFacts.java",
+      "bytes": 1049,
+      "sha256": "20efc6733400f5f41902c591576d91bacb97d2cd0c14137a0723631512c11153"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionBaseline.java",
+      "bytes": 8945,
+      "sha256": "bbc8bcde56d150d2bd4c47f3946138ee7a522e353a4028e501081f6a77603eb4"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionCaptureLifetime.java",
+      "bytes": 3129,
+      "sha256": "fba6eec6f6ab291aca69cb2b2818dc3103cae2670d8adbff62a4e8730a148959"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionChunkFence.java",
+      "bytes": 1327,
+      "sha256": "d7528a39674a4f6b82ba4d3c682128db36e0b3e9fc8b3ec35696db30d8fc249d"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionDraft.java",
+      "bytes": 4372,
+      "sha256": "d8ff3de09034e9f12dfce6e15e76d18b9b6a43eba8ce5f2fc61dfbbe5edf0126"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionGizmo.java",
+      "bytes": 3444,
+      "sha256": "72eb17ff2f4b9498ccd900931ee71623720c2838798a873e08ade93624d41c80"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionLimits.java",
+      "bytes": 1699,
+      "sha256": "2bf80c8c83d6653d76ab50c85640a8d6e9bb7ecc3d17b71ef91b5af5c95b407b"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionPerformanceProbe.java",
+      "bytes": 2336,
+      "sha256": "9263f5b556dd47527645f4b2f381400eb83c6fde78c3d3050b56f95a3b058319"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionReadService.java",
+      "bytes": 35272,
+      "sha256": "0277149d3f893511a181273ce45125806dcc7e56ae29686a292df78a93226540"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionRegion.java",
+      "bytes": 2598,
+      "sha256": "130599cb4a923477941ec40aa699b96b689396faa805269b6d225c9918e14900"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionScan.java",
+      "bytes": 7782,
+      "sha256": "a4850df19fe0dd0ac1a9cd2a8c6d0aff205291816c760ec9044cf234a1aec0f3"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/SelectionTimings.java",
+      "bytes": 1244,
+      "sha256": "21e5f2ac404aa34bf6058510303ed6f74d6ce5cea2f20cb47684f346a8a7e678"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchBeforeCheck.java",
+      "bytes": 6741,
+      "sha256": "5442ad05dfdbf979c60face10ba7e84787c73719c136dd12046362c4d76178bd"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchCompiler.java",
+      "bytes": 12342,
+      "sha256": "1139f88c736c019cab60b065a1b24b464fee1746c693ffbdbf0166ac50f04fe7"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchConsent.java",
+      "bytes": 1666,
+      "sha256": "e61777c12994092206d662abe6514ee04bf145b28336a12653ef3456831b3b99"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchExecution.java",
+      "bytes": 13425,
+      "sha256": "05efd404551ab38149dfb0a4360b24f0006ffe97d428f551e7cecdf212ac8759"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchJournal.java",
+      "bytes": 23994,
+      "sha256": "644e940551a6e20f25c1dd036325f4a6030cbee12cfd74583bd44a2e82476be0"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchJournalFiles.java",
+      "bytes": 6127,
+      "sha256": "ce48c2bdbcdfa5f172eed82dfe3fdadbd85c6b3f404fa5dd2592aa870d3f6fd7"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchJson.java",
+      "bytes": 4024,
+      "sha256": "46429c826d388e7057a52368db04cd1f1e5a0b118d132b50124d0d5f963cca5d"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchNativeSource.java",
+      "bytes": 5282,
+      "sha256": "3466c381b2407f8e951933bc73a9fcf92136f898a19758fd3f407f094ce41eb1"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchPlacementService.java",
+      "bytes": 17011,
+      "sha256": "ebb1e6e52e8a22338f78d76b9420e97d82b24d5d25fa45904e4cd9ea9a387897"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchPreview.java",
+      "bytes": 12205,
+      "sha256": "cb09a9d94542ce10ef39ec1a0a96dd853061803f4e55d17a7636621243970969"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchStatePolicy.java",
+      "bytes": 4887,
+      "sha256": "d5fd10ed62fb016fe1c178c48261d688c3796d41bd3948b51102339252cf2563"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchUndoExecution.java",
+      "bytes": 11444,
+      "sha256": "66ae13bca5850f65dacd8b17be83d61453688feb4de06cd3d7aab790be696656"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchUndoJournal.java",
+      "bytes": 18691,
+      "sha256": "183a9eba0e1a948e7116cbbf832aea695f0da7b7e2867daf25f1daaad8438d88"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldPatchUndoService.java",
+      "bytes": 13017,
+      "sha256": "a89f2e43ba97f40eaa45f414905683a6f47cc1609636b9d52c623a3c7c35798e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/selection/WorldSelection.java",
+      "bytes": 3229,
+      "sha256": "afabc8fd5249f05ab943cb9a23d8807ecf16b9bd54e85c3bf4db0c2b7a2a0aa4"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/SpecialBlocks.java",
+      "bytes": 3090,
+      "sha256": "01f4d87b3f96362ca1f4e6ece698ea524158bd8634cb209d9d9fa3598ed26d72"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/VoxelStudio.java",
+      "bytes": 1748,
+      "sha256": "f03f3d25e67acaecc6bfa1bde165f20453ca203e9b7dbec67031ca3ce7619f3e"
+    },
+    {
+      "path": "mod/src/main/java/dev/voxelstudio/WorldChangeTracker.java",
+      "bytes": 2384,
+      "sha256": "1bb3ef76107645144319e55b8ee641da6cff6af19fbc91835ec653f1baf6b2e3"
+    },
+    {
+      "path": "mod/src/main/resources/assets/voxel_studio/lang/en_us.json",
+      "bytes": 972,
+      "sha256": "9c7f7781b831bf69f2a5f648979f9e3c22c07e441745503f5f187982620646c8"
+    },
+    {
+      "path": "mod/src/main/resources/assets/voxel_studio/lang/zh_cn.json",
+      "bytes": 955,
+      "sha256": "1761fd1066ada7ec84c799a9669131908cb90d0532d0ac10b452040144848d74"
+    },
+    {
+      "path": "mod/src/main/resources/assets/voxel_studio/shaders/core/projection.fsh",
+      "bytes": 335,
+      "sha256": "f69e06b7dab0df092eb8cde9e6a393759f4873c45fb69c8ca260d2740ec88d79"
+    },
+    {
+      "path": "mod/src/main/resources/assets/voxel_studio/shaders/core/projection.json",
+      "bytes": 595,
+      "sha256": "1fd728e309880a5f520f2aeeb9c4d1a774286b63f08336590fa8e94b7724212d"
+    },
+    {
+      "path": "mod/src/main/resources/assets/voxel_studio/shaders/core/projection.vsh",
+      "bytes": 274,
+      "sha256": "7a14a7478339d061ab8bf2f73c3e62f1d6aa0fb00fc69cd891070f89630a12c3"
+    },
+    {
+      "path": "mod/src/main/resources/fabric.mod.json",
+      "bytes": 540,
+      "sha256": "d6c5586049bcb5bd6e915f97dcc931592eb0e6e415725ad8cdab62d4d2ce330d"
+    },
+    {
+      "path": "mod/src/main/resources/voxel-studio.mixins.json",
+      "bytes": 218,
+      "sha256": "3fa1d72f0e3ddec1dc2e69d2201d5cdbde039e4bdf55fff1732d8f67b8347e77"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/AssetTest.java",
+      "bytes": 6025,
+      "sha256": "5708913e2d2f44bae26e880f7eb5a76c9d01315400351b53ff8992e54c87a459"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/AtomicPlacementBatchTest.java",
+      "bytes": 3302,
+      "sha256": "dc3b5a52c81213392787f756edb145605adb3f999b1cc7ed02c84c6c1136348a"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/AgentCatalogTest.java",
+      "bytes": 1323,
+      "sha256": "a99b6439790730a059b778a1914f6eaabdcc653fb25397cf0ced5ccccabce877"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/AssetFloorBandsTest.java",
+      "bytes": 642,
+      "sha256": "5419d5f6667a9fd9886477e599d782099d7f05bd8923b3728a904803e5b9978f"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/BridgeClientTest.java",
+      "bytes": 45009,
+      "sha256": "4dc35492ec4c619528d1876fc3d02a6f0709f538a48bda62f7f1bc73ff9a73c0"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/BuiltinCompanionTest.java",
+      "bytes": 7897,
+      "sha256": "4bff6dc2b9590f46f6b7ba77fada3921217b1304c2dd738ed89582f4d600e039"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/BuiltinRuntimeTest.java",
+      "bytes": 3250,
+      "sha256": "9b20cddd62e68afce27e05f5b00f6537e629a236627b13622c2f52e0f778d70d"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ContextAnalysisReceiptTest.java",
+      "bytes": 6961,
+      "sha256": "57b1e2b79980ba10ab74af96aa6698e0fb91e2604d2761701feb69d957ce8806"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ContextAnalysisReferencesTest.java",
+      "bytes": 4317,
+      "sha256": "c100751017a684d2d13e09ed9fb373e2f598b8fd40190b822bfb946f85061233"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ContextAnalysisSendTest.java",
+      "bytes": 3828,
+      "sha256": "33bf101500182b14c75bf035eef85a670a7197e18697bb17782d8e708dee0653"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ContextPublicationTest.java",
+      "bytes": 3782,
+      "sha256": "ab9228d61a6bdba87d20e99bcf187ddc5ceabb6c015fb1e0fccbf246fa8f91a4"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ContextReceiptTest.java",
+      "bytes": 3794,
+      "sha256": "a716044806c70cc9da85ef449e3840246d51ab265607d126823b181d6ae3f265"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ContextTaskReceiptTest.java",
+      "bytes": 8976,
+      "sha256": "6900c08bc25c4ea5b14ea73123f5131607c5bcbca75bfd4fdb0f8c320e46c5a4"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/IsolatedRandomTickGuardTest.java",
+      "bytes": 2437,
+      "sha256": "5c237bb292df286fbf0cf9ec3fcb3b6a85e3955d1ab5c031c17e869894f16ff1"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/IsolatedTestWindowTest.java",
+      "bytes": 1704,
+      "sha256": "87cdc47f4ecf8eb383440a9a74dadc5ed3bb6cd27de2594f39dcf0c02923aa83"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceArchiveActionsTest.java",
+      "bytes": 7822,
+      "sha256": "6faca74b4c90aaba58536e278f7a6443bd31284eadb5fa2dabdc7e276784bcdc"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceArchiveReceiptTest.java",
+      "bytes": 13534,
+      "sha256": "317d2c26f23050fd9c580f9b4d34acde7db72187b460fe93c04dd8522527ec2f"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceArchiveUiStateTest.java",
+      "bytes": 2289,
+      "sha256": "6968b5217bad635cde9709ede4669565dfbc2c85d685c97315b38ca6122ff5ab"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceDraftStoreTest.java",
+      "bytes": 9196,
+      "sha256": "ca7fc31fccabcadf815a802d0d830e49c26aaca1207198ab59dd670e25f24b61"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceImageDraftTest.java",
+      "bytes": 6093,
+      "sha256": "7658d42ef334331852c1eaa18df565ba18323f8753b4149a76a7d53cf0c4229a"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceImageNormalizerTest.java",
+      "bytes": 7072,
+      "sha256": "eb8d7454fe6752ed41a6c4fc79b814a70b76a4018f1f75c3bab172a63298e29a"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceImageRestoreReceiptTest.java",
+      "bytes": 9574,
+      "sha256": "2360865b32aea9e56936ce384121f44f845fe6431530128e80dfb774caf416c3"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferenceJobHistoryReceiptTest.java",
+      "bytes": 6658,
+      "sha256": "7f8f79cc2b93dad3b4a76112a4d87030a768403d446f0def3acec2092cf9b531"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/ReferencePreparationReceiptTest.java",
+      "bytes": 7640,
+      "sha256": "99a179a982c2b5a5b28498f0206f52c9cb468e4813d6443cf71cc16e052d5e92"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/SelfTestProgressWriterTest.java",
+      "bytes": 4803,
+      "sha256": "54b830ae653f6b7822c753e6046ea7c36fe20101b010966efe0a4db1b225f1d1"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioAssemblyTest.java",
+      "bytes": 26050,
+      "sha256": "9cd7f825a20273aeee76003c68ba26471e0014b0d1b55178fb1f9f7c673d96c1"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioCheckpointsTest.java",
+      "bytes": 3684,
+      "sha256": "663f94e5d76feed41b5fef479dab7d5a0221192e5ddfebd2b61e40ba631e4f9d"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioFlowWorkspaceTest.java",
+      "bytes": 7145,
+      "sha256": "68886d7f46e075fa4883d697886a53457477c1624fc786d156e6553bf353b81b"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioImeCompatTest.java",
+      "bytes": 2765,
+      "sha256": "8a39882cd4b975718fd77007044913478fcb2be653c536697cdc2eb84ce5a6f7"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioMessagesTest.java",
+      "bytes": 3268,
+      "sha256": "5df5eeb2deff522166d284cad3fdd0f877d9820daa77f39584a0342d2f4a2d82"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioOutputBudgetTest.java",
+      "bytes": 636,
+      "sha256": "ee0ef699a409c9c282a11f4bdb1860343b5d6194f5ccbfe80aac96831008dfd4"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioRealAssetAuthorizationTest.java",
+      "bytes": 10890,
+      "sha256": "4c2a2668879c9b91f919d8a4537ff1610360c16e2475cb40124aae0fbd3b5888"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioReferenceHistoryTest.java",
+      "bytes": 1717,
+      "sha256": "949f08aced7ad1654441dc3072948b3117d68a1de7978e1f8ce779ab2ad3ed97"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioSelfTestTest.java",
+      "bytes": 760,
+      "sha256": "60b998a7403cdec2b692f3179df8c39854ad8835053efe03a642f47a3ed74f58"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioStagedBudgetTextTest.java",
+      "bytes": 2221,
+      "sha256": "6d993ef5cce304b531a529c7afe4e812e6a9acc0969f85c31ff2e481a12e9e18"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioStateStoreTest.java",
+      "bytes": 2593,
+      "sha256": "26a99ffff245ad8c8d7faaaf74632456cee5a64001b23dbb3d3d783ac45b8cc0"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/StudioTaskRecoveryTest.java",
+      "bytes": 725,
+      "sha256": "30579720e699165fa9341fa0823dceaa7b548df371383147a0ce2163608098d3"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchBridgeClientTest.java",
+      "bytes": 17997,
+      "sha256": "8c6902b9e9ec42bc1a712fae78fba75d6641339eaf8c6cc7925dddd3b6e7d39b"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchCandidateReceiptTest.java",
+      "bytes": 11401,
+      "sha256": "08930ccf8341429ccafd131e668d285acde222a02fa60d58e7b6bcc52787bd2e"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchJobReceiptTest.java",
+      "bytes": 7375,
+      "sha256": "8fc10fe18075bdf107a680447870409dca8fccdd05ebde8fa630cf0555a26b29"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchPageStateTest.java",
+      "bytes": 2046,
+      "sha256": "c0885b0b50d5759987793043cb1d120cca0950b3714a854d6fcc3fa3d7c50e1f"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchPromptPagesTest.java",
+      "bytes": 1633,
+      "sha256": "7d39b6b64a4467c8cad418a9537a84b5c277ccb7d3ea42f95cd2a6e473960b4f"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchReferencesTest.java",
+      "bytes": 4760,
+      "sha256": "e6eea35f02cf899e27f0d5dc6f969476c3525c62a9f038d668555a527e98e090"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchSendTest.java",
+      "bytes": 3529,
+      "sha256": "0a9647c4762f02b58eb8724085ceee2677d103cd460b813c6b4db6ccf6eb29c8"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/client/WorldPatchTaskReceiptTest.java",
+      "bytes": 7288,
+      "sha256": "06c8dc6c36e9b6dbfec5a97ecafd2c1abd89577de06a6ebcbad01c41410f5f2f"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/HighriseTest.java",
+      "bytes": 2786,
+      "sha256": "ebfe8afec427d726794449a3b2edb8e652e580c7b70b0db7991f34ed52916ebf"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/JournalRecoveryTest.java",
+      "bytes": 2312,
+      "sha256": "4f51df0f14fa19d07652502aa33d0037798b10f7f69d56f5e349d47ed7e8355a"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/LightUndoSafetyTest.java",
+      "bytes": 1226,
+      "sha256": "f8576faa4e659705e75c3ef686ac27a908729786bb283d61b8688d940690b4d0"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/NativeEvidenceRequestTest.java",
+      "bytes": 2421,
+      "sha256": "1dc3de3d6cdefe3924de6b4932ee3dea55e469f5e6df1f23be24c37b2e2f5372"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/NavigationReviewTest.java",
+      "bytes": 1281,
+      "sha256": "913569b51d788b687c617554bdc3eb0b1c5f6111ed94cd9e1dd1641b26dc640a"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/PlacementJournalTest.java",
+      "bytes": 2861,
+      "sha256": "de7c56cb99720b9efa7d5878111874c90da401d4d1efcd5aabffd39c06ddd8e0"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/ProjectionToolsTest.java",
+      "bytes": 2309,
+      "sha256": "35750e7dd11c08af6e20f0296c093d96b9c15fd9417c27b3068bfeac12471f57"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/BlockStateFactsTest.java",
+      "bytes": 1744,
+      "sha256": "85a0558dd7f0dae553f7277a9f43c400b8d5e906f9031239bb0ae685cb3af670"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/SelectionCaptureLifetimeTest.java",
+      "bytes": 5145,
+      "sha256": "851ad8bde2728649351fa50c2c69b71ae25feb0570fbf592dd6c5cf7c825f87d"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/SelectionChunkFenceTest.java",
+      "bytes": 1424,
+      "sha256": "da21f99a35641aa7957f214882817d6a46b455f93a9cab1a5ef94f343f7493e3"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/SelectionGizmoTest.java",
+      "bytes": 2190,
+      "sha256": "23711172c9987ea9e3c8a5835bd5ba26f28720033491270d242ce25469980d9b"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/SelectionScanTest.java",
+      "bytes": 5631,
+      "sha256": "7ea587beb06ab7b2de8b540eebb003bae791c3441e72f9a3de0c3b39399c45a9"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/SelectionTimingsTest.java",
+      "bytes": 1063,
+      "sha256": "b0abaf2525b176d30a0318a8d5db0c469cc093f3f341343f7d0b803e3a1c0b44"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/WorldPatchBeforeCheckTest.java",
+      "bytes": 13530,
+      "sha256": "db42413d91b83c1d483629d0705d6eb8277bc56ec9a2c2ce17a83acc76b7b584"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/WorldPatchCompilerTest.java",
+      "bytes": 11073,
+      "sha256": "f8207fa8a8032abe2893a84fdda85a3cc4e0d80ea619c9d6d6cc059f7a375245"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/WorldPatchConsentTest.java",
+      "bytes": 5584,
+      "sha256": "e78d162b7e554f21d5c04a6a081b0f5c389dcf763628c01621006665d552b015"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/WorldPatchJournalTest.java",
+      "bytes": 40923,
+      "sha256": "ad2dfbde8257fb5051152d120806ac8896802aeff0969de41c2f31b39bbf0ccd"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/WorldPatchPreviewTest.java",
+      "bytes": 9902,
+      "sha256": "23b9df3c77fbafd2b7c7bf789e58c1d8320beb4501d29ffd5d786d5a6be19773"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/selection/WorldSelectionTest.java",
+      "bytes": 5971,
+      "sha256": "c9605b1ba3581383ec97d35dbe889e428ae0d24003a08c8ab85dd8ba184f8528"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/SpecialBlocksTest.java",
+      "bytes": 3954,
+      "sha256": "8cd91c5716aa3543f662d4dc98b204acec7116c392eb90ca5ad58531c613c873"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/StairHeadroomTest.java",
+      "bytes": 2685,
+      "sha256": "89007d8b098e7e3c91da271a4b84f29360eb9d601b23792e8a2cd54e89189306"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/StaticOpenDoorCollisionTest.java",
+      "bytes": 2154,
+      "sha256": "1ab0e47e85cf94b1a273b117f1599e930b08088c1bbbae6861cd35728a0b9089"
+    },
+    {
+      "path": "mod/src/test/java/dev/voxelstudio/StudioLayoutTest.java",
+      "bytes": 1671,
+      "sha256": "1c567bbac5333d48d1f6d118760edcd6b43f4437a50fae9b27ccf493530506f3"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 20494,
+      "sha256": "2d8d642f910609c11829195fdddb79ddd5025bfba396e244a960c2d5169a7961"
+    },
+    {
+      "path": "package.json",
+      "bytes": 1383,
+      "sha256": "36f7698f82b1f33007da1a66bd5979403da45ed877200cd8f431741229ebea2d"
+    },
+    {
+      "path": "packaging/prepare-builtin.mjs",
+      "bytes": 3782,
+      "sha256": "04106b39cc1e3f908d3fc004ded568474892e247472d4050c670ac3e9eb81cff"
+    },
+    {
+      "path": "packaging/THIRD-PARTY-NOTICES.md",
+      "bytes": 2394,
+      "sha256": "755d8b45dc7d112da279b38212e26b25c96e22a1749478bf8cd8ec464b7fd3d3"
+    },
+    {
+      "path": "prompts/building-v1.md",
+      "bytes": 16052,
+      "sha256": "41abf41842fd1b0b8b77ba6edb71b0429ce6e9b8a0e36ee641944d883d6a3831"
+    },
+    {
+      "path": "prompts/scene-v1.md",
+      "bytes": 31531,
+      "sha256": "1005ff4bece0be9071fc232833248f9c31caa6a50c8d16a4982ba438a4fd00a6"
+    },
+    {
+      "path": "scripts/check-syntax.mjs",
+      "bytes": 1136,
+      "sha256": "eb35b6ff90f150f0c70fa87b3ea343f8312ac13ce19aedf5302989448b49b39d"
+    },
+    {
+      "path": "scripts/codex-transport-categories.mjs",
+      "bytes": 1292,
+      "sha256": "d6376e71d67dea9c61d603507f02e4db4b03e2d8e79dc4a898e1fbb5ee3768be"
+    },
+    {
+      "path": "scripts/quality-crash-retirement.mjs",
+      "bytes": 6774,
+      "sha256": "d83963b83b5fa4745961bdc07e0b39114e0df618b51728c0e0316827ff8ae970"
+    },
+    {
+      "path": "scripts/quality-goal-authorization.mjs",
+      "bytes": 7415,
+      "sha256": "159678891bbb8102cbf379b39330e3bd63b86bcedd7bed2590dae903b278a8fd"
+    },
+    {
+      "path": "scripts/quality-live-status.mjs",
+      "bytes": 3512,
+      "sha256": "1db1fcf1e4bc4c025c87b3b3de49a192d6bb1b1302325b7efea3e64d716fff92"
+    },
+    {
+      "path": "scripts/quality-native-renderer.mjs",
+      "bytes": 4139,
+      "sha256": "01b460256715265a7f696db599201f4e689f8102485d9c70570d558253caceec"
+    },
+    {
+      "path": "scripts/quality-process-settlement.mjs",
+      "bytes": 2544,
+      "sha256": "64bd43de0f3ef15061e7d6fb778355cc41dafe128c1fabed774d132119856881"
+    },
+    {
+      "path": "scripts/quality-renderer-lifecycle.mjs",
+      "bytes": 3425,
+      "sha256": "7cbfadc6dd6dde1bf0db3b4474837d27041f91bdf5debb1d4548f860e174a798"
+    },
+    {
+      "path": "scripts/quality-renderer-supervisor.mjs",
+      "bytes": 5548,
+      "sha256": "1180a35e127a74f3bf28f2439fb4c2b8d028f2f719ada7d069620e2a33d1b0f1"
+    },
+    {
+      "path": "scripts/quality-run-cleanup.mjs",
+      "bytes": 3119,
+      "sha256": "15ed1e10a65d4664d72659829f7affc0b93d23318a46d9d4f617fa1e7bedb8e9"
+    },
+    {
+      "path": "scripts/quality-runner-retirement.mjs",
+      "bytes": 10068,
+      "sha256": "c943de4e54d12244bbbec74d3209e6d29af6cadb28e2517d6a7d219390fc6b75"
+    },
+    {
+      "path": "scripts/quality-stage-images.mjs",
+      "bytes": 10920,
+      "sha256": "4a88a4d40e71f15b1a0257d1a0cac5948260679591540093193703cbccaec4b2"
+    },
+    {
+      "path": "scripts/quality-v4-live-gates.mjs",
+      "bytes": 9008,
+      "sha256": "42cf92cd812ab65f714d2a3a34d983c63ab9aad49cb16ffdce00d2b54d4b1bcd"
+    },
+    {
+      "path": "scripts/reference-player-fixtures.mjs",
+      "bytes": 12401,
+      "sha256": "c6036ac573b3f6cb9ed57b5c3fa4ecb3fb9919bc4a156b0ed50edada8c3e8ede"
+    },
+    {
+      "path": "scripts/reference-terminal-evidence.mjs",
+      "bytes": 4945,
+      "sha256": "8d5e6e7bf943545673d542074a64583a7de1010f44a00c300111997913aa58dd"
+    },
+    {
+      "path": "scripts/scene-assembly-assessment.mjs",
+      "bytes": 33205,
+      "sha256": "e7482765c6fb59b3e3df6a72b1a17741575665d1445dafcf928063af9c6787dd"
+    },
+    {
+      "path": "scripts/scene-assembly-interruption-snapshot.mjs",
+      "bytes": 8785,
+      "sha256": "1a96cc7db4ea08860dfcdc24e5f13277a4fb8400c4385fd19badb17c92721a34"
+    },
+    {
+      "path": "scripts/scene-continuation-model.mjs",
+      "bytes": 1073,
+      "sha256": "a0297895432d579c5e828df80ef26594b1ff91debbf133623729dd1406dd0f0b"
+    },
+    {
+      "path": "scripts/scene-live-model.mjs",
+      "bytes": 1168,
+      "sha256": "a22bc9da662a2bd7396bbbaa7b110c7b969c6bb8c6f8ff777f04daed1142d22c"
+    },
+    {
+      "path": "scripts/scene-replacement-budget.mjs",
+      "bytes": 6858,
+      "sha256": "6e8488ac5f7a7799b18b344d8550fb20f469514613c930d32e20d7b65a632fb4"
+    },
+    {
+      "path": "scripts/scene-runtime-snapshot.mjs",
+      "bytes": 1515,
+      "sha256": "cf6cadaa15da2da295c7797a681535d54d35855363883f39353084ace6d4ef7b"
+    },
+    {
+      "path": "scripts/selection-client-log-guard.mjs",
+      "bytes": 431,
+      "sha256": "f43d93f5c1c36ff9d7c9fe30ed1bbf7c9489f3f67cff3075a9da5238cae06d9b"
+    },
+    {
+      "path": "scripts/studio-java-fixtures.mjs",
+      "bytes": 20287,
+      "sha256": "9232df97b6b382a67896d285e9abab57e59ac9be30577c91ef54c6a8748b1ea9"
+    },
+    {
+      "path": "scripts/studio-tests.mjs",
+      "bytes": 2747,
+      "sha256": "aaf81a7be3b1eba15ed4343acb31420c08e188b54b27d9bc268a3d905f9a1fc0"
+    },
+    {
+      "path": "scripts/world-patch-before-fixtures.mjs",
+      "bytes": 3965,
+      "sha256": "860e5ae361a82ba435748edca762e95c633bb48159d36783e2e7342d5634d1af"
+    },
+    {
+      "path": "scripts/world-patch-design-candidate.mjs",
+      "bytes": 8234,
+      "sha256": "745d2bc294c13d97edc5b9ffe50ba5b6ae917f6171d8c79245852b150e6c9925"
+    },
+    {
+      "path": "scripts/world-patch-design-experiment.mjs",
+      "bytes": 26936,
+      "sha256": "dd5267e3a218fa1a447d8b4ffffbffa6b5e715614f4aa83958db6dacff39b924"
+    },
+    {
+      "path": "scripts/world-patch-design-input.mjs",
+      "bytes": 122,
+      "sha256": "50149b3fd396f06302477e22fcfaab91b293aa4c9015bf6022d1eae885cb4a72"
+    },
+    {
+      "path": "scripts/world-patch-design-task.mjs",
+      "bytes": 121,
+      "sha256": "03c28a2e657fa3dd3faaecfc9dd51216ef791e6dff2826a4c8f73811d5b619eb"
+    },
+    {
+      "path": "scripts/world-patch-journal-fixtures.mjs",
+      "bytes": 1481,
+      "sha256": "96d3b3c5b4f0e3b62f09f626e3a0628eb7422ce1b4c45be7458f2ab6daa18d3f"
+    },
+    {
+      "path": "scripts/world-patch-owner-observation.mjs",
+      "bytes": 12707,
+      "sha256": "32e7ef9c4232eae6f911ef6a82a84f3cb549440fe1d49e5a609e3b07e8d79450"
+    },
+    {
+      "path": "scripts/world-patch-safety-fixtures.mjs",
+      "bytes": 7690,
+      "sha256": "bdeaa5e3580d360e790fa0ab303af96eecb2308ac293392ce9873cbd77a704ae"
+    },
+    {
+      "path": "src/core/asset-schema.mjs",
+      "bytes": 2507,
+      "sha256": "76093031954d017e47c1ac708b305ac98580916ffbc3cb368b7d2d9898a99f3d"
+    },
+    {
+      "path": "src/core/build-pipeline.mjs",
+      "bytes": 5461,
+      "sha256": "19ba14cf0beea966940636bb0c4ee6bd270628fb2991e1803e305c75fc6aa03f"
+    },
+    {
+      "path": "src/core/color-mapping.mjs",
+      "bytes": 1729,
+      "sha256": "5b76d86b94c9791288271fd8935637654f792f9c8ef4fcb865c97ddc1f5fb707"
+    },
+    {
+      "path": "src/core/generated-module.mjs",
+      "bytes": 2659,
+      "sha256": "620cc2ca729bd1fd0fc1ca49207677d9248cc0b2e4af5125ab9ddf9cd4e724ee"
+    },
+    {
+      "path": "src/core/hash.mjs",
+      "bytes": 408,
+      "sha256": "add215d5a271c432eb02fc5f81b2365fc8ff1eb6b9ac7d067c94957f86ca7159"
+    },
+    {
+      "path": "src/core/html-inspector.mjs",
+      "bytes": 1721,
+      "sha256": "cd98fd93d7c7e204d1e14cdc747a2ab7f491688df9dba50fb5b1d80dc53d26aa"
+    },
+    {
+      "path": "src/core/partition-layout.mjs",
+      "bytes": 2682,
+      "sha256": "e23bac08b1f8ddea4e99a65c19859e30988dc0c81fa98c1d9c8a23f755621bf5"
+    },
+    {
+      "path": "src/core/partition-worker.mjs",
+      "bytes": 3068,
+      "sha256": "83bc5bd6901fab061ffbac82d4d5d483611880dfa717c86bedb2b6fea4544dc5"
+    },
+    {
+      "path": "src/core/partitioned-build.mjs",
+      "bytes": 9225,
+      "sha256": "a2d355b859e845fd261e159fb0774fec20a54e46d65d5dad14c5aade2cf17280"
+    },
+    {
+      "path": "src/core/path-hash.mjs",
+      "bytes": 1281,
+      "sha256": "9d1ffae170a0b4ea466ac132f03277171c74e5a25b79e8b7e116e49a79cf9507"
+    },
+    {
+      "path": "src/core/paths.mjs",
+      "bytes": 805,
+      "sha256": "28ad9416b14d539a6e6906401b68504938e60f0db629bdc3bfeea138b1bdab4e"
+    },
+    {
+      "path": "src/core/preview-bundle.mjs",
+      "bytes": 7174,
+      "sha256": "fe4eda30c20ff48a946e633527a0b38daa0ffc9a0dcd55234b656074f5ca2d56"
+    },
+    {
+      "path": "src/core/project-config.mjs",
+      "bytes": 3597,
+      "sha256": "fbb015a17c584556c800e1a8c50fa1f2e0022f03ca4c0f4c9e5e37981f68eec2"
+    },
+    {
+      "path": "src/core/scaffold-adapter.mjs",
+      "bytes": 1360,
+      "sha256": "58e1e963a06002c1c2f22c503a3dd231e48fa186fc1c4ceaecb793553e1c8f08"
+    },
+    {
+      "path": "src/core/schematic-verifier.mjs",
+      "bytes": 10117,
+      "sha256": "61886b47a13082f5697a59ac3dff90f2ddbeaef2cf354acf96cb1d1868382f23"
+    },
+    {
+      "path": "src/core/schematic-writer.mjs",
+      "bytes": 14258,
+      "sha256": "326bd28a985a570015cb487a66fb7f5fb3c9b33e4d3f1637b5257381c375e606"
+    },
+    {
+      "path": "src/core/stream-reader.mjs",
+      "bytes": 2705,
+      "sha256": "a97d58c46ef6db137a01e95aaba4578cdf15a119b7cb6f3d11a2bfef734a39bb"
+    },
+    {
+      "path": "src/core/tile-export.mjs",
+      "bytes": 6135,
+      "sha256": "36dc651f03ec03b61c3c46929e19612f2d0426da8652b45524de2409a12a7e9d"
+    },
+    {
+      "path": "src/core/varint.mjs",
+      "bytes": 638,
+      "sha256": "8038480f765867e35e44dc79d7bf2eb7094d9f82fb541024c4398ba8bbf1952f"
+    },
+    {
+      "path": "src/core/visual-runner.mjs",
+      "bytes": 3612,
+      "sha256": "504d293ed82ffaf60bec8a79da0c579a26c5f69af734ce05eb57e3776f3d578f"
+    },
+    {
+      "path": "src/core/voxel-cache.mjs",
+      "bytes": 1724,
+      "sha256": "482fc27e2cf93d14878ffda6ba572f3253b632c0a5b42d0298d89076dc93548d"
+    },
+    {
+      "path": "src/design/architecture-evidence.mjs",
+      "bytes": 2341,
+      "sha256": "4fd77618df082c0763543df040883d68aef62607c12d9297dcfac4e913f5fd34"
+    },
+    {
+      "path": "src/design/assembly-scope.mjs",
+      "bytes": 11212,
+      "sha256": "a320c12c63dfd04ef3cd00728190faa4d7d5973d78cc415a38fb1dcfafebe3e7"
+    },
+    {
+      "path": "src/design/checkpoint.mjs",
+      "bytes": 4310,
+      "sha256": "2aff8f0fa45039e9b4707270c71009ab11a39336eb7f2b88e2405f59065919bb"
+    },
+    {
+      "path": "src/design/compiler.mjs",
+      "bytes": 40735,
+      "sha256": "980cdf513ed2c30483f0065fcd8069c6e6eb704fbd22fab459f99f28d34f8b0e"
+    },
+    {
+      "path": "src/design/construction-feedback.mjs",
+      "bytes": 14981,
+      "sha256": "9e34ebd3d0a26a3dd86eadeafd7569485f8ed73083d36ec2056b46863d6af869"
+    },
+    {
+      "path": "src/design/correction-feedback.mjs",
+      "bytes": 7763,
+      "sha256": "cad61dc1c7c53bdf5aa9a865d140fd1842b68f11be8155d329f3dbc7a883de9c"
+    },
+    {
+      "path": "src/design/edge-facade.mjs",
+      "bytes": 2672,
+      "sha256": "6dd547fea22442f04d834e6ef1253d85eaa876bf7ee0a158489a842aa63a341e"
+    },
+    {
+      "path": "src/design/facade-validation.mjs",
+      "bytes": 4325,
+      "sha256": "ce4be00d8dddab8b27eb8b87a072d51ac99752de3aa6e461d46ea49d0fbe0fa9"
+    },
+    {
+      "path": "src/design/floor-components.mjs",
+      "bytes": 5526,
+      "sha256": "b82e538f62d0ce23e728868336eff0974db13c59a802605e632d44747ce561c2"
+    },
+    {
+      "path": "src/design/instance-revision.mjs",
+      "bytes": 3912,
+      "sha256": "2da2e2c5e8434eeac9244ae01c736bc444db3bf18731aeb3c897bb26ed4413de"
+    },
+    {
+      "path": "src/design/navigation-feedback.mjs",
+      "bytes": 7428,
+      "sha256": "67cb7cccd29bfcc8829f1f310736901ea04dc8fce1d838ad4b59ec8931e12cc1"
+    },
+    {
+      "path": "src/design/occupancy-preview.mjs",
+      "bytes": 6678,
+      "sha256": "949a7336c3c0360dde719853876fe91bd7ff955f6a76baa4d00b1415da11cb6e"
+    },
+    {
+      "path": "src/design/ownership.mjs",
+      "bytes": 302,
+      "sha256": "ba0d60fbabd8f2a24d0912de9790937560b04aba914e3fa921b6d7f4a2ece06d"
+    },
+    {
+      "path": "src/design/package-spatial-feedback.mjs",
+      "bytes": 4681,
+      "sha256": "1a585da5703b06be4ea34536cd9ec5fe0ed49fcb9d8a9c0c2c7e323ebdd1e27f"
+    },
+    {
+      "path": "src/design/profile.mjs",
+      "bytes": 4794,
+      "sha256": "a41c7e9f419533bade70cab671d201d3045202b808880e7edc201bda232d4456"
+    },
+    {
+      "path": "src/design/prototype-expansion.mjs",
+      "bytes": 6079,
+      "sha256": "e86ce58e73acb1b12b609d73798fe28c2a3a6043d36ba0c637eff9ea9c032c83"
+    },
+    {
+      "path": "src/design/prototype-seed-views.mjs",
+      "bytes": 2393,
+      "sha256": "86f9c47b2ca212e02fe547e9b80d1e5b31152871f161625423323bfbc1aca2f6"
+    },
+    {
+      "path": "src/design/quality-prototypes.mjs",
+      "bytes": 10995,
+      "sha256": "ee2731c42db13fc2d87509dcdaaac6118b06b0cf6976af2e0b100e205fe799fc"
+    },
+    {
+      "path": "src/design/quality-v3-evidence.mjs",
+      "bytes": 9700,
+      "sha256": "7e1f884efd114c323fc9832a02ee93a55a033723c3a0f8dff8648f4aa75da067"
+    },
+    {
+      "path": "src/design/quality-v4-evidence.mjs",
+      "bytes": 4353,
+      "sha256": "a59bf2374db4165be09bf659c8e05c21c9f90237ab0619809e10c73098dc36dc"
+    },
+    {
+      "path": "src/design/reservation-authority.mjs",
+      "bytes": 2843,
+      "sha256": "93740c367daef26261a9e51d713c2179bde4010ebbdb5639bef83af3e41a5f1b"
+    },
+    {
+      "path": "src/design/revision-measurements.mjs",
+      "bytes": 3019,
+      "sha256": "7a1a597191bebbb6adb4dd32c53a9fc93db8b5a759a7ae4df8f5ccbfaef787a4"
+    },
+    {
+      "path": "src/design/revision.mjs",
+      "bytes": 9813,
+      "sha256": "9febf870945af98e340b1aec385bf89f628ea024a8c4aaae250666670e159430"
+    },
+    {
+      "path": "src/design/room-zone.mjs",
+      "bytes": 4887,
+      "sha256": "8911a39606b47fc9ef9a0e85b1e29347c1b5206b4bc15edf28322f978524a43e"
+    },
+    {
+      "path": "src/design/spatial.mjs",
+      "bytes": 3854,
+      "sha256": "8e1b57e951a87eb2d3f8313c174037cb15f86cc21022ee8f32f5d372bf790d23"
+    },
+    {
+      "path": "src/design/stair-access.mjs",
+      "bytes": 1483,
+      "sha256": "7cce5bb3cc2bb359644cdc411832fe4ed9d9605ddaefbe049c4e6485114bbc11"
+    },
+    {
+      "path": "src/design/stair-bounds.mjs",
+      "bytes": 1510,
+      "sha256": "df15976c03cc23f3c4bdddc5aaae144abafd4bf4d33494308981d266427bb91f"
+    },
+    {
+      "path": "src/design/storey-layout.mjs",
+      "bytes": 5939,
+      "sha256": "8bc231a32fc9a9578089c93756c3af288ad83436af71e9a53cd3653ad0483566"
+    },
+    {
+      "path": "src/generation/block-states.mjs",
+      "bytes": 4870,
+      "sha256": "0955a2a2256991c3db5d837149d82b1069c18f7622966b864d04ba3113bc9dc0"
+    },
+    {
+      "path": "src/generation/bundle.mjs",
+      "bytes": 4966,
+      "sha256": "139410e78eaab287cf580f6efd6e37e8238578ce3b8fe0649294d3d09c58d5e9"
+    },
+    {
+      "path": "src/generation/compiler.mjs",
+      "bytes": 15292,
+      "sha256": "d3aab34f359a9441dd163c7144a29c4eaa241f04808ead69c64f80a05534a129"
+    },
+    {
+      "path": "src/generation/components.mjs",
+      "bytes": 3250,
+      "sha256": "deda67c2b17d4f73d2eec43933ef99a14be49e4db3c64450c52fa2e25df3c53b"
+    },
+    {
+      "path": "src/generation/design-examples.mjs",
+      "bytes": 7071,
+      "sha256": "2e43a5d89c363a6b4eae766414b4a4c57bf8c067e84646902a46047bdc382c21"
+    },
+    {
+      "path": "src/generation/diff.mjs",
+      "bytes": 1042,
+      "sha256": "0426e8356b1246b1d19a5d3fd2fcca9b50ab09d3a7f87913f9e9b8214be3c6a7"
+    },
+    {
+      "path": "src/generation/export.mjs",
+      "bytes": 2130,
+      "sha256": "1247837c648fee587b52c743f271a9abb48e786e7859ae6c8944186df211f712"
+    },
+    {
+      "path": "src/generation/generator-examples.mjs",
+      "bytes": 1287,
+      "sha256": "1338ffd2396ded30c48dc71fb4fa960f60d29c1b60c637ba23ab579d578427ec"
+    },
+    {
+      "path": "src/generation/groups.mjs",
+      "bytes": 3066,
+      "sha256": "5f46e7f1610ec58e27d4d3c5a150baa42527d6825d569c365132e92c49fe9301"
+    },
+    {
+      "path": "src/generation/materials.mjs",
+      "bytes": 4551,
+      "sha256": "eaa44697cdd00446f3b24213b38667683418c98c4ed52bebaf6a895d6d1024dd"
+    },
+    {
+      "path": "src/generation/navigation.mjs",
+      "bytes": 4675,
+      "sha256": "ff1cd1222db6b4dcdddb596ffd13cc6481efaf3a2a061b178f5d54f2a3c96959"
+    },
+    {
+      "path": "src/generation/passage-declarations.mjs",
+      "bytes": 1579,
+      "sha256": "9ee3eb6f186df194061fc0ffb4b0c0e43f24adf98986036d03d1a6b18db2da5a"
+    },
+    {
+      "path": "src/generation/quality.mjs",
+      "bytes": 576,
+      "sha256": "a5a12b7229588a749d9788120368e80f11ba03715822b9537ec19289734a0a51"
+    },
+    {
+      "path": "src/generation/sample.mjs",
+      "bytes": 1398,
+      "sha256": "16ccb47af15f34f05f5cbe25376c3fafa57ea96a84f13232b5199a132a16737a"
+    },
+    {
+      "path": "src/generation/static-open-doors.mjs",
+      "bytes": 1568,
+      "sha256": "0e47286deac2967fecffbea4beab186ade334b0fbdb67f430c42397335da9fa6"
+    },
+    {
+      "path": "src/generation/walking-grid.mjs",
+      "bytes": 3340,
+      "sha256": "ca1661b2859c2f91d74f632e77d5c039453dccac27b52fc6cc472c99abfdb706"
+    },
+    {
+      "path": "src/world/context-reader.mjs",
+      "bytes": 7711,
+      "sha256": "4f9f6de4989ee33edea422f5318e8cbbdd124488f7fa2e93a0cd9888888eaaa2"
+    },
+    {
+      "path": "src/world/context-snapshot.mjs",
+      "bytes": 9818,
+      "sha256": "959757b65f5cb76ce3ab505c9883f65922ddb17e63eb7edbb82d1f49738ea101"
+    },
+    {
+      "path": "src/world/context-summary.mjs",
+      "bytes": 4530,
+      "sha256": "b87e8bf414778df5e6836fb7cce96ddb4be82d848679dd85c2e4351b64f0fca9"
+    },
+    {
+      "path": "src/world/world-patch-design-input.mjs",
+      "bytes": 12752,
+      "sha256": "85ae30ec2d0c4597b53c7135ef0fe0f415d68a2971149898628b7812f946f344"
+    },
+    {
+      "path": "src/world/world-patch-design-task.mjs",
+      "bytes": 8109,
+      "sha256": "c68924636aa40c8334817939eadc6700a36e98baa2a49753c854246172a587f9"
+    },
+    {
+      "path": "src/world/world-patch-preview-data.mjs",
+      "bytes": 7896,
+      "sha256": "aa5f071f1cb265a5d7ec52a055c0b25af48f98454a9971389ab62117153ab4f0"
+    },
+    {
+      "path": "src/world/world-patch.mjs",
+      "bytes": 9782,
+      "sha256": "e22a493a833f8ccc8b08e9e004efc191ece1b2bb933e3abaa95fc815a89979c8"
+    },
+    {
+      "path": "tests/bridge/agent-discovery.test.mjs",
+      "bytes": 3568,
+      "sha256": "1518efe2ccd2049038c192fd31e344f3afbb5b1057df458fe274dd9af5de9add"
+    },
+    {
+      "path": "tests/bridge/architecture-reference-brief.test.mjs",
+      "bytes": 6008,
+      "sha256": "b31eda7d01ca761f77e183835af8b50b274c32cd8bd3bf328ae558a84b94830a"
+    },
+    {
+      "path": "tests/bridge/assembly-budget.test.mjs",
+      "bytes": 4553,
+      "sha256": "7136d98fcca118d3bf492fa4060a6378f3ed5029d3e1b2ab962e7cf7caf46c3b"
+    },
+    {
+      "path": "tests/bridge/assembly-decomposition-budget.test.mjs",
+      "bytes": 9231,
+      "sha256": "4ef51fbca8d665cc839250f0301720cc44ae44a41eb57df72d6edcb77e417808"
+    },
+    {
+      "path": "tests/bridge/assembly-design-review.test.mjs",
+      "bytes": 18496,
+      "sha256": "fdbbef7a4d11268c866eccffb3a309fdcd9cbc8f73a8ba939d1d62803fc670a7"
+    },
+    {
+      "path": "tests/bridge/assembly-durability.test.mjs",
+      "bytes": 17562,
+      "sha256": "aa659dfc4283404b1bbdf671a6af5e5b3ab8b7460247097fc29e0c14e0146903"
+    },
+    {
+      "path": "tests/bridge/assembly-prototypes-assessment.test.mjs",
+      "bytes": 5329,
+      "sha256": "93ced22dd9fea178fecf9d58186e5dc30fdd1133b0697617d300394503f7fc50"
+    },
+    {
+      "path": "tests/bridge/assembly-prototypes-fixtures.mjs",
+      "bytes": 1750,
+      "sha256": "c7a7ae9b1bbed8cedfaedb70257246afe57fe000b0a4544911c83b22f451fbba"
+    },
+    {
+      "path": "tests/bridge/assembly-prototypes.test.mjs",
+      "bytes": 11795,
+      "sha256": "45f5e4de7018992dac6624a1ec9faa53b1ccf57b37023bd84af36dc6d2a05a9a"
+    },
+    {
+      "path": "tests/bridge/assembly-runtime-world-identity.test.mjs",
+      "bytes": 2215,
+      "sha256": "1ece56ccaf3ab87ef9f65ff13bee6f9346307dc1c9d1f7af4fd6786ae52b8204"
+    },
+    {
+      "path": "tests/bridge/bounds-policy.test.mjs",
+      "bytes": 1215,
+      "sha256": "ef146f771192c2d6ee68199ca08f5f4f17ba10f07f0560d74a050d9b0b079901"
+    },
+    {
+      "path": "tests/bridge/claude-adapter.test.mjs",
+      "bytes": 2858,
+      "sha256": "89657ca84506d354585f4d7be056c8c0d810f0515219ece1d60a08b3bcd16aec"
+    },
+    {
+      "path": "tests/bridge/codex-adapter.test.mjs",
+      "bytes": 1833,
+      "sha256": "fb77bcfea229d6d2a7384ea12eb9f945c6d873636217ca0f05d51e92fd139f0b"
+    },
+    {
+      "path": "tests/bridge/codex-generation.test.mjs",
+      "bytes": 15183,
+      "sha256": "b55ec8732f6e2c1183bb29e7f001aaec87ba8fba83e708e0100eb99255ba85c4"
+    },
+    {
+      "path": "tests/bridge/codex-persistent-receipt.test.mjs",
+      "bytes": 9489,
+      "sha256": "c8b5e2331eacfb6971134e85803506136ac9b78af098a5745b8e1382d53cf402"
+    },
+    {
+      "path": "tests/bridge/codex-reference-input.test.mjs",
+      "bytes": 7931,
+      "sha256": "e01c8694fd7e874dfbd71bbd0dab5a0762e7ddafa2f7ddafc77c3d3d0b591400"
+    },
+    {
+      "path": "tests/bridge/codex-transport-categories.test.mjs",
+      "bytes": 1364,
+      "sha256": "07a64a0bdcbdbb5bd92a8953f2e4038afd8f6c55f21ed5a79622576a2ef1a69a"
+    },
+    {
+      "path": "tests/bridge/codex-turn-observer.test.mjs",
+      "bytes": 2627,
+      "sha256": "e5a8d80f5124e7e3e7e454660ac4ded95e3ddee8d34a33dc42d02a3bf829c88e"
+    },
+    {
+      "path": "tests/bridge/component-correction-budget.test.mjs",
+      "bytes": 8748,
+      "sha256": "a6a5cf4c76dc4672e2b9523c4b0a99dad011c88bcea5716cb752ec6a527a1606"
+    },
+    {
+      "path": "tests/bridge/decomposed-assembly-assessment.test.mjs",
+      "bytes": 7571,
+      "sha256": "d92294e1c82c808817e71380f811095aa8491aa5622e741c28617082a601d42e"
+    },
+    {
+      "path": "tests/bridge/decomposed-assembly-fixtures.mjs",
+      "bytes": 6080,
+      "sha256": "e56099448f7a2b51d02e8680f87282d0fd5f6a595929de882389cfd9b38bad89"
+    },
+    {
+      "path": "tests/bridge/decomposed-assembly.test.mjs",
+      "bytes": 21650,
+      "sha256": "83556728342f82efaae07e3bf93d167f508ec7618fc20b9f608e27dd539523c3"
+    },
+    {
+      "path": "tests/bridge/decomposed-review-funded-budget.test.mjs",
+      "bytes": 4379,
+      "sha256": "cfce5b20d1215a71e00bcf70d3b65d552e68fcff46caca0e9ddbd29fbd267cce"
+    },
+    {
+      "path": "tests/bridge/deepseek-adapter.test.mjs",
+      "bytes": 19849,
+      "sha256": "3e0464fc505b761337b654d08f342d4f1607956284b8b73f1a5915702bfd4ed0"
+    },
+    {
+      "path": "tests/bridge/design-allocation-assembly.test.mjs",
+      "bytes": 11387,
+      "sha256": "d5122b1d1153fd00c53ed8bdc18ce956cf5486788f9abb1a33176425aa47d98d"
+    },
+    {
+      "path": "tests/bridge/design-component-continuation.test.mjs",
+      "bytes": 7703,
+      "sha256": "22e56a328ecd486220e56858055a448776752150798e9e8a9afa015eb5509098"
+    },
+    {
+      "path": "tests/bridge/design-correction-budget.test.mjs",
+      "bytes": 6061,
+      "sha256": "7987755bf3690e86ae8b85e9d934d00d7dd65631d7e4f29cf1aee5e62b64bb65"
+    },
+    {
+      "path": "tests/bridge/design-revision-assessment.test.mjs",
+      "bytes": 5666,
+      "sha256": "3bbee9f235bdd55bf18632ee37b2b8261427a43939d3bb741d365d7fb0c476d5"
+    },
+    {
+      "path": "tests/bridge/design-revision-context.test.mjs",
+      "bytes": 3584,
+      "sha256": "b9530d292a5e0917de23cdef8f3c2dc3eac9893a3996ef73a7eb5c58bff8aa73"
+    },
+    {
+      "path": "tests/bridge/entrypoint-alias.test.mjs",
+      "bytes": 1676,
+      "sha256": "3ce08a67de1df80a2fde94199c50b2be715406504fc2199222cad71b5c8e229c"
+    },
+    {
+      "path": "tests/bridge/failed-scene-repair.test.mjs",
+      "bytes": 14022,
+      "sha256": "dda7b66faab8d40a33b944a3849eb96278c87a396a18f82c06fda95f00a8b956"
+    },
+    {
+      "path": "tests/bridge/highrise-jobs.test.mjs",
+      "bytes": 5898,
+      "sha256": "43d79563785373dcf4e94401a70135220e80ebb8f18623e230cc54e80b469a3e"
+    },
+    {
+      "path": "tests/bridge/journal-replacement.test.mjs",
+      "bytes": 2652,
+      "sha256": "69e2b33e3a301e5d67694461f3eb0366226b795bc15cce054fdad4706907ac8c"
+    },
+    {
+      "path": "tests/bridge/model-json.test.mjs",
+      "bytes": 1414,
+      "sha256": "f3bf8217898a9416024a64a1d6f821c2e83d9d39335793fe97a726431f3cd011"
+    },
+    {
+      "path": "tests/bridge/native-evidence-fixtures.mjs",
+      "bytes": 1037,
+      "sha256": "21915051b381df33460484c02b07233e59ef0232cf9829f52df995adee80b918"
+    },
+    {
+      "path": "tests/bridge/native-evidence.test.mjs",
+      "bytes": 5928,
+      "sha256": "81ad261dc6cc05cc78ff60bff15736e5966c1460632027435a921ad4037dcd55"
+    },
+    {
+      "path": "tests/bridge/native-revision.test.mjs",
+      "bytes": 3593,
+      "sha256": "812c9cf6a75fab1b7890a66ab77b60a6a08b81039cc01a6d59f2c0544cf3b75d"
+    },
+    {
+      "path": "tests/bridge/navigation-review.test.mjs",
+      "bytes": 3320,
+      "sha256": "c9118ae27b143e5d6c15140efddb57278ba8e9d56b0045c773a8cfa4879b1782"
+    },
+    {
+      "path": "tests/bridge/package-repair-assessment.test.mjs",
+      "bytes": 5538,
+      "sha256": "bae792cb51ba138c7d912e8430dedb5253b6e15478a36fcd9c62d6f47514f43b"
+    },
+    {
+      "path": "tests/bridge/package-repair-durability.test.mjs",
+      "bytes": 5855,
+      "sha256": "662c81eeaba5d9228aa0de1edfb7f04d589c0cd7f69f98a3c606fe37974a8e88"
+    },
+    {
+      "path": "tests/bridge/plan-candidate-correction.test.mjs",
+      "bytes": 11638,
+      "sha256": "e50efcaee88d81b8ac7fce63b386c88b32293bb7bf50a174ae63b43e8c3c9fbf"
+    },
+    {
+      "path": "tests/bridge/plan-identity-recovery.test.mjs",
+      "bytes": 7760,
+      "sha256": "2e20947be50a508f8a8755882022609851ac42e74d6386fa77cb5834a4b9acde"
+    },
+    {
+      "path": "tests/bridge/provider-progress.test.mjs",
+      "bytes": 2332,
+      "sha256": "4d1ee1f8a86187838e676519953f8218e0801da8fa203ce2b6e0ecfa671c2429"
+    },
+    {
+      "path": "tests/bridge/quality-candidate-images.test.mjs",
+      "bytes": 5483,
+      "sha256": "bd130e1ac83676c5787d93cbe68ce02dce13fcf70a96c3e6863e4596ddd5bcd1"
+    },
+    {
+      "path": "tests/bridge/quality-crash-retirement.test.mjs",
+      "bytes": 4530,
+      "sha256": "1d1fe916f5e7e3d22e8eeea285bbdd1ed91df5f30ac14dc68d9bba9c4598a9de"
+    },
+    {
+      "path": "tests/bridge/quality-goal-authorization.test.mjs",
+      "bytes": 2972,
+      "sha256": "c21924c5da9506fb7e38606f9199d697b9f49397249ff117eb88fa966742ad46"
+    },
+    {
+      "path": "tests/bridge/quality-live-status.test.mjs",
+      "bytes": 3372,
+      "sha256": "27230517d07f8bc2ab4154090718274fb66a72d1aff49bf66648dec331c42b5d"
+    },
+    {
+      "path": "tests/bridge/quality-process-settlement.test.mjs",
+      "bytes": 5824,
+      "sha256": "8b483a0663b71d4eaf1f98b4bc437b5618f757e52aa9010b1ff67cef61504bbc"
+    },
+    {
+      "path": "tests/bridge/quality-renderer-lifecycle.test.mjs",
+      "bytes": 4216,
+      "sha256": "ad41587cd7212a0ea7d63f9e653995b01a8ed36d95fbbf6feea883538be04c91"
+    },
+    {
+      "path": "tests/bridge/quality-renderer-supervisor.test.mjs",
+      "bytes": 4254,
+      "sha256": "203671c3c8178c573b96aca39fd7b57a23a2e0df7d0b7b579f83074081e2b991"
+    },
+    {
+      "path": "tests/bridge/quality-review-v4.test.mjs",
+      "bytes": 7650,
+      "sha256": "8f666ce888eb5ff32c7325879dc8d5ef523b904e4212823b8728d78ac8db9177"
+    },
+    {
+      "path": "tests/bridge/quality-run-cleanup.test.mjs",
+      "bytes": 3952,
+      "sha256": "171f4352be232dae70b1c369098f141d96a9b3f331d4d409309d4548b87bedc6"
+    },
+    {
+      "path": "tests/bridge/quality-runner-retirement.test.mjs",
+      "bytes": 7730,
+      "sha256": "b00a4fae2584b336596c6909506bfe1e833b1d62ebe7aa05566f86e3fc11cefd"
+    },
+    {
+      "path": "tests/bridge/quality-stage-images.test.mjs",
+      "bytes": 4612,
+      "sha256": "4e8518bc892937a20607951ce9df8c6a04980ee193536585c967c31d7997cd75"
+    },
+    {
+      "path": "tests/bridge/quality-v2.test.mjs",
+      "bytes": 9795,
+      "sha256": "d7c905066a05be2886f7f92a89f0271cd3c780bdc2e3df4172c8b2a54de4f425"
+    },
+    {
+      "path": "tests/bridge/quality-v3.test.mjs",
+      "bytes": 25862,
+      "sha256": "f85cb6cb45b71c368fae71e450049c7875dff2428360063b3030760ff0037472"
+    },
+    {
+      "path": "tests/bridge/quality-v4-assessment.test.mjs",
+      "bytes": 5301,
+      "sha256": "88598b8fad39e588931a22425ee3052611407fda2dbf42f4dfa7d5c6ac95db91"
+    },
+    {
+      "path": "tests/bridge/quality-v4-fixtures.mjs",
+      "bytes": 4667,
+      "sha256": "a833a7b6e358e032b00ab6c781b0ef95449bdea0eecf0e23a6c82e813a099234"
+    },
+    {
+      "path": "tests/bridge/quality-v4-live-gates.test.mjs",
+      "bytes": 6464,
+      "sha256": "775e90c45ce835cb46d3b8f3fbd30b60891f8865cc941566e553ef4cb508c2bd"
+    },
+    {
+      "path": "tests/bridge/quality-v4.test.mjs",
+      "bytes": 6684,
+      "sha256": "f1bae2ef23a8f59ded0eb14c63ac92970b1b64288866d3ef6b87ddc005d146c9"
+    },
+    {
+      "path": "tests/bridge/reference-archive-maintenance-server.test.mjs",
+      "bytes": 15407,
+      "sha256": "4c087b163d49782fe2d1e8b6e64b88b6ca72bedda8d1c9b8577fbfd2b29d6885"
+    },
+    {
+      "path": "tests/bridge/reference-archive-maintenance.test.mjs",
+      "bytes": 16267,
+      "sha256": "2b0861b65ca1696fdfb1ea6fdf581850627466a89f5f6319753eb13061ee0e2d"
+    },
+    {
+      "path": "tests/bridge/reference-archive-record.test.mjs",
+      "bytes": 8350,
+      "sha256": "bd016c332b0421094b56a5267e7dabe733720044ca437ac9b6fe64f5b10078af"
+    },
+    {
+      "path": "tests/bridge/reference-archive-server.test.mjs",
+      "bytes": 7441,
+      "sha256": "17770ea9cd22118803a9e8387fb13678824736b47ee560ad9000dafc9e71089a"
+    },
+    {
+      "path": "tests/bridge/reference-archive.test.mjs",
+      "bytes": 16265,
+      "sha256": "4327cdeb6c9a5d2e0449d6ec3da5ede9bdb5a831d4f07f9002f32f76ac495220"
+    },
+    {
+      "path": "tests/bridge/reference-assembly.test.mjs",
+      "bytes": 16093,
+      "sha256": "2b520b4ebad2092444264ccc13118551babe9a11bf20cc7f927bf00b64ab695f"
+    },
+    {
+      "path": "tests/bridge/reference-attachments.test.mjs",
+      "bytes": 10271,
+      "sha256": "3cd04f0c88b1036b9c718dccce17468bf1147d2af3843a92fa87e81ff4e0a2c9"
+    },
+    {
+      "path": "tests/bridge/reference-cli-startup.test.mjs",
+      "bytes": 5782,
+      "sha256": "832e4af5c85db510d75b89d0333e79cf0d7206263787a9db1863bd6d5a74a60f"
+    },
+    {
+      "path": "tests/bridge/reference-generation-binding.test.mjs",
+      "bytes": 7110,
+      "sha256": "4469ef019cf6c5da7415c5f1ddd491f6283d878a3cfc04ad09d4131723013e84"
+    },
+    {
+      "path": "tests/bridge/reference-generation-fixture.mjs",
+      "bytes": 4301,
+      "sha256": "9ffca133de6b91c018c1b325f7116d0eb00a4265b25bac43c461aa67480db31c"
+    },
+    {
+      "path": "tests/bridge/reference-generation-server.test.mjs",
+      "bytes": 22727,
+      "sha256": "432360f4019c6ab52a4682e23cd67d1f7f7ddf7865b774e78b7cf6b6941ee492"
+    },
+    {
+      "path": "tests/bridge/reference-preparation-server.test.mjs",
+      "bytes": 12352,
+      "sha256": "2c04448b3a639fba14dc62031c03aa03a084397d1114917abc24141d6d16d8cd"
+    },
+    {
+      "path": "tests/bridge/reference-preparation.test.mjs",
+      "bytes": 15473,
+      "sha256": "e375ea0b5fb7a260b93d06056dd6dbf729c8c9fb91b544b820b461bbe0f1e2f1"
+    },
+    {
+      "path": "tests/bridge/refinement-recovery.test.mjs",
+      "bytes": 6526,
+      "sha256": "5fe02c6eaafaf0bf7b8213b3fad37cd76a20cf940bf5220fc819474936a860ca"
+    },
+    {
+      "path": "tests/bridge/scene-assembly-resume.test.mjs",
+      "bytes": 12698,
+      "sha256": "9c69a5acaeb811d9fa248c8aef6ed26ad6ee8058f40978a9c9909e5d685e00ce"
+    },
+    {
+      "path": "tests/bridge/scene-assembly.test.mjs",
+      "bytes": 46354,
+      "sha256": "fe55d19d52eb7b1e784fd5608aef50100239349b1995692ea5e96c349410fcdc"
+    },
+    {
+      "path": "tests/bridge/scene-checkpoints.test.mjs",
+      "bytes": 14779,
+      "sha256": "51b92c9136aa7c83b9a1dc155f0c050f9447534962d547cfd284272f333145a3"
+    },
+    {
+      "path": "tests/bridge/scene-continuation-tools.test.mjs",
+      "bytes": 5952,
+      "sha256": "0d0a9f8cab674e40fdc5d1454c404a26ecfd8e37087d25ecb547328652222605"
+    },
+    {
+      "path": "tests/bridge/scene.test.mjs",
+      "bytes": 11604,
+      "sha256": "55c7b881e59dc8ee5b60ded24740296d9d40a99f56e50d2cd47b2d7e64cdbb5c"
+    },
+    {
+      "path": "tests/bridge/selection-client-log-guard.test.mjs",
+      "bytes": 844,
+      "sha256": "494e9b6bdd94124b739d76c700dbbd86b14aa0ab2e96a5a99cdfd5222689dabd"
+    },
+    {
+      "path": "tests/bridge/server.test.mjs",
+      "bytes": 12757,
+      "sha256": "e70221b41ae7b61b187acb16da33a09a2e38998b2ed9309fe36a7de0874e4656"
+    },
+    {
+      "path": "tests/bridge/visual-review.test.mjs",
+      "bytes": 4428,
+      "sha256": "6a85a1eb5977738b5819d8647b503dc7e0b5107817ec5220f83a794265c348a7"
+    },
+    {
+      "path": "tests/bridge/world-context-analysis-http.test.mjs",
+      "bytes": 8931,
+      "sha256": "6bbdff0e8efc38c09892fe7eeb1270ef6c3891d20fa7adad4fd1c2999113df57"
+    },
+    {
+      "path": "tests/bridge/world-context-analysis.test.mjs",
+      "bytes": 19984,
+      "sha256": "b4174542333335eb1d3eb31d3e674f7f8fc805189547c4134de0dd3b032da641"
+    },
+    {
+      "path": "tests/bridge/world-context-codex-boundary.test.mjs",
+      "bytes": 9325,
+      "sha256": "14f6ca18c0e887fda1281ecd224c1e0fdaf19793fca4348da34b2f5af4ef5e43"
+    },
+    {
+      "path": "tests/bridge/world-context-store.test.mjs",
+      "bytes": 19152,
+      "sha256": "922d6e1093b69f0827590d6cce4382945a0e9a84819ca57fabd46b2445346002"
+    },
+    {
+      "path": "tests/bridge/world-context-task.test.mjs",
+      "bytes": 5612,
+      "sha256": "97a0c317946e9a812b47d45155623a3068806ce9031703924fa61c7b531e8584"
+    },
+    {
+      "path": "tests/bridge/world-patch-capabilities.test.mjs",
+      "bytes": 4596,
+      "sha256": "a5a9fd60ed427b0715d1835a6661195849819f45f9d68d3b6b8980e83af7f4b7"
+    },
+    {
+      "path": "tests/bridge/world-patch-design-runner.test.mjs",
+      "bytes": 49511,
+      "sha256": "55e0cf29e511921b7f9ae62e1c52e6cf057527f35a47c2a6f43772b5b3af2af7"
+    },
+    {
+      "path": "tests/bridge/world-patch-player-protocol.test.mjs",
+      "bytes": 1470,
+      "sha256": "7cd5ded8f79fd2262f1417653c912c1a4c5020877f0b4de0044c30316bc2aca0"
+    },
+    {
+      "path": "tests/bridge/world-patch-task-capsule.test.mjs",
+      "bytes": 22198,
+      "sha256": "97c14751b592424d34b28c113bb5561c4543e0a909e02efc99fc997ae068c43e"
+    },
+    {
+      "path": "tests/bridge/world-patch-task-disclosure.test.mjs",
+      "bytes": 18709,
+      "sha256": "7a23f991c1a6370a1e270c8ed68735fe9bc40d8197c5529d079186726a069908"
+    },
+    {
+      "path": "tests/bridge/world-patch-task-review.test.mjs",
+      "bytes": 11864,
+      "sha256": "71f692c75ffd10e8639738d4bf55dadd90c03ff45f9a4ab9b44fefacc3650c1e"
+    },
+    {
+      "path": "tests/bridge/world-patch-worker.test.mjs",
+      "bytes": 6488,
+      "sha256": "7c776a77a01549e8973eb53e57e43c251b77b0a0a54e4b4e78b008149aef6076"
+    },
+    {
+      "path": "tests/design/assembly-fixtures.mjs",
+      "bytes": 2848,
+      "sha256": "34547151e4b2b60853f6e29898ce556ef8332fe6e77d368cf781f36d57c576b0"
+    },
+    {
+      "path": "tests/design/assembly-planning.test.mjs",
+      "bytes": 4388,
+      "sha256": "79af9070367bfbccac890091a47c663f349dbd76c0038f34302044c8b8159675"
+    },
+    {
+      "path": "tests/design/assembly-stage.test.mjs",
+      "bytes": 5481,
+      "sha256": "79b5fe62f6f550031919b3257e4e249b4eadcb2d4023f90e45326031f24bc9b6"
+    },
+    {
+      "path": "tests/design/assembly.test.mjs",
+      "bytes": 10850,
+      "sha256": "ab524813c2188fa215e29e758a959677fb76100fecfb1a767c098acbef49538b"
+    },
+    {
+      "path": "tests/design/checkpoint.test.mjs",
+      "bytes": 6072,
+      "sha256": "b077fc800fff5515b6491a29287bc4ce6d3d12b9805ef8cb0045cd2df88edd1f"
+    },
+    {
+      "path": "tests/design/compiler.test.mjs",
+      "bytes": 12915,
+      "sha256": "1404fa27acc1ff525afda1ab0d5774fd728818268bfe955c76be1657d55d3199"
+    },
+    {
+      "path": "tests/design/construction-feedback.test.mjs",
+      "bytes": 13533,
+      "sha256": "3c5da3f1c78ce84e648900fae2a28f306c0353ddfcaf34610ddbc54d31a07e64"
+    },
+    {
+      "path": "tests/design/correction-feedback.test.mjs",
+      "bytes": 10204,
+      "sha256": "e67cd1b72e6f4c73bd2246ddadabdeecc5f2ae9c1b5b38cddef6f366f463c503"
+    },
+    {
+      "path": "tests/design/decomposed-prototypes.test.mjs",
+      "bytes": 12018,
+      "sha256": "b5051b08f1c8f7fcd1b00f297a740de37dded5c88611b6e49df14b086b424789"
+    },
+    {
+      "path": "tests/design/design-allocation.test.mjs",
+      "bytes": 6769,
+      "sha256": "1330b604671ab0fb532ba64601b43458f1c82c55262b61c20919664fc2e9a704"
+    },
+    {
+      "path": "tests/design/doorway.test.mjs",
+      "bytes": 7270,
+      "sha256": "085623323674533973fdad797c3e87f0c1bfee0e3ec2450686983cbb579e6a54"
+    },
+    {
+      "path": "tests/design/edge-facade.test.mjs",
+      "bytes": 6424,
+      "sha256": "5f5acf172df9e1a9dec0491e779c39893d8df4a35b958a0e7adb2d8f44803b3b"
+    },
+    {
+      "path": "tests/design/facade-feedback.test.mjs",
+      "bytes": 4640,
+      "sha256": "a90d96fc74f068f54bb486f6c0b28a3ee100889aed1581538460a5dd4f0fa8d7"
+    },
+    {
+      "path": "tests/design/fixtures.mjs",
+      "bytes": 10806,
+      "sha256": "4303c07d4ca099701cd0c532d51fa5129c7d3228dc356eda764d3d7c3bc4a0ad"
+    },
+    {
+      "path": "tests/design/floor-components-fixtures.mjs",
+      "bytes": 1629,
+      "sha256": "5c87d0b49c2f5d48932c358273a78e02861322a324ba22f428f845c605cd052f"
+    },
+    {
+      "path": "tests/design/floor-components.test.mjs",
+      "bytes": 10886,
+      "sha256": "1f5a198000e53365340fdc84581f2905422404b3d6dfe788a8db5714b0ee740d"
+    },
+    {
+      "path": "tests/design/frozen-facade-authority.test.mjs",
+      "bytes": 3095,
+      "sha256": "e500f3759ed09fa5b954ec7fa7fd88d6a2e545e4621572eeed72dad8d3932587"
+    },
+    {
+      "path": "tests/design/live-model.test.mjs",
+      "bytes": 1158,
+      "sha256": "e5823bb4a5ad115760728467978a98d6657586aa12edbc207b8eef9791c1d775"
+    },
+    {
+      "path": "tests/design/module-doors.test.mjs",
+      "bytes": 3917,
+      "sha256": "618bc7abd738d0795d108efdd3af2984eaf8ca4a5a9391a4563913d6c1acbbe6"
+    },
+    {
+      "path": "tests/design/navigation-feedback.test.mjs",
+      "bytes": 5829,
+      "sha256": "d8d59a0fde942718fe97d9ec718892ae5bfa41df7ec228ffbf7ef11477d0eceb"
+    },
+    {
+      "path": "tests/design/package-repair.test.mjs",
+      "bytes": 6852,
+      "sha256": "74a3e101272ec3f2388f32b1e6fd91fffc14f88ec2ed486e8f4fc9c3620f5ae9"
+    },
+    {
+      "path": "tests/design/package-spatial-feedback.test.mjs",
+      "bytes": 3764,
+      "sha256": "10ea84d3c7d547eec997adb78051248f29e6abd0946fff8a19d5d24c35928251"
+    },
+    {
+      "path": "tests/design/panel-facade.test.mjs",
+      "bytes": 6504,
+      "sha256": "3fad67fe08d31995d165695d30e18e6d04e59d5758feaed9ac18686978b1f0fd"
+    },
+    {
+      "path": "tests/design/profile-fixtures.mjs",
+      "bytes": 4223,
+      "sha256": "dac277b3e5941c232e008f4379456f5db4d81326282371f5975c138b8277732c"
+    },
+    {
+      "path": "tests/design/profile.test.mjs",
+      "bytes": 8971,
+      "sha256": "77319d5e79037538e826db70393f30756e1c5d1f0fe2b30f7ac3fb8c3695dcce"
+    },
+    {
+      "path": "tests/design/prototype-expansion.test.mjs",
+      "bytes": 8158,
+      "sha256": "17af8388e1825d551b358365c3c98ba6d60f5b9c0474efb54209831c74a7257f"
+    },
+    {
+      "path": "tests/design/prototype-seed-views.test.mjs",
+      "bytes": 1509,
+      "sha256": "3313d2ca9d86b02fdb223e3aa416427ed0f6681e6ff41bc82b0d37dfe3881ec8"
+    },
+    {
+      "path": "tests/design/prototype-surface-guidance.test.mjs",
+      "bytes": 5277,
+      "sha256": "6a594dac5cfb9af75a85b6a5cc414189da8351d1e156c4a7ccee095cf3a7765b"
+    },
+    {
+      "path": "tests/design/quality-prototypes.test.mjs",
+      "bytes": 16824,
+      "sha256": "1ef9227333add8b17b55fa2b19d52a0c74e9c154f749c0e0bd514197870dbec7"
+    },
+    {
+      "path": "tests/design/quality-v4-evidence.test.mjs",
+      "bytes": 2080,
+      "sha256": "bfbc554b6eb3275fe67b540a03246467f8fbeaef891cdada26669d51230b55f6"
+    },
+    {
+      "path": "tests/design/replacement-budget.test.mjs",
+      "bytes": 5330,
+      "sha256": "d0d77b2cbe8b821e73353f428179b3a566df21f225e5980fd30b575793ee01ff"
+    },
+    {
+      "path": "tests/design/reservation-authority.test.mjs",
+      "bytes": 4554,
+      "sha256": "b2e93f575a7d5000b60c0054721b4533c4d86cb3a514c9f56296825922ebd6f9"
+    },
+    {
+      "path": "tests/design/revision-measurements.test.mjs",
+      "bytes": 3037,
+      "sha256": "0ff98683b1a7e5340191f0d2e2656891b39fdc88b3cceb39a95aeb1e8e02b481"
+    },
+    {
+      "path": "tests/design/revision.test.mjs",
+      "bytes": 7805,
+      "sha256": "a9125bbc9e9a227670a8a33f27e7e0bc3fff672a922bd065d63a6e244dc220c4"
+    },
+    {
+      "path": "tests/design/room-containment-feedback.test.mjs",
+      "bytes": 3087,
+      "sha256": "44e16c59c0bebd19d53c2f296fbdf50e6b7720027e105019dc16dc097ee54381"
+    },
+    {
+      "path": "tests/design/room-zone.test.mjs",
+      "bytes": 8497,
+      "sha256": "cc025cb43625639503177f3a96fad03349ade7543283508f93ce30262432a48c"
+    },
+    {
+      "path": "tests/design/scene-capacity.test.mjs",
+      "bytes": 2533,
+      "sha256": "81adad956c174021a4e1fdfcff17a0c80b63742cc88cbd8c2b121b5a52c19520"
+    },
+    {
+      "path": "tests/design/schema-feedback.test.mjs",
+      "bytes": 4349,
+      "sha256": "b35f8d56a04ee18d2fb8c3092fa523bae2eb7d662264734dd42f053b0d225193"
+    },
+    {
+      "path": "tests/design/space-audit.mjs",
+      "bytes": 3414,
+      "sha256": "49502d7d2658a0d915595a53b9be8cc08536386858e66a8b4cb419471bdaa1d8"
+    },
+    {
+      "path": "tests/design/space-fixtures.mjs",
+      "bytes": 14065,
+      "sha256": "b5ff0da0ca21f59bc4ad54afbc2766544f73c370d9319d731f4047e803bf2c52"
+    },
+    {
+      "path": "tests/design/space-integration.test.mjs",
+      "bytes": 3850,
+      "sha256": "b3051342b466d1df9ee8a31c1d81030142dc9edd71569100b9d2998376b722a7"
+    },
+    {
+      "path": "tests/design/stair-access-model.test.mjs",
+      "bytes": 3422,
+      "sha256": "b555d6e21db454bba773d96e4cfefa9e7e5d5dff12d43fc72a92446745756acb"
+    },
+    {
+      "path": "tests/design/stair-bounds.test.mjs",
+      "bytes": 2962,
+      "sha256": "5e950dba3fb36729553570b624cf939878555b299c47c763639325052fd80a55"
+    },
+    {
+      "path": "tests/design/stair-headroom.test.mjs",
+      "bytes": 2491,
+      "sha256": "a5be26ec625fc8704f92027801675254cfb05a701b1a8ec4ce6ed598a320317e"
+    },
+    {
+      "path": "tests/design/static-door-navigation.test.mjs",
+      "bytes": 3230,
+      "sha256": "90fcaf4b76fc54bfc17075bf26cb4e7de0d3baad5898560e6295e72514ad2723"
+    },
+    {
+      "path": "tests/design/storey-layout-fixtures.mjs",
+      "bytes": 1003,
+      "sha256": "93d469272bbc016029510e87d91168e18b73c0932e62fbaafc0721ef51da6e5c"
+    },
+    {
+      "path": "tests/design/storey-layout.test.mjs",
+      "bytes": 8790,
+      "sha256": "98631604a19cb78d51211a4765516ce4036763b34b5a2c4c2d844ed06a9d645c"
+    },
+    {
+      "path": "tests/design/world-context-reader.test.mjs",
+      "bytes": 8868,
+      "sha256": "b2f8a9bc234a883648bf6bec770b9f2ad9f1d919182b7a82eff7ce82577619f9"
+    },
+    {
+      "path": "tests/design/world-context-snapshot.test.mjs",
+      "bytes": 11677,
+      "sha256": "f660f662914df9fc81808d24b401b0465f5592e21b8a1ee4498300134d3c298d"
+    },
+    {
+      "path": "tests/design/world-context-summary.test.mjs",
+      "bytes": 5255,
+      "sha256": "1fdee6f861e3cdc65fc12c9c0f9e944b5986ef54e07d16a5f6dd671fd265f9d6"
+    },
+    {
+      "path": "tests/design/world-patch-natural-terrain.test.mjs",
+      "bytes": 5325,
+      "sha256": "55123e3c2b370562313117bd88ffb17fcea58840c3cad9e057c7b6221dde5ca6"
+    },
+    {
+      "path": "tests/design/world-patch.test.mjs",
+      "bytes": 15131,
+      "sha256": "23b5b81ec74c41bfd854bac13196482a2be44371ff07528012941ec28cbb7dd1"
+    },
+    {
+      "path": "tests/fixtures/completed-format-error.mjs",
+      "bytes": 1237,
+      "sha256": "54b8f072680388a8fd369c1c959fe631a91ed9cd7b0b38195a5b0edf8f82b603"
+    },
+    {
+      "path": "tests/fixtures/design-continuation-source.mjs",
+      "bytes": 2880,
+      "sha256": "d451654830e50f9b9a3298ecbb1437b54aaaa293592db59770e368cfd850bfce"
+    },
+    {
+      "path": "tests/fixtures/highrise.mjs",
+      "bytes": 1542,
+      "sha256": "d316d5495002e140d6ef22e93d4148bc0a9c40f8f95201b4f682f0f8b2ee03da"
+    },
+    {
+      "path": "tests/fixtures/quality-evaluation-v2.json",
+      "bytes": 3086,
+      "sha256": "225e4e2c2ec1d209a2da2e6e6b631b8ef6f5bf9cf65c6127a0afb159d77ab571"
+    },
+    {
+      "path": "tests/fixtures/special-blocks.mjs",
+      "bytes": 1083,
+      "sha256": "de7403a6039dad2a4ba5a6b58416465abeff5360e1bfa55446bc3c9c14d435f1"
+    },
+    {
+      "path": "tests/fixtures/world-patch-capsule-process.mjs",
+      "bytes": 989,
+      "sha256": "0d60d5205110bd61eee675a07c63bf63915a9700fe743e036a67eed125a1019e"
+    },
+    {
+      "path": "tests/fixtures/world-patch-design-recovery-fixture.mjs",
+      "bytes": 2641,
+      "sha256": "99255f847644b8e3f958f7723e6f991d91cc3b887df25001d9875378920b5980"
+    },
+    {
+      "path": "tests/fixtures/world-patch-owner-process-fixture.mjs",
+      "bytes": 914,
+      "sha256": "457909f6045b422cc221cd91ad6ba350acbc3195822fb9048f2dc2f4e3007802"
+    },
+    {
+      "path": "tests/fixtures/world-patch-task-fixture.mjs",
+      "bytes": 1798,
+      "sha256": "6a9e2e92c63c26fd45755309673a24ef611c78c81f3dcfee633e260c4b07cd11"
+    },
+    {
+      "path": "tests/generation/bundle.test.mjs",
+      "bytes": 3604,
+      "sha256": "ad14033c39340f78c92f81971b600dfbd0bdfef8b28298b82e2370c2c9f50e80"
+    },
+    {
+      "path": "tests/generation/compiler.test.mjs",
+      "bytes": 2648,
+      "sha256": "56f4cf38e329e45ccef8e48a3b055157861c2ca6fd9bc898667075b86a8affbc"
+    },
+    {
+      "path": "tests/generation/highrise.test.mjs",
+      "bytes": 5304,
+      "sha256": "ea1cb0f7debffb135821adb5a4e8b25d42469a0c9cc3fb30e03551a8a505a6d1"
+    },
+    {
+      "path": "tests/generation/navigation-review.test.mjs",
+      "bytes": 4473,
+      "sha256": "d868c6dc21c9c571c023c12809ea7c4b4d3e4d77d2e1c7ef240147e0f727474a"
+    },
+    {
+      "path": "tests/generation/navigation.test.mjs",
+      "bytes": 3608,
+      "sha256": "c4c4b75b8344f329e2335d14aa5d2afa0426e43832e6eebc9d96bfa891de2fbd"
+    },
+    {
+      "path": "tests/generation/passage-declarations.test.mjs",
+      "bytes": 1476,
+      "sha256": "a2d44c2ef5659550263bdd6bd94e4f32e08555b2652a5bf40e998d1eb5a60516"
+    },
+    {
+      "path": "tests/generation/quality.test.mjs",
+      "bytes": 2382,
+      "sha256": "77ffaec4dfb331496771231d438b933668682afe1fafe288826f35b59c87ff59"
+    },
+    {
+      "path": "tests/generation/special-blocks.test.mjs",
+      "bytes": 6759,
+      "sha256": "e566d87033f95683e6158a0926435ab666291f757cd336a4041c9d7482ba4b9f"
+    },
+    {
+      "path": "tests/generation/static-open-doors.test.mjs",
+      "bytes": 2427,
+      "sha256": "0c817614586776c05be466508b67f705cb2f3927a4328d686f900c98a7742317"
+    }
+  ],
+  "noCredentials": true,
+  "noPrivateGenerations": true,
+  "noWorlds": true,
+  "noParentGitHistory": true,
+  "note": "Inherited hashes describe the initial snapshot, not subsequent changes. Public Git commits identify the current source."
+}
