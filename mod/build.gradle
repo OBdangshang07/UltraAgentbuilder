@@ -1,11 +1,11 @@
 plugins {
-    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'fabric-loom' version '1.10.5'
     id 'maven-publish'
 }
 
 version = '0.4.10-alpha'
 group = 'dev.voxelstudio'
-base { archivesName = 'voxel-studio' }
+base { archivesName = 'UltraAgentbuilder' }
 repositories { mavenCentral() }
 dependencies {
     minecraft 'com.mojang:minecraft:1.20.1'
@@ -28,6 +28,10 @@ processResources { inputs.property 'version', project.version; filesMatching('fa
 processResources { from('../contracts') { include 'context-analysis-protocol.json', 'world-patch-design-review-protocol.json'; into 'voxelstudio' } }
 test {
     useJUnitPlatform()
+    inputs.dir layout.buildDirectory.dir('test-fixtures')
+    // Several Fabric dependencies contain fabric.mod.json. Bind the branding
+    // test to THIS build's processed metadata, not classpath lookup order.
+    systemProperty 'ultraagentbuilder.testModMetadata', layout.buildDirectory.file('resources/main/fabric.mod.json').get().asFile.absolutePath
     // JUnit also extracts the bundled runtime. Keep free regression temporary
     // data on the project drive, not a potentially full system drive.
     def explicitTestTemp = findProperty('studioJavaTestTemp')
@@ -58,6 +62,10 @@ tasks.register('prepareJavaFixtures', Exec) {
     commandLine 'node', 'scripts/studio-java-fixtures.mjs'
     inputs.files(fileTree('../src/generation'),fileTree('../src/design'),fileTree('../src/world'),fileTree('../tests/design'),fileTree('../tests/fixtures'),fileTree('../contracts'),fileTree('../bridge'),file('../scripts/studio-java-fixtures.mjs'),file('../scripts/reference-player-fixtures.mjs'),file('../scripts/world-patch-before-fixtures.mjs'),file('../scripts/world-patch-safety-fixtures.mjs'),file('../scripts/world-patch-journal-fixtures.mjs'))
     outputs.dir layout.buildDirectory.dir('test-fixtures')
+    // These FREE fixtures contain expiring SEND confirmations and fresh
+    // private synthetic journals. Reusing yesterday's generated authority is
+    // not a valid incremental test; do not loosen production expiry instead.
+    outputs.upToDateWhen { false }
 }
 test.dependsOn tasks.named('prepareJavaFixtures')
 def bundleDir = layout.buildDirectory.dir('generated/studio-bundle')

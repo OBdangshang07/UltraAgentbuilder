@@ -7,7 +7,7 @@ final class StudioRuntimeVersion {
     private StudioRuntimeVersion() {}
     static String loaded() {
         return FabricLoader.getInstance().getModContainer("voxel_studio")
-            .orElseThrow(() -> new IllegalStateException("Voxel Studio runtime metadata is missing"))
+            .orElseThrow(() -> new IllegalStateException(dev.voxelstudio.StudioBrand.NAME + " runtime metadata is missing"))
             .getMetadata().getVersion().getFriendlyString();
     }
 }

@@ -68,7 +68,7 @@ public final class StudioScreen extends Screen {
     private String[] coordinateDraft;
     private float yaw=-35,pitch=24,zoom=1,panX,panY;
 
-    public StudioScreen(){super(Text.literal("体素建筑工作室"));}
+    public StudioScreen(){super(Text.literal(dev.voxelstudio.StudioBrand.NAME));}
     static JsonObject contextRecipient(){
         if(!agentReady||selectedModel==null)throw new IllegalStateException("先在创作页选择已就绪的 Agent 与确切模型；不会自动替换");
         var value=new JsonObject();value.addProperty("agent",selectedAgent);value.addProperty("model",selectedModel);value.addProperty("effort",selectedEffort);return value;
@@ -647,7 +647,7 @@ public final class StudioScreen extends Screen {
 
     @Override public void render(DrawContext d,int mx,int my,float delta){
         d.fill(0,0,width,height,StudioTheme.BG);d.fill(8,11,11,32,StudioTheme.ACCENT);
-        d.drawText(textRenderer,width<430?"体素工作室":"VOXEL STUDIO / 建筑工作室",17,11,StudioTheme.TEXT,false);
+        d.drawText(textRenderer,StudioTheme.fit(textRenderer,dev.voxelstudio.StudioBrand.NAME,Math.max(0,width-90)),17,11,StudioTheme.TEXT,false);
         d.drawText(textRenderer,discovering?"正在检测本机 Agent…":!agentReady?"本机生成 · 先预览，再建造":agentName()+" 已连接 · 本机生成",17,25,StudioTheme.MUTED,false);
         var s=layout.sidebar();StudioTheme.panel(d,s.x(),s.y(),s.width(),s.height());renderSidebar(d,mx,my,delta);renderPreview(d,mx,my,delta);
         String context=tab==Tab.CREATE?modelLabel()+" · "+StudioMessages.effort(selectedEffort):tab==Tab.PLACE?(projection().replace?"覆盖与挖空 · 请先备份":"仅填空气 · 保留地形"):"仅导出当前选中的版本";

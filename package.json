@@ -12,7 +12,7 @@
     "test:studio": "node scripts/studio-tests.mjs",
     "check": "node scripts/check-syntax.mjs",
     "check:public": "node scripts/publication-check.mjs",
-    "test": "node --test tests/bridge/publication-guard.test.mjs",
+    "test": "node --test tests/bridge/publication-guard.test.mjs tests/bridge/branding-compatibility.test.mjs",
     "test:full": "npm run check && npm test && npm run test:studio"
   },
   "dependencies": {

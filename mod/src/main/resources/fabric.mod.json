@@ -2,9 +2,10 @@
   "schemaVersion": 1,
   "id": "voxel_studio",
   "version": "${version}",
-  "name": "Voxel Studio",
+  "name": "UltraAgentbuilder",
   "description": "Local-agent building generation, world projection and reversible creative placement.",
-  "authors": ["Voxel Studio contributors"],
+  "authors": ["UltraAgentbuilder contributors"],
+  "contact": {"homepage": "https://github.com/OBdangshang07/UltraAgentbuilder", "sources": "https://github.com/OBdangshang07/UltraAgentbuilder", "issues": "https://github.com/OBdangshang07/UltraAgentbuilder/issues"},
   "environment": "*",
   "mixins": ["voxel-studio.mixins.json"],
   "entrypoints": {

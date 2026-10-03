@@ -13,7 +13,7 @@ const wrapperHash = '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed8408884
 
 export function publicationIssues(relative, bytes) {
   const issues = [];
-  if (relative !== relative.replaceAll('\\', '/') || relative.startsWith('/') || relative.split('/').includes('..')) issues.push('unsafe-path');
+  if (relative !== relative.replaceAll('\\', '/') || relative.startsWith('/') || /[\r\n\0]/.test(relative) || relative.split('/').includes('..')) issues.push('unsafe-path');
   if (excluded.test(relative) && relative !== '.env.example') issues.push('private-or-generated-file');
   if (relative.endsWith('.jar')) {
     if (relative !== wrapper || createHash('sha256').update(bytes).digest('hex') !== wrapperHash) issues.push('unapproved-binary');
@@ -26,6 +26,26 @@ export function publicationIssues(relative, bytes) {
   return issues;
 }
 
+function indexedBytes(root, indexed) {
+  if ([...indexed].some(name => /[\r\n\0]/.test(name))) throw new Error('Unsupported index path');
+  // One Git process, not one process per file. Read the exact staged blobs so
+  // an innocuous working copy cannot conceal a secret already in the index.
+  const output = execFileSync('git', ['cat-file', '--batch'], {cwd: root, windowsHide: true,
+    input: [...indexed].map(name => ':' + name).join('\n') + '\n', maxBuffer: 128 * 1024 * 1024});
+  const values = new Map(); let offset = 0;
+  for (const name of indexed) {
+    const end = output.indexOf(10, offset);
+    if (end < offset) throw new Error('Truncated staged blob header');
+    const header = output.subarray(offset, end).toString('ascii'), match = /^[a-f0-9]{40,64} blob (\d+)$/.exec(header);
+    if (!match) throw new Error('Expected a staged blob (content withheld)');
+    const size = Number(match[1]); offset = end + 1;
+    if (!Number.isSafeInteger(size) || output.length < offset + size + 1 || output[offset + size] !== 10) throw new Error('Truncated staged blob');
+    values.set(name, output.subarray(offset, offset + size)); offset += size + 1;
+  }
+  if (offset !== output.length) throw new Error('Unexpected staged blob data');
+  return values;
+}
+
 export async function checkPublication(root = project) {
   root = await fs.realpath(root);
   if (await fs.realpath(path.join(root, '.git')) !== path.join(root, '.git')) throw new Error('An independent, non-redirected .git directory is required');
@@ -34,10 +54,11 @@ export async function checkPublication(root = project) {
   const indexed = new Set(execFileSync('git', ['ls-files', '-z', '--cached'], {cwd: root, encoding: 'utf8', windowsHide: true}).split('\0').filter(Boolean));
   const names = [...new Set([...indexed, ...execFileSync('git', ['ls-files', '-z', '--others', '--exclude-standard'], {cwd: root, encoding: 'utf8', windowsHide: true}).split('\0').filter(Boolean)])].sort();
   if (!names.length) throw new Error('No public source files found');
+  const staged = indexed.size ? indexedBytes(root, indexed) : new Map();
   const failures = [];
   for (const relative of names) {
     if (indexed.has(relative)) {
-      const issues = publicationIssues(relative, execFileSync('git', ['cat-file', 'blob', ':' + relative], {cwd: root, windowsHide: true, maxBuffer: 8 * 1024 * 1024}));
+      const issues = publicationIssues(relative, staged.get(relative));
       if (issues.length) failures.push({path: relative, source: 'index', issues});
     }
     const full = path.resolve(root, relative);

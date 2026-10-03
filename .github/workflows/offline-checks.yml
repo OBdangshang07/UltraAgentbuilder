@@ -28,3 +28,29 @@ jobs:
         run: npm test
       - name: Run free simulated Studio regression
         run: npm run test:studio -- --test-concurrency=3
+
+  java-build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install locked fixture dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Prepare project local Java temporary directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Path build/java-temp -Force | Out-Null
+      - name: Compile, run free Java tests and build the candidate JAR
+        working-directory: mod
+        env:
+          TEMP: ${{ github.workspace }}/build/java-temp
+          TMP: ${{ github.workspace }}/build/java-temp
+        run: .\gradlew.bat --no-daemon test build

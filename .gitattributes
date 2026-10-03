@@ -1,4 +1,10 @@
 * text=auto
+*.yml text eol=lf
+*.properties text eol=lf
+*.fsh text eol=lf
+*.vsh text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
 *.mjs text eol=lf
 *.json text eol=lf
 *.md text eol=lf

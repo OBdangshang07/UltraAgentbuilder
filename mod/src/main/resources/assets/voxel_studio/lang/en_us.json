@@ -1,6 +1,6 @@
 {
-  "key.categories.voxel_studio": "Voxel Studio",
-  "key.voxel_studio.open": "Open building studio",
+  "key.categories.voxel_studio": "UltraAgentbuilder",
+  "key.voxel_studio.open": "Open UltraAgentbuilder",
   "key.voxel_studio.lock": "Lock / follow projection",
   "key.voxel_studio.snap": "Snap projection to crosshair surface and lock",
   "key.voxel_studio.rotate": "Rotate projection 90 degrees",

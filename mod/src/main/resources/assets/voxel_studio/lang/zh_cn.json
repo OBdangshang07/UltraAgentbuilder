@@ -1,6 +1,6 @@
 {
-  "key.categories.voxel_studio": "体素建筑工作室",
-  "key.voxel_studio.open": "打开建筑工作室",
+  "key.categories.voxel_studio": "UltraAgentbuilder",
+  "key.voxel_studio.open": "打开 UltraAgentbuilder",
   "key.voxel_studio.lock": "锁定 / 跟随准星",
   "key.voxel_studio.snap": "投影吸附准星表面并锁定",
   "key.voxel_studio.rotate": "旋转投影 90 度",
