@@ -1,0 +1,17 @@
+{
+  "format": "UltraAgentbuilderPublicValidation",
+  "version": 1,
+  "sourceCommit": "dfead28bcffd0abda37855549c53639adcf5a267",
+  "workflowUrl": "https://github.com/OBdangshang07/UltraAgentbuilder/actions/runs/37131461419",
+  "workflowConclusion": "success",
+  "platform": "GitHub Actions windows-latest",
+  "nodeVersion": "22.19.0",
+  "publicationAndBrandingTests": {"tests": 10, "pass": 10, "fail": 0, "skipped": 0},
+  "studioRegression": {"tests": 1376, "pass": 1374, "fail": 0, "skipped": 2},
+  "javaTestAndBuildJob": "success",
+  "modelCalls": 0,
+  "gameWorldWrites": 0,
+  "coversLaterCommits": false,
+  "certifiesBinaryRelease": false,
+  "certifiesBuildingQuality": false
+}
