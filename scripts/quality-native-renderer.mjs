@@ -2,11 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
-import {setTimeout as delay} from 'node:timers/promises';
 import {rendererLifecycle} from './quality-renderer-lifecycle.mjs';
+import {waitRendererReady} from './quality-renderer-startup.mjs';
 
 /** Visible, project-isolated asset-only client. Never submits model requests. */
-export async function startNativeRenderer(project,root,bridge,{startupTimeoutMs=180000}={}){
+export async function startNativeRenderer(project,root,bridge,{startupTimeoutMs=180000,onObservation}={}){
  if(path.dirname(root)!==path.join(project,'build')||!/^quality-native-[a-f0-9]{32}$/.test(path.basename(root)))throw Error('Invalid isolated renderer root');
  const instanceId=randomUUID();
  await fs.writeFile(path.join(root,'renderer-authorization.json'),JSON.stringify({instanceId,assetOnly:true,visibleWindowAuthorized:true,bridgePid:bridge.connection.pid}),{flag:'wx'});
@@ -35,8 +35,9 @@ export async function startNativeRenderer(project,root,bridge,{startupTimeoutMs=
   isProcessAlive:pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}},
   saveOutcome:outcome=>fs.writeFile(path.join(root,'renderer-exit.json'),JSON.stringify(outcome,null,2),{flag:'wx'})});
  try{
-  const deadline=Date.now()+startupTimeoutMs;
-  for(;;){await lifecycle.check();try{const ready=JSON.parse(await fs.readFile(path.join(root,'renderer-ready.json'),'utf8'));if(ready.ready&&ready.assetOnly&&ready.visible)break;throw Error('Invalid renderer readiness');}catch(e){if(e.code!=='ENOENT')throw e;}if(Date.now()>deadline)throw Error('Renderer startup timed out');await delay(1000);}
+  await waitRendererReady({lifecycle,instanceId,startupTimeoutMs,onObservation,
+   readProcessIdentity:async()=>JSON.parse(await fs.readFile(path.join(root,'renderer-process.json'),'utf8')),
+   readReady:async()=>JSON.parse(await fs.readFile(path.join(root,'renderer-ready.json'),'utf8'))});
  }catch(e){e.rendererOutcome=await lifecycle.settle();throw e;}
  return {...lifecycle,observe:id=>control({jobId:id})};
 }
