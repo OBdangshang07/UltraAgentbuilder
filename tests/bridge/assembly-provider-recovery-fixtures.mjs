@@ -30,7 +30,7 @@ const response=(input,options)=>{
 // transport. Reusable by HTTP/reference tests; no account discovery or model.
 export async function syntheticRecoveryTurn(options,{index,answer,selected={},transport=[],loadAdapter=async()=>CodexAdapter}={}){
   const Adapter=await loadAdapter(),adapter=new Adapter({observationIntervalMs:5}),threadId='fixture-thread-'+index,turnId='fixture-turn-'+index;
-  adapter.connect=async()=>{};adapter.models=async()=>[{id:recoveryModel,supportsImages:true,efforts:[{reasoningEffort:recoveryEffort}],defaultEffort:recoveryEffort}];
+  adapter.connect=async()=>{};adapter.models=async()=>[{id:options.model??recoveryModel,supportsImages:true,efforts:[{reasoningEffort:options.effort??recoveryEffort}],defaultEffort:options.effort??recoveryEffort}];
   adapter.readStoredTurn=async()=>{throw Error('Synthetic unavailable original observation');};
   adapter.request=async(method,params)=>{
     transport.push({method,index,...(method==='turn/start'?{model:params.model,effort:params.effort,input:params.input}: {})});

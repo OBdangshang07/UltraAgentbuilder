@@ -182,7 +182,9 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
       let reviewImages=[];
       const invoke=async(prompt,stage,stageOptions={})=>{
         controller.signal.throwIfAborted();
-        await event(job,'generating',{stage,stageCount:stageOptions.stageCount??(job.preflight.mode==='layered'?2:1),threadId:null,turnId:null,providerProgress:null,...(stageOptions.stageName?{stageName:stageOptions.stageName}:{})});
+        await event(job,'generating',{stage,stageCount:stageOptions.stageCount??(job.preflight.mode==='layered'?2:1),threadId:null,turnId:null,providerProgress:null,...(stageOptions.stageName?{stageName:stageOptions.stageName}:{}),
+          ...(job.recovery?.nextIndex===stage&&['provider-capacity-wait','provider-capacity-replay'].includes(job.recovery.state)?
+            {recovery:{...job.recovery,state:stageOptions.recoverProviderBinding?'provider-capacity-observing-original':'provider-capacity-dispatched',waitMs:0}}:{})});
         controller.signal.throwIfAborted();
         let output;
         const operation=stageOptions.recoverProviderBinding?selectedAgent.recoverOriginal?.bind(selectedAgent):selectedAgent.generate.bind(selectedAgent);

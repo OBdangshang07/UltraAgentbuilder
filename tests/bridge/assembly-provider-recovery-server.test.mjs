@@ -29,7 +29,8 @@ async function fixture(t,{choose=()=>({})}={}){
       }else if(format==='SceneConceptReview')answer={format:'SceneConceptReview',version:1,planHash:input.planHash,sourceHash:input.sourceHash,
         evidenceHash:input.designEvidence.evidenceHash,verdict:'accept',summary:'Synthetic engineering acceptance only',issues:[]};
       else answer=format==='SceneAssemblyPlan'?assemblyPlan():format==='SceneAssemblyReview'?acceptReview(input):packageResponse(input,packageEdit(input));
-      calls.push({index,input,options});
+      const saved=JSON.parse(await fs.readFile(path.join(options.cwd,'job.json')));
+      calls.push({index,input,options,recoveryState:saved.recovery?.state});
       return syntheticRecoveryTurn(options,{index,answer,selected:choose({index,input,options})??{},transport});
     },recoverOriginal:async()=>assert.fail('No original outcome may be resent or substituted')};
   const open=async()=>{service=await startBridge({dataDir,adapter,claudeAdapter:adapter,deepseekAdapter:adapter,referenceGenerationSending:true});};
@@ -90,6 +91,7 @@ test('ordinary HTTP capacity recovery uses exact identity, real waits, original 
   assert.equal(job.assemblySummary.finalTextReviewAccepted,true);assert.equal(job.assemblySummary.completedPackages.length,2);
   assert.equal(journal[0].state,'error');assert.equal(journal[1].providerRetry.failedIndex,1);assert.equal(journal[1].providerRetry.waitMs,10000);
   assert.equal(job.generations.length,6);assert.equal(job.generations[0].outcome,'failed');assert.equal(job.assemblyCallsReserved,6);
+  assert.equal(f.calls[1].recoveryState,'provider-capacity-dispatched');assert.equal(job.recovery.state,'complete');assert.equal(job.recovery.waitMs,0);
   for(const turn of f.transport.filter(v=>v.method==='turn/start')){assert.equal(turn.model,f.request.model);assert.equal(turn.effort,f.request.effort);}
   const audit=await independentAudit(f,job);assert.equal(audit.report.allReservedCallsClosed,true);assert.equal(audit.report.relationships.length,1);
   assert.equal((await f.json('/v1/jobs',f.request)).value.id,job.id);assert.equal(f.calls.length,6);
@@ -107,6 +109,7 @@ test('two-image HTTP SEND closes capacity-format-capacity prelude, preserves ori
   assert.equal(job.assemblySummary.completedPackages.length,2);assert.equal(job.assemblySummary.finalTextReviewAccepted,true);
   assert.deepEqual(journal.slice(0,4).map(v=>v.state),['error','error','error','response']);
   assert.deepEqual(journal.filter(v=>v.providerRetry).map(v=>v.providerRetry.waitMs),[10000,30000]);
+  for(const index of [1,3])assert.equal(f.calls[index].recoveryState,'provider-capacity-dispatched');assert.equal(job.recovery.state,'complete');assert.equal(job.recovery.waitMs,0);
   const turns=f.transport.filter(v=>v.method==='turn/start');
   const first=turns[0].input.filter(v=>v.type==='localImage').map(v=>v.path);assert.equal(first.length,2);
   for(const turn of turns.slice(0,4)){assert.deepEqual(turn.input.filter(v=>v.type==='localImage').map(v=>v.path),first);assert.equal(turn.effort,'max');}

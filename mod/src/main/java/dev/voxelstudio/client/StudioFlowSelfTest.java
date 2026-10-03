@@ -15,7 +15,7 @@ final class StudioFlowSelfTest {
     private static int stage;
     private static long started;
     private static String job;
-    private static boolean extendedCorrections,irisRequested;
+    private static boolean extendedCorrections,irisRequested,providerRecoveryRequested;
     private static final JsonObject report=new JsonObject();
     static boolean enabled(){return FabricLoader.getInstance().isDevelopmentEnvironment()&&Boolean.getBoolean("voxelstudio.selftest")&&System.getProperty("voxelstudio.flowTestRoot")!=null;}
     private static Path root()throws Exception{
@@ -49,7 +49,17 @@ final class StudioFlowSelfTest {
             boolean prototypes=marker.has("prototypes")&&marker.get("prototypes").getAsBoolean();
             String prototypeMode=marker.has("prototypeMode")?marker.get("prototypeMode").getAsString():prototypes?"verified":"off";
             if(!prototypeMode.equals("off")&&!prototypes)throw new IllegalArgumentException("Explicit prototype marker required");
-            StudioScreen.prepareOfflineFlow(extendedCorrections,nativeEvidence,qualityVersion,prototypeMode);c.setScreen(new StudioScreen());press(c.currentScreen,"生成建筑");
+            providerRecoveryRequested=marker.has("providerRecovery")&&marker.get("providerRecovery").getAsBoolean();
+            StudioScreen.prepareOfflineFlow(extendedCorrections,nativeEvidence,qualityVersion,prototypeMode,providerRecoveryRequested);c.setScreen(new StudioScreen());
+            if(StudioScreen.offlineFlowState().get("providerRecoverySelected").getAsBoolean())throw new IllegalStateException("Recovery must remain off before the normal UI selection");
+            report.addProperty("providerRecoveryDefaultOff",true);report.addProperty("providerRecoveryRequested",providerRecoveryRequested);
+            if(providerRecoveryRequested){
+                if(!StudioScreen.offlineFlowState().get("effort").getAsString().equals("max"))throw new IllegalStateException("Explicit advertised fixture effort missing");
+                press(c.currentScreen,"容量恢复：关闭（默认）");
+                if(!StudioScreen.offlineFlowState().get("providerRecoverySelected").getAsBoolean())throw new IllegalStateException("Normal recovery selection did not change");
+                report.addProperty("normalProviderRecoveryButtonPressed",true);
+            }
+            press(c.currentScreen,"生成建筑");
             report.addProperty("nativeEvidence",nativeEvidence);
             report.addProperty("qualityVersion",qualityVersion);
             report.addProperty("prototypes",prototypes);
@@ -63,6 +73,7 @@ final class StudioFlowSelfTest {
         try{
             if(System.nanoTime()-started>600_000_000_000L)throw new IllegalStateException("Offline UI flow timed out");
             var state=StudioScreen.offlineFlowState();
+            if(!state.get("providerRecoveryWait").getAsString().isEmpty())report.addProperty("boundedWaitVisibleInProgress",true);
             if(!state.get("error").isJsonNull())throw new IllegalStateException(state.get("error").getAsString());
             if(stage==1){
                 if(!(c.currentScreen instanceof StudioInfoScreen)||!c.currentScreen.getTitle().getString().startsWith("确认组件化预算"))return;
@@ -77,6 +88,7 @@ final class StudioFlowSelfTest {
                 var asset=StudioClient.PROJECTION.asset;if(asset==null)return;
                 verifyIris();
                 if(!asset.revision.equals(job)||asset.diagnosticOnly||asset.height!=224||state.get("busy").getAsBoolean())throw new IllegalStateException("Automatic preview identity/terminal-state mismatch");
+                if(providerRecoveryRequested&&(!report.has("boundedWaitVisibleInProgress")||!report.get("boundedWaitVisibleInProgress").getAsBoolean()))throw new IllegalStateException("No truthful capacity wait observed in normal progress");
                 report.addProperty("panelClosedDuringAssembly",true);report.addProperty("automaticFinalPreviewLoaded",true);report.addProperty("noIntermediateUserAction",true);report.addProperty("assetHash",asset.hash);
                 Files.writeString(root().resolve("client-flow.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report),StandardOpenOption.CREATE_NEW);
                 stage=99;pending.complete(asset);
@@ -92,6 +104,11 @@ final class StudioFlowSelfTest {
     private static void press(Screen screen,String label){
         var buttons=screen.children().stream().filter(e->e instanceof ButtonWidget b&&b.getMessage().getString().equals(label)).map(e->(ButtonWidget)e).toList();
         if(buttons.size()!=1||!buttons.get(0).active)throw new IllegalStateException("Missing/disabled normal UI button: "+label);
+        if(screen instanceof StudioScreen){
+            var side=StudioLayout.of(screen.width,screen.height).content();
+            for(int i=0;i<100&&!buttons.get(0).visible;i++)screen.mouseScrolled(side.x()+2,side.y()+2,-1);
+        }
+        if(!buttons.get(0).visible)throw new IllegalStateException("Normal UI button is not visible: "+label);
         buttons.get(0).onPress();
     }
     static JsonObject evidence(){return report.deepCopy();}

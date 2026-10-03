@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class StudioAssemblyTest {
-    @Test void oldUiConsentCannotAcquireExperimentalProviderRecoveryAuthority(){
+    @Test void unselectedUiConsentCannotAcquireProviderRecoveryAuthority(){
         var t=StudioAssembly.tier("ultra");var r=object("{\"model\":\"offline\"}");StudioAssembly.configure(r,t.id(),26);var p=policy(t,26);
         assertNotNull(StudioAssembly.confirmation(r,p));
         var a=p.getAsJsonObject("assembly");a.addProperty("providerRetries",0);assertNotNull(StudioAssembly.confirmation(r,p));

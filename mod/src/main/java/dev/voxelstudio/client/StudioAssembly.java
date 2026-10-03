@@ -60,11 +60,12 @@ final class StudioAssembly {
         case "correct-reference-analysis"->"修正识图分析响应（原共享预算内）";
         case "concept-candidate"->"制作独立概念候选";case "correct-concept-candidate"->"修正独立概念候选";case "assembly-blueprint"->"结构与职责蓝图（差量）";case "correct-blueprint","correct-assembly-blueprint"->"修正结构与职责蓝图";case "prototype-role"->"制作单角色原型 / 展开预检";case "correct-prototype-role"->"修正本角色原型 / 展开预检";case "concepts"->"制作轻量设计候选";case "correct-concepts"->"修正设计候选";case "select-concept"->"原生图片比较 / 自动选案";case "plan"->"整体设计与空间骨架";case "concept-review"->"冻结前整体 / 代表原型复核";case "correct-concept-review"->"修正整体复核响应";case "revise-design"->"整体协调改稿（尚未冻结）";case "correct-design"->"修正整体改稿错误";case "repair-plan"->"修正总纲结构契约";case "correct-plan"->"修正总纲几何";case "component"->"制作组件";case "correct-component"->"修正组件";case "review"->"最终设计与工程复核";case "correct-review"->"修正复核响应";case "refine-component"->"定向精修组件";case "refine-coordinated"->"批准制作包内协调精修";default->"待开始";
     };}
-    static String progress(JsonObject job){return job(job)?" · "+phase(value(job,"stageName",""))+" · 已预留 "+value(job,"assemblyCallsReserved","0")+"/"+value(job.getAsJsonObject("preflight"),"maximumCalls","?"):"";}
+    static String progress(JsonObject job){String wait=StudioProviderRecovery.waitStatus(job);return job(job)?" · "+(wait.isEmpty()?phase(value(job,"stageName","")):wait)+" · 已预留 "+value(job,"assemblyCallsReserved","0")+"/"+value(job.getAsJsonObject("preflight"),"maximumCalls","?"):"";}
     static String details(JsonObject job){
         if(!job(job))return "";
         var p=job.getAsJsonObject("preflight");var a=p.getAsJsonObject("assembly");int receipts=job.has("generations")&&job.get("generations").isJsonArray()?job.getAsJsonArray("generations").size():0;
         var out=new StringBuilder("\n\n组件化制作 · ").append(value(a,"id","未知")).append("\n确认上限：").append(value(p,"maximumCalls","?")).append(" 次底层模型调用\n已预留：").append(value(job,"assemblyCallsReserved","0")).append(" 次；调用回执：").append(receipts).append(" 次\n回执缺失不代表未执行或未计费；失败调用不退还预算；只有确定收到的可修复响应可在预算内纠正，未知结果不重发。");
+        out.append(StudioProviderRecovery.details(job));
         if(a.has("quality"))out.append("\n质量 v").append(value(a.getAsJsonObject("quality"),"version","?")).append("：代表原型与空间证据；跨包精修仅限已批准范围。");
         if(a.has("prototypes")){
             if("staged".equals(value(a.getAsJsonObject("prototypes"),"mode","")))out.append("\n分阶段原型（实验）：3 次独立概念 → 自动选案 → 差量蓝图 → 4 次单角色原型 → 种子看图复核 → 0 调用展开 → 全部深化包 → 整楼终审。纠错 / 改稿 / 再复核仍占同一预算。");
@@ -75,6 +76,7 @@ final class StudioAssembly {
             var s=item.getAsJsonObject();String state=switch(value(s,"state","")){case "reserved"->"已预留 / 等待结果";case "checking"->"本地校验中";case "accepted"->"此阶段已采纳";case "rejected"->"候选被拒绝";case "failed"->"失败";case "interrupted"->"中断";case "cancelled"->"取消";default->"未知";};
             out.append("\n").append(value(s,"index","?")).append(". ").append(phase(value(s,"phase",""))).append(" ").append(value(s,"task","")).append("：").append(state);
             if(s.has("formatCorrectionOf"))out.append("（格式纠正，原调用 ").append(value(s,"formatCorrectionOf","?")).append("）");
+            if(s.has("providerRetryOf"))out.append("（容量恢复，原失败调用 ").append(value(s,"providerRetryOf","?")).append("；另占原总额度）");
             if(s.has("error")&&!s.get("error").isJsonNull())out.append("\n   ").append(value(s,"error",""));
         }
         if(job.has("assemblySummary")){
@@ -103,13 +105,7 @@ final class StudioAssembly {
     static String confirmation(JsonObject request,JsonObject policy){
         var t=tier(request.get("qualityTier").getAsString());int calls=request.get("assemblyCalls").getAsInt();
         var a=policy.getAsJsonObject("assembly");
-        // The experimental API contract is not selectable in this player UI
-        // yet. Do not let a changed companion or restored request silently
-        // grant capacity retries under the existing zero-retry consent text.
-        var retries=a==null?null:a.get("providerRetries");
-        if(request.has("assemblyProviderRecovery")||a!=null&&a.has("providerRecovery")||
-            retries!=null&&(!retries.isJsonPrimitive()||!retries.getAsJsonPrimitive().isNumber()||retries.getAsDouble()!=0))
-            throw new IllegalArgumentException("本版界面尚未支持明确确认容量恢复；未提交，请勿复用旧确认");
+        boolean providerRecovery=StudioProviderRecovery.verify(request,a);
         boolean recovery="safe".equals(value(request,"assemblyRecovery",""));
         if(recovery){
             if(a==null||!a.has("recovery"))throw new IllegalArgumentException("配套不支持安全自动恢复，请完整升级");
@@ -166,7 +162,7 @@ final class StudioAssembly {
             : images
             ? "图像复核：把本任务编译资产的四张专用几何图发送给所选模型；不含世界、玩家、界面或桌面。近似颜色、玻璃不透明、半砖等按整格显示，不是游戏材质截图；不验证精确内饰。"
             : "仅文本复核：没有图像复核，不会宣称模型看过建筑。";
-        return "档位："+t.id()+" · 最多 "+calls+" 次底层模型调用\n模型："+request.get("model").getAsString()+"\n制作任务上限："+packages+"；最终复核上限："+t.reviewRounds()+" 轮\n\n"+t.description()
+        return "档位："+t.id()+" · 最多 "+calls+" 次底层模型调用\n模型："+request.get("model").getAsString()+"\n推理："+value(request,"effort","跟随模型")+"\n制作任务上限："+packages+"；最终复核上限："+t.reviewRounds()+" 轮\n\n"+t.description()
             +(quality?"\n\n质量 "+qualityName+"：概念阶段核对代表立面、典型空间、入口和特殊层；最终可对复核明确涉及的多个制作包一起精修。只在这些包原批准范围/构件内协调，保留全局接口、保护空间和未选构件；不是对已有建筑或世界的写入授权。":"")
             +(staged?"\n分阶段原型（实验）：3 次独立概念 → 自动选案 → 差量蓝图 → 4 次单角色原型 → 种子看图复核 → 0 调用展开 → "+packages+" 个深化包上限 → 整楼终审。基础路径最多 "+(11+packages)+" 次，预留 "+stagedRecoveryReserve(calls)+" 次共享纠错 / 改稿及必要再复核；全部计入本次总预算，不是额外额度。合并调用批次不减少组件精度或必需职责；包职责冻结后不会为重试删包或缩小功能。":concepts?"\n先制作 1 / 2 / 2 / 3 个轻量几何候选（对应 lite / pro / max / ultra），再把 4–8 张明确标识候选的原生图送给模型自动选案，不要求玩家中途选择。候选制作、自动选案、最多 "+t.maximumPlanCorrections()+" 次候选几何纠正都占上述总预算；不是额外额度。无效或重复候选会排除并记录；保留完整内饰与核心筒的后续制作。":"")
             +(qualityName.equals("v4")?"\n修改后使用固定相机的前后原生图对照，分项核对上轮问题与设计取舍。可选精修被判为退步时保留上一完整已复核稿及原意见，不把概念草稿当成品，也不把未解决问题改记通过。":"")
@@ -183,6 +179,7 @@ final class StudioAssembly {
             +"\n\n完整响应的 JSON 格式错误：全任务最多 1 次预算内格式纠正，另占一次调用且可能计费；保留原文。不补全截断内容，不绕过几何和权限校验。"
             +"\n\n输出 tokens："+(policy.get("maxOutputTokens").isJsonNull()?"跟随 Agent / 模型，不设固定上限":policy.get("maxOutputTokens").getAsString()+" / 每次")
             +(recovery?"\n\n安全自动恢复：配套重启后复用已保存的完整响应、重做校验，再继续原任务剩余阶段；不重复已派发调用，不重置预算，不更换模型。关闭面板不暂停任务；取消后不自动恢复。程序版本变化、回执未知或证据损坏时安全停止。":"")
-            +"\n\n未完成中间稿不可建造。截断、结果未知、提供方错误或哈希不符后停止，不重发；越权候选不采纳。确认前返回或关闭不调用模型；原建筑和世界保留。";
+            +"\n\n"+(providerRecovery?StudioProviderRecovery.WARNING:"容量恢复：关闭（默认）；提供方错误后停止，不重发。")
+            +"\n\n未完成中间稿不可建造。截断、结果未知、普通提供方错误或哈希不符后停止，不重发；越权候选不采纳。确认前返回或关闭不调用模型；原建筑和世界保留。";
     }
 }

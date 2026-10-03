@@ -40,6 +40,7 @@ public final class StudioScreen extends Screen {
     private static boolean assemblyImageReview=false;
     private static int assemblyQualityVersion=1;
     private static String assemblyPrototypeMode="off";
+    private static boolean assemblyProviderRecovery=false;
     private static ReferenceImageDraft referenceDraft=new ReferenceImageDraft();
     private static JsonObject designSources;
     private static String designRevision,selectedComponent;
@@ -101,7 +102,7 @@ public final class StudioScreen extends Screen {
         var world=MinecraftClient.getInstance().world;if(world!=null)req.addProperty("worldHeight",world.getHeight());configureAssembly(req);return req;
     }
     static boolean referenceGenerationCurrent(JsonObject exact,String world){
-        try{if(!projection().key().equals(world))return false;var request=exact.deepCopy();request.remove("assemblyConfirmed");return request.equals(referenceGenerationRequest(exact.get("key").getAsString()));}catch(Exception e){return false;}
+        try{return StudioGenerationConsent.matches(exact,referenceGenerationRequest(exact.get("key").getAsString()),world,projection().key(),idle());}catch(Exception e){return false;}
     }
     private static void configureAssembly(JsonObject req){
         StudioAssembly.configure(req,qualityTier,assemblyCalls);
@@ -109,6 +110,7 @@ public final class StudioScreen extends Screen {
         if(assemblyQualityVersion>=3&&(!assemblyImageReview||assemblyCalls<7))throw new IllegalArgumentException("质量 v3 / v4 需要原生图像比较且至少预留 7 次调用；未提交");
         if(assemblyImageReview){if(!supportsVisualReview())throw new IllegalArgumentException("所选模型没有声明图片能力；请选择图像模型，或切换质量旧版 / v2 的文本复核；未提交");req.addProperty("assemblyDesignReview",assemblyQualityVersion>=2?"native":"images");}
         StudioAssembly.configurePrototypes(req,assemblyQualityVersion==4?assemblyPrototypeMode:"off");
+        StudioProviderRecovery.configure(req,assemblyProviderRecovery,efforts());
     }
     /** Only prepares test selections; the fixture presses the real generate and budget buttons. */
     static void prepareOfflineFlow(boolean extendedCorrections,boolean nativeEvidence){
@@ -121,17 +123,23 @@ public final class StudioScreen extends Screen {
         prepareOfflineFlow(extendedCorrections,nativeEvidence,qualityVersion,prototypes?"verified":"off");
     }
     static void prepareOfflineFlow(boolean extendedCorrections,boolean nativeEvidence,int qualityVersion,String prototypes){
+        prepareOfflineFlow(extendedCorrections,nativeEvidence,qualityVersion,prototypes,false);
+    }
+    static void prepareOfflineFlow(boolean extendedCorrections,boolean nativeEvidence,int qualityVersion,String prototypes,boolean explicitEffort){
         if(!StudioFlowSelfTest.enabled()||!idle()||projection().asset!=null)throw new IllegalStateException("Fresh isolated flow fixture required");
         if(!List.of(1,2,4).contains(qualityVersion)||qualityVersion>=2&&!nativeEvidence||qualityVersion==4&&!extendedCorrections)throw new IllegalArgumentException("Invalid isolated quality/renderer/budget fixture");
         if(!List.of("off","verified","staged").contains(prototypes)||!prototypes.equals("off")&&qualityVersion!=4||prototypes.equals("staged")&&!extendedCorrections)throw new IllegalArgumentException("Prototype flow fixture requires explicit matching v4 / Ultra");
         discoveryAttempted=true;recoveryAttempted=true;agentReady=true;selectedAgent="codex";selectedModel="offline-player-fixture";selectedEffort="default";
         models=JsonParser.parseString("[{\"id\":\"offline-player-fixture\",\"name\":\"Offline test provider (no account)\",\"efforts\":[\"default\"],\"supportsImages\":true}]").getAsJsonArray();
+        if(explicitEffort){selectedEffort="max";models.get(0).getAsJsonObject().add("efforts",JsonParser.parseString("[\"max\"]"));}
         description="离线工程链路测试，不是 AI 设计：32×224×32 格边界，实际高度 224 米的办公塔楼，保留楼梯和通路";
-        generationMode="components";qualityTier=extendedCorrections?"ultra":"lite";assemblyCalls=extendedCorrections?26:8;repairBudget=0;assemblyImageReview=true;assemblyQualityVersion=qualityVersion;assemblyPrototypeMode=prototypes;
+        generationMode="components";qualityTier=extendedCorrections?"ultra":"lite";assemblyCalls=extendedCorrections?26:8;repairBudget=0;assemblyImageReview=true;assemblyQualityVersion=qualityVersion;assemblyPrototypeMode=prototypes;assemblyProviderRecovery=false;
     }
     static JsonObject offlineFlowState(){
         if(!StudioFlowSelfTest.enabled())throw new IllegalStateException("Explicit isolated flow fixture required");
         var state=new JsonObject();state.addProperty("activeJob",activeJob);state.addProperty("loading",loading);state.addProperty("busy",taskBusy());state.addProperty("error",notice.color==StudioTheme.ERROR?notice.details:null);
+        state.addProperty("providerRecoverySelected",assemblyProviderRecovery);state.addProperty("effort",selectedEffort);
+        state.addProperty("providerRecoveryWait",notice.summary.contains("容量恢复等待 ·")?notice.summary:"");
         if(taskIdentity!=null)state.add("identity",taskIdentity.deepCopy());return state;
     }
     private static void tell(String summary,String detail,int color){notice=new Notice(summary,detail,color);}
@@ -200,6 +208,7 @@ public final class StudioScreen extends Screen {
         if(generationMode.equals("components")){
             sideButton(()->"制作精度："+qualityTier,StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"档位控制拆分深度与复核轮数，不缩小建筑，不保证每次质量达标",this::chooseQualityTier);
             sideButton(()->"组件化总预算：最多 "+assemblyCalls+" 次",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"总纲、组件、纠错、复核与精修都计入；可主动降低，生成前必须确认",this::chooseAssemblyCalls);
+            sideButton(()->assemblyProviderRecovery?"容量恢复：开启 · 原预算内":"容量恢复：关闭（默认）",StudioTheme.Kind.NORMAL,()->idle()&&(assemblyProviderRecovery||canSelectProviderRecovery()),()->"仅 Codex 和明确已声明推理强度可选。最多两次等待 10 / 30 秒，失败不退预算；不换模型、不删功能、未知不重发。生成前单独列入费用确认。",()->{assemblyProviderRecovery=!assemblyProviderRecovery;tell(assemblyProviderRecovery?"本次制作设置已开启有限容量恢复":"容量恢复已关闭",assemblyProviderRecovery?StudioProviderRecovery.WARNING:"下一次预检将使用零提供方重试；没有改动原任务或调用模型。",StudioTheme.WARN);});
             sideButton(()->assemblyQualityVersion==4?"质量 v4：前后对照 + 分项复核":assemblyQualityVersion==3?"质量 v3：实景候选 + 自动选案":assemblyQualityVersion==2?"质量 v2：代表原型 + 协调精修":"质量流程：稳定旧版",StudioTheme.Kind.NORMAL,()->idle(),()->"点击切换：旧版 / v2 / v3 / v4。v4 增加同角度修改前后对照、入口与顶部近景，并逐项追踪设计问题；至少 7 次，需支持图片的模型。",()->{assemblyQualityVersion=assemblyQualityVersion%4+1;if(assemblyQualityVersion>=3){assemblyImageReview=true;assemblyCalls=Math.max(7,assemblyCalls);}if(assemblyQualityVersion!=4&&!assemblyPrototypeMode.equals("off")){assemblyPrototypeMode="off";tell("已关闭原型流程","原型只支持 v4；切回 v4 后须重新明确选择。没有提交任务或调用模型。",StudioTheme.MUTED);}});
             sideButton(()->assemblyImageReview?(assemblyQualityVersion>=2?"整体复核：原生材质 / 内饰切层":"整体复核：四视角几何图")+(supportsVisualReview()?"":"（需要支持图片的模型）"):"整体复核：仅文本",StudioTheme.Kind.NORMAL,()->idle()&&assemblyQualityVersion<3&&(assemblyImageReview||supportsVisualReview()),()->"v3 / v4 使用原生图像比较；v2 可选择文本。原生图只含建筑资产，不含世界、玩家、界面和桌面；生成前确认。",()->assemblyImageReview=!assemblyImageReview);
             if(assemblyQualityVersion==4)sideButton(()->"原型流程："+switch(assemblyPrototypeMode){case "verified"->"旧版整组制作 / 展开";case "staged"->"分阶段 · Ultra 实验";default->"关闭 · 保留原流程";},StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"明确选择关闭 / 旧版 / Ultra 分阶段。新流程分别生成概念、蓝图和四角色原型，预算至少 22 次；不会改变旧任务或自动授权调用。",this::choosePrototypeWorkflow);
@@ -336,7 +345,7 @@ public final class StudioScreen extends Screen {
         }));
     }
     private static void selectAgent(String id,boolean explicit){
-        if(selectedModel!=null)rememberedModels.put(selectedAgent,selectedModel);userSelectedAgent|=explicit;selectedAgent=id;models=new JsonArray();selectedModel=rememberedModels.get(id);selectedEffort="default";agentReady=false;
+        if(selectedModel!=null)rememberedModels.put(selectedAgent,selectedModel);userSelectedAgent|=explicit;selectedAgent=id;models=new JsonArray();selectedModel=rememberedModels.get(id);selectedEffort="default";agentReady=false;assemblyProviderRecovery=false;
         if(MinecraftClient.getInstance().currentScreen instanceof StudioScreen screen)screen.clearAndInit();refreshAgent();
     }
     private void chooseAgent(){
@@ -469,11 +478,12 @@ public final class StudioScreen extends Screen {
         var report=new JsonObject();report.addProperty("tab","visual-refinement");report.addProperty("capabilityGated",true);report.addProperty("defaultEnterReturnsWithoutCalling",true);report.addProperty("noGenerationSubmitted",true);return report;
     }
     private static void defaultEffort(){String preferred=model()==null?"default":string(model(),"defaultEffort","default");selectedEffort=efforts().contains(preferred)?preferred:efforts().get(0);}
+    private static boolean canSelectProviderRecovery(){return agentReady&&model()!=null&&StudioProviderRecovery.canSelect(selectedAgent,selectedModel,selectedEffort,efforts());}
     private static List<String> efforts(){var m=model();if(m==null||!m.has("efforts"))return List.of("default");List<String> result=new ArrayList<>();for(var e:m.getAsJsonArray("efforts"))result.add(e.isJsonObject()?e.getAsJsonObject().get("reasoningEffort").getAsString():e.getAsString());return result.isEmpty()?List.of("default"):result;}
     private void chooseModel(){List<StudioChoiceScreen.Choice> choices=new ArrayList<>();for(var entry:models){var m=entry.getAsJsonObject();String id=m.get("id").getAsString();choices.add(new StudioChoiceScreen.Choice(id,id,string(m,"name",id)));}client.setScreen(new StudioChoiceScreen(this,"选择制作模型",choices,selectedModel,id->{selectedModel=id;defaultEffort();}));}
     private void chooseEffort(){var choices=efforts().stream().map(e->new StudioChoiceScreen.Choice(e,StudioMessages.effort(e)+" · "+e,"所选模型支持的推理选项；不是生成质量或速度保证")).toList();client.setScreen(new StudioChoiceScreen(this,"选择推理级别",choices,selectedEffort,e->selectedEffort=e));}
     private void chooseOutputBudget(){var m=model();String configured=m!=null&&m.has("configuredOutputBudget")&&!m.get("configuredOutputBudget").isJsonNull()?m.get("configuredOutputBudget").getAsString():"由 Harness 决定";client.setScreen(new StudioOutputBudgetScreen(this,outputBudget,configured,v->outputBudget=v));}
-    private void chooseGenerationMode(){client.setScreen(new StudioChoiceScreen(this,"生成方式与调用次数",List.of(new StudioChoiceScreen.Choice("components","组件化制作 · lite / pro / max / ultra","整体设计 → 分组件拼装 → 文本复核；调用总上限单独确认"),new StudioChoiceScreen.Choice("single","原有完整建筑 · 1 次","保留兼容入口；自动修复预算另计"),new StudioChoiceScreen.Choice("scene","实验设计层 · 1 次 + 本地编译","通用体块/立面/模块/楼梯；0 自动修复，质量待真实评审"),new StudioChoiceScreen.Choice("checkpoints","实验设计检查点 · 最多 2–4 次","布局 → 编译反馈 → 细化；纠错包含在总预算内，只有新设计可用"),new StudioChoiceScreen.Choice("layered","原有外壳 → 内饰 · 最多 2 次","任一阶段失败即停止，完整合并校验后才可预览")),generationMode,v->{generationMode=v;if(!v.equals("single"))repairBudget=0;}));}
+    private void chooseGenerationMode(){client.setScreen(new StudioChoiceScreen(this,"生成方式与调用次数",List.of(new StudioChoiceScreen.Choice("components","组件化制作 · lite / pro / max / ultra","整体设计 → 分组件拼装 → 文本复核；调用总上限单独确认"),new StudioChoiceScreen.Choice("single","原有完整建筑 · 1 次","保留兼容入口；自动修复预算另计"),new StudioChoiceScreen.Choice("scene","实验设计层 · 1 次 + 本地编译","通用体块/立面/模块/楼梯；0 自动修复，质量待真实评审"),new StudioChoiceScreen.Choice("checkpoints","实验设计检查点 · 最多 2–4 次","布局 → 编译反馈 → 细化；纠错包含在总预算内，只有新设计可用"),new StudioChoiceScreen.Choice("layered","原有外壳 → 内饰 · 最多 2 次","任一阶段失败即停止，完整合并校验后才可预览")),generationMode,v->{generationMode=v;if(!v.equals("single"))repairBudget=0;if(!v.equals("components"))assemblyProviderRecovery=false;}));}
     private static int assemblyPackageLimit(){return assemblyPrototypeMode.equals("staged")?StudioAssembly.stagedPackageLimit(assemblyCalls):Math.min(StudioAssembly.tier(qualityTier).maxPackages(),assemblyCalls-(assemblyQualityVersion>=3?5:3));}
     private void choosePrototypeWorkflow(){
         List<StudioChoiceScreen.Choice> choices=new ArrayList<>();
@@ -498,31 +508,35 @@ public final class StudioScreen extends Screen {
             tell(models.isEmpty()?"Agent 没有返回模型":agentName()+" 已连接，选择模型后即可生成",requestedAgent.equals("deepseek")?"Harness 本机配置目录，不代表账号实时授权；生成才会访问模型服务。":"模型列表来自本机 Codex CLI。生成使用所选模型的账户额度。",models.isEmpty()?StudioTheme.WARN:StudioTheme.ACCENT);
         }));
     }
+    private static JsonObject generationRequest(String key,boolean revise){
+        var req=new JsonObject();req.addProperty("key",key);req.addProperty("sample",false);
+        req.addProperty("agent",selectedAgent);req.addProperty("model",modelLabel());req.addProperty("maxRepairs",repairBudget);req.addProperty("generationMode",generationMode);if(selectedAgent.equals("deepseek")&&outputBudget>0)req.addProperty("maxOutputTokens",outputBudget);if(!selectedEffort.equals("default"))req.addProperty("effort",selectedEffort);req.addProperty("prompt",description);var world=MinecraftClient.getInstance().world;if(world!=null)req.addProperty("worldHeight",world.getHeight());
+        if(revise){var a=projection().asset;if(a==null)throw new IllegalStateException("原修订资产已变化，请重新预检");req.addProperty("baseJobId",a.revision);req.addProperty("baseHash",a.hash);}
+        if(generationMode.equals("checkpoints"))StudioCheckpoints.configure(req,checkpointCalls);
+        if(generationMode.equals("components"))configureAssembly(req);return req;
+    }
+    private static boolean generationCurrent(JsonObject request,String scope){
+        try{return agentReady&&model()!=null&&!description.isBlank()&&StudioGenerationConsent.matches(request,generationRequest(request.get("key").getAsString(),request.has("baseJobId")),scope,projection().key(),idle());}catch(Exception invalid){return false;}
+    }
     private static void generate(boolean sample,boolean revise){
         if(!idle())return;if(!sample&&(model()==null||description.isBlank()))return;
         if(revise&&Set.of("checkpoints","components").contains(generationMode)){fail(new IllegalArgumentException("检查点 / 组件化只用于新设计；修改现有建筑请使用原有修订或局部精修入口"));return;}
-        JsonObject req=new JsonObject();req.addProperty("key",UUID.randomUUID().toString());req.addProperty("sample",sample);
-        if(!sample){req.addProperty("agent",selectedAgent);req.addProperty("model",modelLabel());req.addProperty("maxRepairs",repairBudget);req.addProperty("generationMode",generationMode);if(selectedAgent.equals("deepseek")&&outputBudget>0)req.addProperty("maxOutputTokens",outputBudget);if(!selectedEffort.equals("default"))req.addProperty("effort",selectedEffort);req.addProperty("prompt",description);var world=MinecraftClient.getInstance().world;if(world!=null)req.addProperty("worldHeight",world.getHeight());}
-        if(revise){var a=projection().asset;if(a==null)return;req.addProperty("baseJobId",a.revision);req.addProperty("baseHash",a.hash);}
-        if(sample){submitRequest(req,true);return;}
-        if(generationMode.equals("checkpoints"))StudioCheckpoints.configure(req,checkpointCalls);
-        if(generationMode.equals("components")){
-            try{configureAssembly(req);}catch(IllegalArgumentException invalid){fail(invalid);return;}
-        }
+        if(sample){var req=new JsonObject();req.addProperty("key",UUID.randomUUID().toString());req.addProperty("sample",true);submitRequest(req,true);return;}
+        final JsonObject req;try{req=generationRequest(UUID.randomUUID().toString(),revise);}catch(IllegalArgumentException|IllegalStateException invalid){fail(invalid);return;}
         preflighting=true;var c=MinecraftClient.getInstance();Screen parent=c.currentScreen;String scope=projection().key();
         tell("正在本地预检尺寸和调用预算…","尚未调用模型，也没有创建生成任务。",StudioTheme.MUTED);
         ("native".equals(string(req,"assemblyDesignReview",""))?StudioNativeEvidence.ready():java.util.concurrent.CompletableFuture.completedFuture(new JsonObject())).thenCompose(ready->StudioClient.BRIDGE.request("POST","/v1/preflight",req)).whenComplete((policy,error)->onClient(()->{
-            preflighting=false;if(error!=null){fail(error);return;}if(c.currentScreen!=parent||!scope.equals(projection().key())){tell("界面或世界已变化，未提交生成","再次点击生成后重新检查；没有调用模型。",StudioTheme.MUTED);return;}
+            preflighting=false;if(error!=null){fail(error);return;}if(c.currentScreen!=parent||!generationCurrent(req,scope)){tell("界面、世界或制作设置已变化，未提交生成","再次点击生成后重新检查；没有调用模型。",StudioTheme.MUTED);return;}
             if("components".equals(string(req,"sceneWorkflow",""))){
-                try{c.setScreen(assemblyConfirmation(parent,req,policy,()->{if(!scope.equals(projection().key())||!idle()){fail(new IllegalStateException("世界或任务状态变化，请重新预检"));c.setScreen(parent);return;}c.setScreen(parent);req.addProperty("assemblyConfirmed",true);submitRequest(req,false);}));}catch(Exception invalid){fail(invalid);}return;
+                try{c.setScreen(assemblyConfirmation(parent,req,policy,()->{if(!generationCurrent(req,scope)){fail(new IllegalStateException("世界、模型、推理或制作设置变化，请重新预检"));c.setScreen(parent);return;}c.setScreen(parent);req.addProperty("assemblyConfirmed",true);submitRequest(req,false);}));}catch(Exception invalid){fail(invalid);}return;
             }
             if("checkpoints".equals(string(req,"sceneWorkflow",""))){
-                try{c.setScreen(checkpointConfirmation(parent,req,policy,()->{if(!scope.equals(projection().key())||!idle()){fail(new IllegalStateException("世界或任务状态变化，请重新预检"));c.setScreen(parent);return;}c.setScreen(parent);req.addProperty("checkpointConfirmed",true);submitRequest(req,false);}));}catch(Exception invalid){fail(invalid);}return;
+                try{c.setScreen(checkpointConfirmation(parent,req,policy,()->{if(!generationCurrent(req,scope)){fail(new IllegalStateException("世界或制作设置变化，请重新预检"));c.setScreen(parent);return;}c.setScreen(parent);req.addProperty("checkpointConfirmed",true);submitRequest(req,false);}));}catch(Exception invalid){fail(invalid);}return;
             }
             String height=policy.get("minimumHeight").isJsonNull()?"未识别到明确数字高度，以描述为准":policy.get("minimumHeight").getAsInt()+" 格起，保持 1∶1，不自动缩小";
             String budget=policy.get("maxOutputTokens").isJsonNull()?"跟随 Harness / 所选 Agent 与模型配置；模组不指定 token 上限，不估算费用":policy.get("maxOutputTokens").getAsString()+" tokens / 每次"+(policy.get("totalOutputTokenLimit").isJsonNull()?"":"；最多 "+policy.get("totalOutputTokenLimit").getAsString()+" 输出 tokens")+"（非费用估算，服务端验证是否支持）";
             String detail="模型："+req.get("model").getAsString()+"\n方式："+(policy.get("mode").getAsString().equals("scene")?"实验设计层：一次设计 + 本地编译（不计模型调用）":policy.get("mode").getAsString().equals("layered")?"外壳 → 内饰与楼梯":"单次完整建筑")+"\n最多调用："+policy.get("maximumCalls").getAsInt()+" 次（含允许的编译修复）\n预算："+budget+"\n目标高度："+height+"\n\n最高 384 格；总体积 ≤8,388,608 格、实体 ≤1,000,000 格。放置还需满足当前维度的顶/底高度。\n\n"+policy.get("warnings").toString()+"\n\n确认会使用所选账户额度。失败不自动续写；原建筑和世界保留。";
-            c.setScreen(new StudioInfoScreen(parent,"确认生成预算",detail,"确认并生成",false,()->{if(!scope.equals(projection().key())||!idle()){fail(new IllegalStateException("世界或任务状态变化，请重新预检"));c.setScreen(parent);return;}c.setScreen(parent);submitRequest(req,false);}));
+            c.setScreen(new StudioInfoScreen(parent,"确认生成预算",detail,"确认并生成",false,()->{if(!generationCurrent(req,scope)){fail(new IllegalStateException("世界或制作设置变化，请重新预检"));c.setScreen(parent);return;}c.setScreen(parent);submitRequest(req,false);}));
         }));
     }
     private static StudioInfoScreen checkpointConfirmation(Screen parent,JsonObject request,JsonObject policy,Runnable action){return new StudioInfoScreen(parent,"确认检查点总预算",StudioCheckpoints.confirmation(request,policy),"确认 · 最多 "+request.get("checkpointCalls").getAsInt()+" 次",false,action);}

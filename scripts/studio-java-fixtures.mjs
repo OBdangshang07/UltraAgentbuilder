@@ -42,6 +42,7 @@ for(const fixture of [profileTower,profileGallery,profileCourt,profileWorldTower
 for(const spec of [...designExamples(),specialBlocksSpec()]){const c=compileSpec(spec,{navigationPolicy:'review'}),dir='mod/build/test-fixtures/'+spec.id;await fs.mkdir(dir,{recursive:true});await fs.writeFile(dir+'/manifest.json',JSON.stringify(c.manifest));await fs.writeFile(dir+'/cells.bin',c.binary);await fs.writeFile(dir+'/spec.json',JSON.stringify(spec));}
 await fs.mkdir('mod/build/test-fixtures',{recursive:true});
 await makeReferencePlayerFixtures();
+await makeReferencePlayerFixtures({providerRecovery:true});
 await fs.writeFile('mod/build/test-fixtures/world-patch-before.json',JSON.stringify(makeBeforeCheckFixtures()));
 await fs.writeFile('mod/build/test-fixtures/world-patch-safety.json',JSON.stringify(makePatchSafetyFixtures()));
 await fs.writeFile('mod/build/test-fixtures/world-patch-journal.json',JSON.stringify(makeJournalFixture()));
@@ -77,6 +78,14 @@ for(const mode of ['verified','staged'])for(const calls of mode==='staged'?[22,2
  prototypePolicies.push({request,policy:generationPreflight(request)});
 }
 await fs.writeFile('mod/build/test-fixtures/prototype-preflight.json',JSON.stringify(prototypePolicies));
+const recoveryPolicies=[];
+for(const qualityTier of ['lite','pro','max','ultra'])for(const enabled of [false,true]){
+ const request={agent:'codex',model:'offline-vision',effort:'max',prompt:'32×224×32格，224米办公塔楼；免费费用合同测试',generationMode:'scene',sceneWorkflow:'components',qualityTier,
+   assemblyCalls:({lite:8,pro:14,max:20,ultra:26})[qualityTier],assemblyDesignReview:'text',assemblyRecovery:'safe',maxRepairs:0,...(enabled?{assemblyProviderRecovery:'bounded'}:{})};
+ recoveryPolicies.push({request,policy:generationPreflight(request)});
+}
+for(const original of prototypePolicies){const request={...original.request,effort:'max',assemblyProviderRecovery:'bounded'};recoveryPolicies.push({request,policy:generationPreflight(request)});}
+await fs.writeFile('mod/build/test-fixtures/provider-recovery-preflight.json',JSON.stringify(recoveryPolicies));
 
 // Production worker/summary/task/consent outputs for the Java boundary. This is
 // a small synthetic snapshot: no world, account, model adapter or screenshots.
