@@ -4,6 +4,12 @@ import {codexTerminalOutput} from './codex-terminal-failure.mjs';
 
 export async function codexRequestHash({prompt,model,effort,outputSchema,images=[],referenceBindingHash}){
  const imageHashes=[];for(const file of images)imageHashes.push(hash(await fs.readFile(file)));
+ return codexRequestFingerprint({prompt,model,effort,outputSchema,imageHashes,referenceBindingHash});
+}
+
+// The verifier uses one checked snapshot of image bytes for BOTH the assembly
+// fingerprint and the provider request. Keep the versioned hash unchanged.
+export function codexRequestFingerprint({prompt,model,effort,outputSchema,imageHashes=[],referenceBindingHash}){
  if(referenceBindingHash!==undefined){
   if(!/^[a-f0-9]{64}$/.test(referenceBindingHash))throw Error('Invalid Codex reference binding hash');
   return hash({version:2,prompt,model,effort,outputSchema,imageHashes,referenceBindingHash});

@@ -5,6 +5,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {hash} from '../src/generation/compiler.mjs';
 import {CompletedResponseFormatError} from './model-json.mjs';
 import {runSceneAssembly} from './scene-assembly.mjs';
+import {assemblyInvocationFingerprint} from './assembly-invocation.mjs';
 
 // A write-ahead invocation ledger, not a retry queue. A pending invocation is
 // ambiguous and must NEVER be sent again. Replay only a saved, hashed receipt.
@@ -80,8 +81,8 @@ export async function openAssemblyJournal({directory,requestHash,policy,runtimeH
     if(busy)throw new Error('Concurrent assembly invocation forbidden');busy=true;
     try{
       const images=[];for(const file of options.images??[])images.push(hash(await fs.readFile(file)));
-      const fingerprint=hash({prompt,index,schema:options.outputSchema,phase:options.stageName,maximum:options.stageCount,images,
-        ...(options.referenceInput!==undefined?{referenceInput:options.referenceInput}:{})});
+      const fingerprint=assemblyInvocationFingerprint({prompt,index,outputSchema:options.outputSchema,
+        stageName:options.stageName,stageCount:options.stageCount,imageHashes:images,referenceInput:options.referenceInput});
       const saved=records[index-1];
       let recovering=false;
       if(saved){
