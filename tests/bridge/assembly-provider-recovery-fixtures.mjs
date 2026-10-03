@@ -26,6 +26,31 @@ const response=(input,options)=>{
   }
 };
 
+// Exercise the real adapter's evidence and binding paths with an inert
+// transport. Reusable by HTTP/reference tests; no account discovery or model.
+export async function syntheticRecoveryTurn(options,{index,answer,selected={},transport=[],loadAdapter=async()=>CodexAdapter}={}){
+  const Adapter=await loadAdapter(),adapter=new Adapter({observationIntervalMs:5}),threadId='fixture-thread-'+index,turnId='fixture-turn-'+index;
+  adapter.connect=async()=>{};adapter.models=async()=>[{id:recoveryModel,supportsImages:true,efforts:[{reasoningEffort:recoveryEffort}],defaultEffort:recoveryEffort}];
+  adapter.readStoredTurn=async()=>{throw Error('Synthetic unavailable original observation');};
+  adapter.request=async(method,params)=>{
+    transport.push({method,index,...(method==='turn/start'?{model:params.model,effort:params.effort,input:params.input}: {})});
+    if(method==='config/read')return {config:{}};
+    if(method==='thread/start')return {thread:{id:threadId,ephemeral:false}};
+    if(['thread/unsubscribe','turn/interrupt'].includes(method))return {};
+    if(method!=='turn/start')throw Error('Unexpected synthetic transport request');
+    const text=selected.text??JSON.stringify(selected.answer??answer),failed=selected.failure!==undefined;
+    const items=[...(selected.commentary?[{type:'agentMessage',phase:'commentary',text:'Synthetic nonempty commentary'}]:[]),
+      ...(!failed||selected.text!==undefined?[{type:'agentMessage',phase:'final_answer',text}]:[])];
+    if(!selected.unknown)setImmediate(()=>adapter.emit('notification',{method:'turn/completed',params:{threadId,
+      turn:{id:turnId,status:failed?'failed':'completed',...(failed?{error:{message:selected.failure}}:{}),items}}}));
+    return {turn:{id:turnId,status:'inProgress'}};
+  };
+  return adapter.generate({...options,onEvent:async e=>{
+    await options.onEvent?.(e);
+    if(selected.unknown&&e.turnId)throw Error('Synthetic observer lost after original turn acknowledged');
+  }});
+}
+
 // Actual adapter, persisted answer files and actual durable journal. ONLY the
 // app-server transport/model answers are synthetic; no account or model calls.
 export async function recoveryHarness(t,{staged=false,enabled=true,requestDelta={},choose=()=>({}),loadAdapter=async()=>CodexAdapter}={}){
@@ -49,25 +74,9 @@ export async function recoveryHarness(t,{staged=false,enabled=true,requestDelta=
     const selected=choose({index,input,stage,answer,calls,directory})??{};
     calls.push({index,phase:stage.stageName,input,prompt,outputSchema:structuredClone(stage.outputSchema),
       referenceInput:stage.referenceInput,answer:structuredClone(answer),images:[...(stage.images??[])]});
-    const Adapter=await loadAdapter(),adapter=new Adapter({observationIntervalMs:5}),threadId='fixture-thread-'+index,turnId='fixture-turn-'+index;
-    adapter.connect=async()=>{};adapter.models=async()=>[{id:recoveryModel,supportsImages:true,efforts:[{reasoningEffort:recoveryEffort}],defaultEffort:recoveryEffort}];
-    adapter.readStoredTurn=async()=>{throw Error('Synthetic unavailable original observation');};
-    adapter.request=async(method,params)=>{
-      transport.push({method,index});
-      if(method==='config/read')return {config:{}};
-      if(method==='thread/start')return {thread:{id:threadId,ephemeral:false}};
-      if(['thread/unsubscribe','turn/interrupt'].includes(method))return {};
-      if(method!=='turn/start')throw Error('Unexpected synthetic transport request');
-      const text=selected.text??JSON.stringify(selected.answer??answer),failed=selected.failure!==undefined;
-      const items=[...(selected.commentary?[{type:'agentMessage',phase:'commentary',text:'Synthetic nonempty commentary'}]:[]),
-        ...(!failed||selected.text!==undefined?[{type:'agentMessage',phase:'final_answer',text}]:[])];
-      if(!selected.unknown)setImmediate(()=>adapter.emit('notification',{method:'turn/completed',params:{threadId,
-        turn:{id:turnId,status:failed?'failed':'completed',...(failed?{error:{message:selected.failure}}:{}),items}}}));
-      return {turn:{id:turnId,status:'inProgress'}};
-    };
-    const result=await adapter.generate({prompt,model:recoveryModel,effort:recoveryEffort,cwd:directory,signal:controller.signal,
+    const result=await syntheticRecoveryTurn({prompt,model:recoveryModel,effort:recoveryEffort,cwd:directory,signal:controller.signal,
       images:stage.images,referenceInput:stage.referenceInput,outputSchema:stage.outputSchema,onProviderBinding:stage.onProviderBinding,
-      onEvent:async e=>{if(selected.unknown&&e.turnId)throw Error('Synthetic observer lost after original turn acknowledged');}});
+      onEvent:async()=>{}},{index,answer,selected,transport,loadAdapter});
     return result.spec;
   };
   return {directory,options,controller,events,calls,waits,transport,

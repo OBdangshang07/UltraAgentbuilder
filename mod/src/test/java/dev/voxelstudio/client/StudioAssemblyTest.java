@@ -4,6 +4,16 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class StudioAssemblyTest {
+    @Test void oldUiConsentCannotAcquireExperimentalProviderRecoveryAuthority(){
+        var t=StudioAssembly.tier("ultra");var r=object("{\"model\":\"offline\"}");StudioAssembly.configure(r,t.id(),26);var p=policy(t,26);
+        assertNotNull(StudioAssembly.confirmation(r,p));
+        var a=p.getAsJsonObject("assembly");a.addProperty("providerRetries",0);assertNotNull(StudioAssembly.confirmation(r,p));
+        for(var retries:java.util.List.of(new JsonPrimitive(2),new JsonPrimitive(0.5),new JsonPrimitive("0"),JsonNull.INSTANCE)){
+            a.add("providerRetries",retries);assertThrows(IllegalArgumentException.class,()->StudioAssembly.confirmation(r,p));
+        }
+        a.addProperty("providerRetries",0);a.add("providerRecovery",object("{}"));assertThrows(IllegalArgumentException.class,()->StudioAssembly.confirmation(r,p));
+        a.remove("providerRecovery");r.addProperty("assemblyProviderRecovery","bounded");assertThrows(IllegalArgumentException.class,()->StudioAssembly.confirmation(r,p));
+    }
     @Test void referenceProgressNamesAnalysisAndCorrectionWithoutCreatingNewBudget(){
         assertTrue(StudioAssembly.phase("reference-analysis").contains("识图分析"));
         assertTrue(StudioAssembly.phase("correct-reference-analysis").contains("原共享预算内"));

@@ -1,7 +1,8 @@
 import {hash} from '../src/generation/compiler.mjs';
 
 // A new explicit authority contract, not a migration of existing task policies.
-// It is not yet exposed by preflight/UI. Defining it does not dispatch retries.
+// Preflight accepts only the explicit new-task opt-in. Existing requests and
+// journals stay disabled; the player UI has not yet exposed this option.
 const policy=Object.freeze({version:1,mode:'bounded',provider:'codex',maximumRetries:2,
   waitMs:Object.freeze([10000,30000]),unknownOutcomeRetries:0,partialOutputRetries:0,
   increaseCallLimit:false,changeModel:false,refundFailedCalls:false,shrinkRequiredScope:false});

@@ -103,6 +103,13 @@ final class StudioAssembly {
     static String confirmation(JsonObject request,JsonObject policy){
         var t=tier(request.get("qualityTier").getAsString());int calls=request.get("assemblyCalls").getAsInt();
         var a=policy.getAsJsonObject("assembly");
+        // The experimental API contract is not selectable in this player UI
+        // yet. Do not let a changed companion or restored request silently
+        // grant capacity retries under the existing zero-retry consent text.
+        var retries=a==null?null:a.get("providerRetries");
+        if(request.has("assemblyProviderRecovery")||a!=null&&a.has("providerRecovery")||
+            retries!=null&&(!retries.isJsonPrimitive()||!retries.getAsJsonPrimitive().isNumber()||retries.getAsDouble()!=0))
+            throw new IllegalArgumentException("本版界面尚未支持明确确认容量恢复；未提交，请勿复用旧确认");
         boolean recovery="safe".equals(value(request,"assemblyRecovery",""));
         if(recovery){
             if(a==null||!a.has("recovery"))throw new IllegalArgumentException("配套不支持安全自动恢复，请完整升级");

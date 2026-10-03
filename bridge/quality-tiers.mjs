@@ -2,14 +2,24 @@ import catalog from '../contracts/quality-tiers.json' with {type:'json'};
 import {QUALITY_STRATEGIES} from '../src/design/quality-prototypes.mjs';
 import {decompositionBlueprintBudget} from './assembly-decomposition-budget.mjs';
 import {DESIGN_ALLOCATION_POLICY} from '../contracts/scene-design-allocation.mjs';
+import {assemblyProviderRecoveryPolicy} from '../contracts/assembly-provider-recovery.mjs';
 export function qualityTiers(){return structuredClone(catalog.tiers);}
 export function assemblyPreflight(input){
-  const fields=['qualityTier','assemblyCalls','assemblyConfirmed','assemblyDesignReview','assemblyRecovery','assemblyQuality','assemblyPrototypes'];
+  const fields=['qualityTier','assemblyCalls','assemblyConfirmed','assemblyDesignReview','assemblyRecovery','assemblyQuality','assemblyPrototypes','assemblyProviderRecovery'];
   if(input.sceneWorkflow!=='components'){
     if(fields.some(k=>input[k]!==undefined))throw new Error('Quality tier fields require explicit component workflow');return null;
   }
   if(input.generationMode!=='scene'||(input.maxRepairs??0)!==0||['sample','spec','patch','scenePatch','importDirectory','revalidateJobId','baseJobId','baseHash','sceneScope','reviewImages','repairJobId','checkpointCalls','checkpointConfirmed'].some(k=>input[k]!==undefined))throw new Error('Component workflow is a separately confirmed new SceneSpec design');
   const tier=structuredClone(catalog.tiers.find(t=>t.id===input.qualityTier));if(!tier)throw new Error('Select lite, pro, max or ultra explicitly');
+  // This new request opts into a fixed contract; omitted means the historical
+  // zero-retry policy, byte-for-byte. Never resolve a model/effort later or
+  // reinterpret safe restart recovery as authority to resend a provider call.
+  if(input.assemblyProviderRecovery!==undefined&&
+    (input.assemblyProviderRecovery!=='bounded'||input.agent!=='codex'||input.assemblyRecovery!=='safe'||
+      typeof input.model!=='string'||!/^[A-Za-z0-9._:-]{1,128}$/.test(input.model)||
+      !['none','minimal','low','medium','high','xhigh','max','ultra'].includes(input.effort)))
+    throw new Error('Bounded provider recovery requires an explicit new Codex component task, safe recovery, selected model and reasoning effort');
+  const providerRecovery=input.assemblyProviderRecovery===undefined?null:assemblyProviderRecoveryPolicy();
   const mode=input.assemblyDesignReview;
   const quality=input.assemblyQuality;
   if(input.assemblyPrototypes!==undefined&&(!['verified','staged'].includes(input.assemblyPrototypes)||quality!=='v4'||mode!=='native'||input.assemblyRecovery!=='safe'))throw new Error('Verified/staged prototypes require explicit new-building quality v4, native review and safe recovery');
@@ -39,5 +49,5 @@ export function assemblyPreflight(input){
   const stagedBudget=tier.prototypes?.mode==='staged'?decompositionBlueprintBudget({maximumCalls,candidateCount:3,maximumPackages:tier.maxPackages,recoveryReserve:tier.prototypes.recoveryReserve}):null;
   if(stagedBudget&&!stagedBudget.canStart)throw new Error('Staged Ultra cannot fund every required role, package and recovery reserve');
   if(input.assemblyConfirmed!==undefined&&typeof input.assemblyConfirmed!=='boolean')throw new Error('Component workflow confirmation must be explicit');
-  return {...tier,maximumCalls,maxPackages:stagedBudget?stagedBudget.maximumPackages:Math.min(tier.maxPackages,maximumCalls-(['v3','v4'].includes(quality)?5:designReview?3:2)),workflow:'components',providerRetries:0,maximumFormatCorrections:1,visualReview:['images','native'].includes(mode),...(quality?{quality:{version:quality==='v4'?4:quality==='v3'?3:2,prototypeReview:true,coordinatedRefinement:true,newBuildingOnly:true,strategy:structuredClone(QUALITY_STRATEGIES[tier.id]),...(['v3','v4'].includes(quality)?{renderedConcepts:true,maximumConceptCorrections:tier.maximumPlanCorrections}:{}),...(quality==='v4'?{pairedRevisionReview:true,structuredFindings:true}:{})}}:{}),...(designReview?{designReview}:{}),...(input.assemblyRecovery?{recovery:{version:1,mode:'safe',unknownOutcomeRetries:0},componentCorrection:{version:1,budgetedExtensions:true}}:{}),intermediateAssetsPlaceable:false};
+  return {...tier,maximumCalls,maxPackages:stagedBudget?stagedBudget.maximumPackages:Math.min(tier.maxPackages,maximumCalls-(['v3','v4'].includes(quality)?5:designReview?3:2)),workflow:'components',providerRetries:providerRecovery?.maximumRetries??0,...(providerRecovery?{providerRecovery}:{}),maximumFormatCorrections:1,visualReview:['images','native'].includes(mode),...(quality?{quality:{version:quality==='v4'?4:quality==='v3'?3:2,prototypeReview:true,coordinatedRefinement:true,newBuildingOnly:true,strategy:structuredClone(QUALITY_STRATEGIES[tier.id]),...(['v3','v4'].includes(quality)?{renderedConcepts:true,maximumConceptCorrections:tier.maximumPlanCorrections}:{}),...(quality==='v4'?{pairedRevisionReview:true,structuredFindings:true}:{})}}:{}),...(designReview?{designReview}:{}),...(input.assemblyRecovery?{recovery:{version:1,mode:'safe',unknownOutcomeRetries:0},componentCorrection:{version:1,budgetedExtensions:true}}:{}),intermediateAssetsPlaceable:false};
 }
