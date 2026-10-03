@@ -135,6 +135,16 @@ Ultra／26 次预算、224 米、v4 分阶段原型及显式有限容量恢复�
 
 修改后的启动、有限恢复预检及参考图 HTTP 关联回归 24 项全部通过，390 份 JavaScript 语法检查零失败，命名与发布测试 10 项通过。此阶段没有修改 Java 或内置 Bridge 源码，候选包未重建；这些定向成绩不代替本次提交后的独立全量 CI。
 
+普通 CLI 边界提交 `17888f3` 的[独立 GitHub CI](https://github.com/OBdangshang07/UltraAgentbuilder/actions/runs/37156118405) 已核对 completed／success，准确绑定该提交。
+
+### 实际 JAR 的隔离 Minecraft 安装检查
+
+同一实际候选 JAR 已在全新的可见 Minecraft 实例中通过零生成安装验收。使用官方 Minecraft 1.20.1、Fabric Loader 0.16.10 和 Fabric API，不使用 `runClient`、开发类路径、替代 Bridge 或生产自测参数。辅助 QA 模组独立构建，绑定实际 `UltraAgentbuilder-0.4.10-alpha.jar`，保留兼容 ID `voxel_studio`；正式游戏和存档未操作。
+
+游戏实际执行 Java 内置解包，启动未修改的包内 Bridge。通过正常界面选择本机 Codex、GPT‑6.1 Sol 和 Max；生产类来源准确属于安装 JAR，Bridge 是本次 JVM 的子进程，正常功能入口可用。正常退出后，JVM 与 Bridge 均确认结束，连接文件和锁已清除；190 份实际解出的文件重新核对原 JAR 的尺寸和哈希。独立测试缓存的 3575 份官方资源对象也重新核验。
+
+整个安装检查没有创建生成任务、进入世界或调用生成模型；不是 AI 建筑全程、实际建造事务、Iris、输入法或跨机器安装认证。辅助驱动编译和重映射成功，新增安装命名／来源边界回归后，命名与发布测试 11 项全部通过，390 份 JavaScript 语法检查零失败。本阶段只修改辅助 QA 的公开产品文件名和相关测试，没有重建或替换生产候选 JAR。截图、测试实例、运行时、内部回执与审计工具不进入公开 Git。
+
 ## 尚未闭合的验收
 
 - 224 米 Ultra CBD 的完整生成、设计品质和同一成品在游戏中的放置事务。

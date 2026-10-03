@@ -41,7 +41,7 @@ public final class InstalledCompanionAcceptance implements ClientModInitializer 
             if(!copy.get("result").getAsString().equals("passed")||!copy.get("developmentOnly").getAsBoolean()||copy.get("worldsCopied").getAsBoolean()||copy.get("accountDataCopied").getAsBoolean())throw new IllegalStateException("Unsafe development ownership receipt");
             if(!authorization.get("gameDirectory").getAsString().equals(game.toString())||!authorization.get("zeroGenerationCalls").getAsBoolean()
                 ||!authorization.get("visibleWindowAuthorized").getAsBoolean()||authorization.get("formalWorldAuthorized").getAsBoolean())throw new IllegalStateException("Invalid bounded read-only authorization");
-            Path jar=game.resolve("mods/voxel-studio-0.4.10-alpha.jar").toRealPath();
+            Path jar=game.resolve("mods/UltraAgentbuilder-0.4.10-alpha.jar").toRealPath();
             String jarHash=hash(Files.readAllBytes(jar));
             if(!jarHash.equals(authorization.get("productionJarSha256").getAsString()))throw new IllegalStateException("Installed JAR does not match gate pin");
             var mod=loader.getModContainer("voxel_studio").orElseThrow();
