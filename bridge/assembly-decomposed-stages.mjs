@@ -12,6 +12,7 @@ import {inspectCheckpoint} from './scene-checkpoints.mjs';
 import {sourceIdentityGuidance,SOURCE_IDENTITY_RULES} from '../contracts/scene-source-identity-guidance.mjs';
 import {prototypeSurfaceGuidance,BLUEPRINT_SURFACE_RULES,ROLE_SURFACE_RULES} from '../contracts/scene-prototype-surface-guidance.mjs';
 import {stagedDesignAllocationEnabled} from '../contracts/scene-design-allocation.mjs';
+import {inspectPrototypeRoleAllocation,PROTOTYPE_ALLOCATION_POLICY,PROTOTYPE_ALLOCATION_RULES} from './assembly-design-allocation.mjs';
 
 const write=(directory,name,value)=>fs.writeFile(path.join(directory,name),JSON.stringify(value,null,2),{flag:'wx'});
 const failure=error=>({accepted:false,error:error.message,feedback:{geometryPassed:false,canAuthorizePlacement:false,
@@ -139,13 +140,14 @@ export async function inspectDecomposedRepresentatives(state,directory,feedback)
  * a second provider adapter, adopts invalid output or grants placement rights. */
 export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,policy,signal,stage,records,inspect=inspectCheckpoint,capacityProgress}){
  const tier=policy.assembly,config=configuration(tier),selected=selectedConcept.selected;
+ const allocationEnabled=stagedDesignAllocationEnabled(tier);
  let state,checked,stageDirectory,blueprintStage,prior=null;
  for(let attempt=0;attempt<=tier.maximumPlanCorrections;attempt++){
   const callBudget=decompositionBlueprintBudget(config,{reservedCalls:records.length,completedCandidates:config.candidateCount,selectionAccepted:true,...decompositionPreludeProgress(tier,records,capacityProgress)});
   if(!callBudget.canStart)throw Error('Unfunded decomposition blueprint; no complete-task work omitted');
   const result=await stage(attempt?'correct-blueprint':'assembly-blueprint',null,{description:prompt,tier,selectedConcept,sourceHash:hash(selected.scene),callBudget,prior,
    minimumHeight:policy.minimumHeight,maximumBounds:policy.maximumBounds,decompositionBudget:decompositionTailBudget(tier,records,6+callBudget.maximumPackages),decompositionStageId:'blueprint'},
-   DECOMPOSED_BLUEPRINT_RULES+'\n'+BLUEPRINT_SURFACE_RULES+'\nCORRECTION: if prior is supplied, it is a rejected delta. Return a corrected delta against the SAME selected source, preserving already-valid structural work, not a new full scene. Every required task, function and selected massing anchor must remain.',
+   DECOMPOSED_BLUEPRINT_RULES+'\n'+BLUEPRINT_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+'\nCORRECTION: if prior is supplied, it is a rejected delta. Return a corrected delta against the SAME selected source, preserving already-valid structural work, not a new full scene. Every required task, function and selected massing anchor must remain.',
    assemblyBlueprintStageSchema(selected,tier,callBudget),async(response,dir)=>{
     if(response?.sourceHash!==hash(selected.scene)||response?.sceneEdit?.sourceHash!==hash(selected.scene))throw Error('Stale selected blueprint identity');
     let candidate;try{candidate=applyAssemblyBlueprint(selected,response,{...tier,maxPackages:callBudget.maximumPackages});}catch(error){return failure(error);}
@@ -175,8 +177,9 @@ export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,
     programHash:decomposedProgramHash(state),previousDraft:state.plan.scene,
     prototypeState:{version:state.version,roles:state.roles,completedRoles:state.completedRoles,recipesByRole:state.recipesByRole,representativesByRole:state.representativesByRole},prior,
     capacity:assemblyCapacity(state.plan,state.plan.scene,[],task),feedback:checked.feedback,decompositionBudget:budget,prototypeCorrectionBudget:correctionBudget,decompositionStageId:role,
-    sourceIdentityPolicy:sourceIdentityGuidance(task,prior),prototypeSurfacePolicy:prototypeSurfaceGuidance(state.plan.scene,task)},
-    DECOMPOSED_ROLE_RULES+'\n'+SOURCE_IDENTITY_RULES+'\n'+ROLE_SURFACE_RULES+'\nCORRECTION: prior is an unapproved role delta. Fix every reported source/geometry/expansion issue against the SAME original state. No failed seed or partial model text is adopted; preserve valid work within this role and do not modify another role.',
+    sourceIdentityPolicy:sourceIdentityGuidance(task,prior),prototypeSurfacePolicy:prototypeSurfaceGuidance(state.plan.scene,task),
+    ...(allocationEnabled?{prototypeAllocationPolicy:structuredClone(PROTOTYPE_ALLOCATION_POLICY)}:{})},
+    DECOMPOSED_ROLE_RULES+'\n'+SOURCE_IDENTITY_RULES+'\n'+ROLE_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+'\nCORRECTION: prior is an unapproved role delta. Fix every reported source/geometry/expansion issue against the SAME original state. No failed seed or partial model text is adopted; preserve valid work within this role and do not modify another role.',
     prototypeRoleStageSchema(state,role),async(response,dir)=>{
      if(response?.planHash!==hash(state.plan)||response?.programHash!==decomposedProgramHash(state)||response?.edit?.sourceHash!==hash(state.plan.scene))throw Error('Stale prototype role identity');
      let candidate;try{candidate=applyPrototypeRoleEdit(state,response,tier);}catch(error){return failure(error);}
@@ -199,12 +202,22 @@ export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,
         baseAssetHash:priorExpanded.feedback.diagnosticAssetHash,task,previousFeedback:priorExpanded.feedback})});
      }
      if(report.accepted&&!assemblyCapacity(candidate.plan,candidate.plan.scene).assembly.feasible)return {...report,...failure(Error('Prototype role consumes required component headroom')),state:candidate};
+     if(report.accepted&&allocationEnabled){
+      let allocation;
+      try{allocation=await inspectPrototypeRoleAllocation({state:candidate,checked:report});}
+      catch(error){
+       if(!error.designAllocationFeedback)throw error;
+       await write(dir,'prototype-allocation.json',{version:1,accepted:false,error:error.message,feedback:error.designAllocationFeedback,canAuthorizePlacement:false});
+       return {...report,accepted:false,error:error.message,feedback:{...report.feedback,designAllocation:error.designAllocationFeedback},state:candidate,plan:candidate.plan};
+      }
+      await write(dir,'prototype-allocation.json',allocation);report={...report,prototypeAllocationReceipt:allocation};
+     }
      return {...report,state:candidate,plan:candidate.plan,representativeWitness:witness};
     });
    if(result.accepted){accepted=result;break;}
    const key=hash(result.response);if(seen.has(key))throw Error('Prototype role correction repeated the same rejected delta');seen.add(key);
    prior={response:result.response,feedback:result.feedback,error:result.error,overallAccepted:false,
-    interpretation:'A passed seed-only report does not approve expansion. prototypeExpansion feedback and this error describe the rejected full-instance proposal; correct every failing instance within this role.'};
+    interpretation:allocationEnabled?'A passed seed-only report does not approve expansion or witness allocation. prototypeExpansion/designAllocation feedback and this error describe the rejected proposal; correct every failing instance or unsupported witness claim within this same role.':'A passed seed-only report does not approve expansion. prototypeExpansion feedback and this error describe the rejected full-instance proposal; correct every failing instance within this role.'};
   }
   if(!accepted)throw Error('Required prototype role '+role+' failed; original accepted seed preserved');
   if(hash(state)!==originalStateHash||checked!==originalChecked)throw Error('Rejected prototype stage mutated its baseline');

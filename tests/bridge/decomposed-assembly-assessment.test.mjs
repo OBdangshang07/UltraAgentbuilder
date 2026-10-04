@@ -8,9 +8,10 @@ import {hash} from '../../src/generation/compiler.mjs';
 import {freezeSceneRuntime} from '../../scripts/scene-runtime-snapshot.mjs';
 import {setupLegacyStaged,setupStaged} from './decomposed-assembly-fixtures.mjs';
 import {planEdit} from '../design/assembly-fixtures.mjs';
+import {shape} from '../design/fixtures.mjs';
 
-for(const profile of ['legacy-v3','review-funded-v4','allocation-v5'])test(profile+' read-only terminal audit reconstructs all independent responses, scoped seed/full owners and role receipts; tampering fails',async()=>{
- const expectedCalls=profile==='legacy-v3'?19:profile==='allocation-v5'?18:16;
+for(const profile of ['legacy-v3','review-funded-v4','allocation-v5','allocation-v5-role-correction'])test(profile+' read-only terminal audit reconstructs all independent responses, scoped seed/full owners and role receipts; tampering fails',async()=>{
+ const expectedCalls=profile==='legacy-v3'?19:profile==='allocation-v5'?18:profile==='allocation-v5-role-correction'?17:16;
  let revised=false;
  const change=profile==='allocation-v5'?({answer,input,options})=>{
   if(options.stageName==='assembly-blueprint')answer.packages[1].regions[0].size[1]=183;
@@ -18,6 +19,13 @@ for(const profile of ['legacy-v3','review-funded-v4','allocation-v5'])test(profi
   if(options.stageName==='revise-design'){
    const target=structuredClone(input.priorPlan);target.packages[1].regions[0].size[1]=224;target.packages[1].purpose+='; upper work';answer.edit=planEdit(input.priorPlan,target);
   }return answer;
+ }:profile==='allocation-v5-role-correction'?({answer,input,options})=>{
+  if(options.stageName==='assembly-blueprint'){
+   answer.sceneEdit.components.put.push(shape('entryContext',[16,4,23],[2,1,2],'frame'));
+   answer.packages[2].editableComponents.push('entryContext');
+  }
+  if(options.stageName==='prototype-role'&&input.role==='entry-podium')answer.representatives[1].components.push('entryContext');
+  return answer;
  }:null;
  const h=await (profile==='legacy-v3'?setupLegacyStaged():setupStaged(change,undefined,{legacyV4:profile==='review-funded-v4'})),project=fileURLToPath(new URL('../../',import.meta.url));
  const snapshot=await freezeSceneRuntime(project,path.join(h.directory,'runtime')),mod=file=>import(pathToFileURL(path.join(snapshot.runtime,file)));
@@ -65,6 +73,15 @@ for(const profile of ['legacy-v3','review-funded-v4','allocation-v5'])test(profi
   await tamper('assembly/design-allocation-freeze.json','false-manufacturing-freeze',v=>v.packagesHash='0'.repeat(64),/Manufacturing allocation freeze differs/);
   await tamper('assembly/interfaces.json','changed-frozen-region',v=>v.packages[1].regions[0].size[1]--,/Manufacturing packages differ/);
   await tamper('assembly/interfaces.json','changed-frozen-probes',v=>v.constraints.passages[0].origin[0]++,/Manufacturing packages differ/);
+ }
+ if(profile.startsWith('allocation-v5')){
+  await tamper('assembly/6/input.json','false-role-allocation-policy',v=>v.prototypeAllocationPolicy.automaticRegionExpansion=true,/role allocation policy mismatch/);
+  await tamper('assembly/6/prototype-allocation.json','false-role-allocation',v=>v.expanded.sources[0].cells++,/Accepted prototype allocation differs/);
+  await tamper('assembly/6/result.json','false-role-allocation-result',v=>v.prototypeAllocationReceipt.seed.sources[0].cells++,/Accepted prototype allocation differs/);
+ }
+ if(profile==='allocation-v5-role-correction'){
+  await tamper('assembly/8/prototype-allocation.json','false-rejected-allocation',v=>v.feedback.outsideWorkspaceCells++,/Rejected prototype allocation differs/);
+  await tamper('assembly/8/result.json','false-rejected-allocation-result',v=>v.feedback.designAllocation.uncoveredSources[0].uncoveredSamples[0][2]++,/Rejected prototype allocation differs/);
  }
  assert.equal(h.calls.length,expectedCalls);
 });

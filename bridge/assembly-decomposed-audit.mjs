@@ -4,7 +4,7 @@ import {hash} from '../src/generation/compiler.mjs';
 import {validateConceptSet,checkSelectedConceptPlan} from '../contracts/scene-concepts.mjs';
 import {applyAssemblyBlueprint,applyPrototypeRoleEdit,bindDecomposedPrototypeProgram} from '../contracts/scene-decomposed-prototypes.mjs';
 import {checkStagedDesignAllocation,stagedDesignAllocationEnabled} from '../contracts/scene-design-allocation.mjs';
-import {inspectDesignAllocation,designAllocationFreeze} from './assembly-design-allocation.mjs';
+import {inspectDesignAllocation,designAllocationFreeze,inspectPrototypeRoleAllocation,PROTOTYPE_ALLOCATION_POLICY} from './assembly-design-allocation.mjs';
 import {decompositionBlueprintBudget,createDecompositionSchedule,PROTOTYPE_ROLES,decompositionConfiguration} from './assembly-decomposition-budget.mjs';
 import {inspectDecomposedRepresentatives,decompositionTailBudget,decompositionRoleCorrectionBudget} from './assembly-decomposed-stages.mjs';
 import {readAssemblyPrototypeCandidate} from './assembly-prototypes.mjs';
@@ -12,6 +12,7 @@ import {readAssemblyBaseline,checkPackageGeometry} from '../src/design/assembly-
 import {isAssemblyProviderRecoveryAudit} from './assembly-provider-recovery-audit.mjs';
 
 const read=async file=>JSON.parse(await fs.readFile(file,'utf8'));
+const optional=async file=>{try{return await read(file);}catch(error){if(error.code!=='ENOENT')throw error;return null;}};
 /** READ ONLY terminal reconstruction. No provider, render, compile, repair,
  * normalization, world load/write or substitution of a saved baseline. */
 export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}={}){
@@ -51,6 +52,7 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
     candidate=applyAssemblyBlueprint(input.selectedConcept.selected,response,{...input.tier,maxPackages:budget.maximumPackages});
    }else{
     if(!state||input.decompositionStageId!==PROTOTYPE_ROLES[state.completedRoles.length])throw Error('Decomposed role order differs from accepted baseline');
+    if(stagedDesignAllocationEnabled(input.tier)&&hash(input.prototypeAllocationPolicy)!==hash(PROTOTYPE_ALLOCATION_POLICY))throw Error('Decomposed role allocation policy mismatch');
     const task=state.plan.packages.find(p=>p.id===state.roles[state.completedRoles.length].task);
     requiredAfterCall=(3-state.completedRoles.length)+state.plan.packages.length+2;
     if(hash(task)!==hash(input.task)||hash(state.plan.scene)!==hash(input.previousDraft))throw Error('Decomposed role changed its authority baseline');
@@ -73,6 +75,28 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
    if(hash(expectedBudget)!==hash(input.decompositionBudget))throw Error('Decomposed mandatory tail budget mismatch');
    if(hash(candidate)!==hash(await read(path.join(dir,'decomposition-state.json')))||hash(candidate.plan)!==hash(await read(path.join(dir,'plan.json')))||
     hash(candidate.plan.scene)!==hash(scene)||feedback.sourceHash!==hash(scene))throw Error('Decomposed delta/state/source mismatch');
+   if(stage.state==='rejected'&&stagedDesignAllocationEnabled(input.tier)&&['prototype-role','correct-prototype-role'].includes(stage.phase)){
+    const result=await read(path.join(dir,'result.json')),saved=await optional(path.join(dir,'prototype-allocation.json'));
+    if(saved||result.feedback?.designAllocation){
+     if(!saved||saved.accepted!==false||saved.canAuthorizePlacement!==false||result.accepted!==false)throw Error('Rejected prototype allocation receipt is missing or inconsistent');
+     const recipes=PROTOTYPE_ROLES.flatMap(role=>candidate.recipesByRole[role]??[]);
+     const prototype=recipes.length?await readAssemblyPrototypeCandidate({directory:path.join(dir,'prototype'),plan:candidate.plan,recipes,seedFeedback:feedback}):null;
+     const diagnostic=path.join(dir,'diagnostic'),seed=await readAssemblyBaseline(diagnostic,feedback.diagnosticAssetHash);
+     const base=await readAssemblyBaseline(previousDiagnostic,previousFeedback.diagnosticAssetHash);
+     if(feedback.geometryPassed!==true||hash(checkPackageGeometry(base,seed,input.task,previousFeedback,feedback))!==hash(feedback.packageCheck))throw Error('Decomposed seed scope differs from saved authority');
+     if(prototype){
+      const prior=previousExpanded??{diagnostic:previousDiagnostic,feedback:previousFeedback};
+      const expandedBase=await readAssemblyBaseline(prior.diagnostic,prior.feedback.diagnosticAssetHash),expanded=await readAssemblyBaseline(prototype.diagnostic,prototype.feedback.diagnosticAssetHash);
+      if(hash(checkPackageGeometry(expandedBase,expanded,input.task,prior.feedback,prototype.feedback))!==hash(prototype.feedback.packageCheck)||
+       hash(prototype)!==hash(result.prototype))throw Error('Decomposed expanded scope/proposal mismatch');
+     }
+     let actualError;
+     try{await inspectPrototypeRoleAllocation({state:candidate,checked:{diagnostic,feedback,prototype}});}
+     catch(error){if(!error.designAllocationFeedback)throw error;actualError=error;}
+     if(!actualError||stage.error!==actualError.message||saved.error!==actualError.message||result.error!==actualError.message||
+      hash(saved.feedback)!==hash(actualError.designAllocationFeedback)||hash(result.feedback.designAllocation)!==hash(actualError.designAllocationFeedback))throw Error('Rejected prototype allocation differs from actual saved cells');
+    }
+   }
    return candidate;
   },
   async commit({stage,input,candidate,feedback}){
@@ -96,6 +120,11 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
      const expandedBase=await readAssemblyBaseline(prior.diagnostic,prior.feedback.diagnosticAssetHash),expanded=await readAssemblyBaseline(prototype.diagnostic,prototype.feedback.diagnosticAssetHash);
      const expandedCheck=checkPackageGeometry(expandedBase,expanded,input.task,prior.feedback,prototype.feedback);
      if(hash(expandedCheck)!==hash(prototype.feedback.packageCheck)||hash(prototype)!==hash((await read(path.join(dir,'result.json'))).prototype))throw Error('Decomposed expanded scope/proposal mismatch');
+    }
+    if(stagedDesignAllocationEnabled(input.tier)){
+     const actual=await inspectPrototypeRoleAllocation({state:candidate,checked:{diagnostic,feedback,prototype}});
+     if(hash(actual)!==hash(await read(path.join(dir,'prototype-allocation.json')))||
+      hash(actual)!==hash((await read(path.join(dir,'result.json'))).prototypeAllocationReceipt))throw Error('Accepted prototype allocation differs from actual saved cells');
     }
     roles.push({role:input.role,task:input.task.id,stage:stage.index,sourceHash:hash(candidate.plan.scene),witnessHash:witness.witnessHash});
     state=candidate;previousExpanded=prototype;
