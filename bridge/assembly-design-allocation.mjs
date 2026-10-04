@@ -124,8 +124,17 @@ export const PROTOTYPE_ALLOCATION_RULES=`PROTOTYPE WITNESS COVERAGE: before this
 export async function inspectDesignAllocation({before,plan,prototype,feedback,diagnostic,roles,representatives,tier}){
  const authority=checkStagedDesignAllocation(before,plan,representatives,tier);
  if(!authority)return null;
- const seed=designAllocationCoverage(plan,await readAssemblyBaseline(diagnostic,feedback.diagnosticAssetHash),roles,representatives,prototype.program.recipes);
- const expanded=designAllocationCoverage(prototype.plan,await readAssemblyBaseline(prototype.diagnostic,prototype.feedback.diagnosticAssetHash),roles,representatives,prototype.program.recipes);
+ const inspect=async(subject,candidate,directory,report)=>{
+  const actual=await readAssemblyBaseline(directory,report.diagnosticAssetHash);
+  try{return designAllocationCoverage(candidate,actual,roles,representatives,prototype.program.recipes);}
+  catch(error){
+   if(!error.designAllocationFeedback)throw error;
+   const {feedbackHash,...detail}=error.designAllocationFeedback,data={...detail,subject};
+   error.designAllocationFeedback={...data,feedbackHash:hash(data)};throw error;
+  }
+ };
+ const seed=await inspect('seed',plan,diagnostic,feedback);
+ const expanded=await inspect('expanded',prototype.plan,prototype.diagnostic,prototype.feedback);
  const data={version:1,authority,seed,expanded,programHash:hash(prototype.program),expandedPlanHash:hash(prototype.plan),canAuthorizePlacement:false};
  return {...data,receiptHash:hash(data)};
 }

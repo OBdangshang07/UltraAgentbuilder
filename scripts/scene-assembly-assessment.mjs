@@ -140,6 +140,8 @@ for(const stage of job.assemblyStages??[]){
    const previousDir=path.join(assemblyRoot,String(previous.index));
    const {planCandidateBase,applyPlanCandidateCorrection}=await mod('contracts/scene-plan-candidate.mjs');
    const previousRaw=await read(path.join(previousDir,'response.json'));
+   const previousResult=await read(path.join(previousDir,'result.json'));
+   if(hash(input.contractFeedback)!==hash(previousResult.feedback))throw new Error('Design candidate correction feedback differs from preserved rejection');
    const base=planCandidateBase(plan,{plan:await read(path.join(previousDir,'plan.json')),effectiveEdit:await optional(path.join(previousDir,'effective-edit.json')),response:prototypeEnabled?previousRaw.edit:previousRaw},input.tier);
    if(!base)throw new Error('Design candidate baseline cannot be reconstructed');
    const {plan:candidatePlan,...repairIdentity}=base;
@@ -149,6 +151,14 @@ for(const stage of job.assemblyStages??[]){
   }
   let reconstructed;try{reconstructed=response.format==='SceneAssemblyPlanRepair'?applyAssemblyPlanRepair(input.priorPlan,response,input.tier).plan:response.format==='SceneAssemblyPlanEdit'?applyAssemblyPlanEdit(input.priorPlan,response,input.tier,{designReview:designRevision}).plan:response;}catch(error){if(!AssemblyCandidateError||!(error instanceof AssemblyCandidateError))throw error;reconstructed=error.plan;}
   if(hash(reconstructed)!==hash(mergedPlan))throw new Error('Plan edit/merged proposal mismatch');
+ }
+ if(designRevision&&stagedPrototype&&stage.state==='rejected'){
+  const rejected=await read(path.join(dir,'result.json'));
+  const allocation=await optional(path.join(dir,'design-allocation.json'));
+  if(rejected.feedback?.designAllocation||allocation?.accepted===false){
+   if(!mergedPlan||!feedback||!rejected.prototype)throw new Error('Rejected design allocation lacks original plan/geometry evidence');
+   await decomposedAudit.verifyRejectedAllocation(mergedPlan,dir,feedback,input,rejected.prototype,rejected);
+  }
  }
  if(proposed)proposedPlans.push({stage:stage.index,accepted:stage.state==='accepted',designIntent:proposed.designIntent,bounds:proposed.scene?.bounds??null,componentCount:proposed.scene?.components?.length??0,componentKinds:(Array.isArray(proposed.scene?.components)?proposed.scene.components:[]).reduce((counts,c)=>{const kind=typeof c?.kind==='string'?c.kind:'invalid';counts[kind]=(counts[kind]??0)+1;return counts;},Object.create(null)),moduleCount:proposed.scene?.modules?.length??0,packages:(Array.isArray(proposed.packages)?proposed.packages:[]).map(p=>({id:p?.id,name:p?.name,purpose:p?.purpose,dependsOn:p?.dependsOn}))});
  if(input.previousDraft&&(hash(input.previousDraft)!==sourceHash||input.sourceHash!==sourceHash))throw new Error('Edit input does not use last accepted source');
@@ -228,11 +238,15 @@ for(const stage of job.assemblyStages??[]){
     const {readAssemblyPrototypeCandidate}=await mod('bridge/assembly-prototypes.mjs');
     acceptedPrototypeRecipes=rawResponse.recipes;
     acceptedPrototype=await readAssemblyPrototypeCandidate({directory:path.join(dir,'prototype'),plan,recipes:acceptedPrototypeRecipes,seedFeedback:feedback});
-   sourceHistory.set(hash(acceptedPrototype.plan.scene),acceptedPrototype.plan.scene);
     const outcome=await read(path.join(dir,'result.json'));
     if(hash(outcome.prototype)!==hash(acceptedPrototype)||hash(outcome.prototypeRecipes)!==hash(acceptedPrototypeRecipes))throw Error('Prototype stage outcome differs from saved checked candidate');
     if(stagedPrototype)await decomposedAudit.verifyRevision(plan,dir,feedback,input,acceptedPrototype);
    }
+   // Both complete-plan and staged-role candidates have now independently
+   // verified saved expansion bundles. Revision pairs can reference that
+   // exact expanded source without compiling a substitute or accepting it
+   // as a final building. Do not admit rejected candidate sources here.
+   if(acceptedPrototype)sourceHistory.set(hash(acceptedPrototype.plan.scene),acceptedPrototype.plan.scene);
   }
   if(['component','correct-component'].includes(stage.phase)&&!input.refinement)completedPackages.add(stage.task);
  }

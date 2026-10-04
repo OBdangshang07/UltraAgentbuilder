@@ -142,6 +142,24 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
    }
    if(hash(input.designAllocationReceipt)!==hash(allocationReceipt))throw Error('Model input design allocation differs from the accepted unapproved proposal');
   },
+  async verifyRejectedAllocation(plan,dir,feedback,input,prototype,result){
+   if(hash(input.tier)!==hash(tier))throw Error('Rejected design allocation changed its original staged policy');
+   const response=await read(path.join(dir,'response.json'));
+   const checked=await readAssemblyPrototypeCandidate({directory:path.join(dir,'prototype'),plan,
+    recipes:response.recipes,seedFeedback:feedback});
+   if(hash(checked)!==hash(prototype)||hash(result.prototypeRecipes)!==hash(response.recipes))
+    throw Error('Rejected design prototype differs from original response and saved expansion');
+   const before=revisedPlan??state.plan;let actualError;
+   try{await inspectDesignAllocation({before,plan,prototype,feedback,diagnostic:path.join(dir,'diagnostic'),
+    roles:state.roles,representatives:state.representativesByRole,tier:input.tier});}
+   catch(error){if(!error.designAllocationFeedback)throw error;actualError=error;}
+   if(!actualError)throw Error('Rejected design allocation has no actual uncovered owner cells');
+   const saved=await read(path.join(dir,'design-allocation.json'));
+   const expected={version:1,accepted:false,error:actualError.message,feedback:actualError.designAllocationFeedback};
+   const expectedFeedback={...feedback,error:actualError.message,designAllocation:actualError.designAllocationFeedback};
+   if(result.accepted!==false||result.error!==actualError.message||hash(saved)!==hash(expected)||
+    hash(result.feedback)!==hash(expectedFeedback))throw Error('Rejected design allocation differs from actual saved cells');
+  },
   async verifyRevision(plan,dir,feedback,input,prototype){
    if(hash(input.tier)!==hash(tier))throw Error('Design allocation revision changed its original staged policy');
    const before=revisedPlan??state.plan;
