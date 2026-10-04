@@ -3,9 +3,10 @@ import {QUALITY_STRATEGIES} from '../src/design/quality-prototypes.mjs';
 import {decompositionBlueprintBudget} from './assembly-decomposition-budget.mjs';
 import {DESIGN_ALLOCATION_POLICY} from '../contracts/scene-design-allocation.mjs';
 import {assemblyProviderRecoveryPolicy} from '../contracts/assembly-provider-recovery.mjs';
+import {assemblyEvidencePolicy} from '../contracts/assembly-evidence-policy.mjs';
 export function qualityTiers(){return structuredClone(catalog.tiers);}
 export function assemblyPreflight(input){
-  const fields=['qualityTier','assemblyCalls','assemblyConfirmed','assemblyDesignReview','assemblyRecovery','assemblyQuality','assemblyPrototypes','assemblyProviderRecovery'];
+  const fields=['qualityTier','assemblyCalls','assemblyConfirmed','assemblyDesignReview','assemblyRecovery','assemblyQuality','assemblyPrototypes','assemblyProviderRecovery','assemblyEvidence'];
   if(input.sceneWorkflow!=='components'){
     if(fields.some(k=>input[k]!==undefined))throw new Error('Quality tier fields require explicit component workflow');return null;
   }
@@ -22,6 +23,10 @@ export function assemblyPreflight(input){
   const providerRecovery=input.assemblyProviderRecovery===undefined?null:assemblyProviderRecoveryPolicy();
   const mode=input.assemblyDesignReview;
   const quality=input.assemblyQuality;
+  if(input.assemblyEvidence!==undefined){
+    if(input.assemblyEvidence!=='representative-v1'||input.assemblyPrototypes!=='staged'||quality!=='v4'||mode!=='native'||input.assemblyRecovery!=='safe')throw Error('Representative evidence requires an explicit new staged native v4 task');
+    tier.cameraEvidence=assemblyEvidencePolicy();
+  }
   if(input.assemblyPrototypes!==undefined&&(!['verified','staged'].includes(input.assemblyPrototypes)||quality!=='v4'||mode!=='native'||input.assemblyRecovery!=='safe'))throw new Error('Verified/staged prototypes require explicit new-building quality v4, native review and safe recovery');
   if(input.assemblyPrototypes==='verified')tier.prototypes={version:1,mode:'verified',newBuildingOnly:true,seedVisualGate:true,expandedVisualGate:true,expansionCalls:0};
   if(input.assemblyPrototypes==='staged'){

@@ -105,6 +105,7 @@ final class StudioAssembly {
     static String confirmation(JsonObject request,JsonObject policy){
         var t=tier(request.get("qualityTier").getAsString());int calls=request.get("assemblyCalls").getAsInt();
         var a=policy.getAsJsonObject("assembly");
+        boolean representativeEvidence=StudioRepresentativeEvidence.verify(request,a);
         boolean providerRecovery=StudioProviderRecovery.verify(request,a);
         boolean recovery="safe".equals(value(request,"assemblyRecovery",""));
         if(recovery){
@@ -166,6 +167,7 @@ final class StudioAssembly {
             +(quality?"\n\n质量 "+qualityName+"：概念阶段核对代表立面、典型空间、入口和特殊层；最终可对复核明确涉及的多个制作包一起精修。只在这些包原批准范围/构件内协调，保留全局接口、保护空间和未选构件；不是对已有建筑或世界的写入授权。":"")
             +(staged?"\n分阶段原型（实验）：3 次独立概念 → 自动选案 → 差量蓝图 → 4 次单角色原型 → 种子看图复核 → 0 调用展开 → "+packages+" 个深化包上限 → 整楼终审。基础路径最多 "+(11+packages)+" 次，预留 "+stagedRecoveryReserve(calls)+" 次共享纠错 / 改稿及必要再复核；全部计入本次总预算，不是额外额度。合并调用批次不减少组件精度或必需职责；包职责冻结后不会为重试删包或缩小功能。":concepts?"\n先制作 1 / 2 / 2 / 3 个轻量几何候选（对应 lite / pro / max / ultra），再把 4–8 张明确标识候选的原生图送给模型自动选案，不要求玩家中途选择。候选制作、自动选案、最多 "+t.maximumPlanCorrections()+" 次候选几何纠正都占上述总预算；不是额外额度。无效或重复候选会排除并记录；保留完整内饰与核心筒的后续制作。":"")
             +(qualityName.equals("v4")?"\n修改后使用固定相机的前后原生图对照，分项核对上轮问题与设计取舍。可选精修被判为退步时保留上一完整已复核稿及原意见，不把概念草稿当成品，也不把未解决问题改记通过。":"")
+            +(representativeEvidence?"\n"+StudioRepresentativeEvidence.WARNING:"")
             +(prototypes?"\n真实原型：先制作典型空间 / 立面 / 入口 / 特殊层样板；所有展开实例先完整几何预检，再以完整展开建筑的实际原生图复核，接受后才冻结制作范围。改稿仍绑定原种子及明确展开参数。展开本身 0 次模型调用；制作、纠错和看图复核仍在原总预算内。种子不是最终成品，此阶段不代表精修成品或通行已验证，不是世界写入授权。":"")
             +(staged?"\n原型纠错 v4：每次原型制作、基础纠错和追加纠错均保留全部后续原型、深化包、展开整楼复核、整楼终审及 2 次改稿 / 再复核预算；基础纠错 "+t.maximumComponentCorrections()+" 次，超出后仅使用本任务余量。不会升级旧任务、重置次数或重发未知调用。":"")
             +(staged?"\n分工校正 v1：概念接受前可明确调整包用途及增加 / 合并工作范围，核对全部原型展开格；保留原工作范围、组件归属、依赖、通行职责和保护空间。当前复核接受后冻结制作范围，后续组件不能再扩权；不增加模型预算或世界写入权限。":"")

@@ -21,6 +21,10 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
  let tier=null,allocationReceipt=null,allocatedPrototype=null;
  const roles=[];
  return {
+  cameraResponsibilities(){
+   if(!state||state.completedRoles.length!==4)throw Error('Representative camera audit requires all saved staged responsibilities');
+   return structuredClone(state.representativesByRole);
+  },
   async comparison(input,studies,stage){
    const saved=await read(path.join(assemblyRoot,'decomposed-concepts.json')),value=saved.aggregate;
    validateConceptSet(value,input.tier.prototypes.candidateCount);

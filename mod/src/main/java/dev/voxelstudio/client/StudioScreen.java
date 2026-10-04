@@ -110,6 +110,7 @@ public final class StudioScreen extends Screen {
         if(assemblyQualityVersion>=3&&(!assemblyImageReview||assemblyCalls<7))throw new IllegalArgumentException("质量 v3 / v4 需要原生图像比较且至少预留 7 次调用；未提交");
         if(assemblyImageReview){if(!supportsVisualReview())throw new IllegalArgumentException("所选模型没有声明图片能力；请选择图像模型，或切换质量旧版 / v2 的文本复核；未提交");req.addProperty("assemblyDesignReview",assemblyQualityVersion>=2?"native":"images");}
         StudioAssembly.configurePrototypes(req,assemblyQualityVersion==4?assemblyPrototypeMode:"off");
+        StudioRepresentativeEvidence.configure(req);
         StudioProviderRecovery.configure(req,assemblyProviderRecovery,efforts());
     }
     /** Only prepares test selections; the fixture presses the real generate and budget buttons. */
@@ -490,7 +491,7 @@ public final class StudioScreen extends Screen {
         choices.add(new StudioChoiceScreen.Choice("off","关闭 · 保留原流程","不增加原型阶段；已有任务的协议不变"));
         if(supportsVisualReview()){
             choices.add(new StudioChoiceScreen.Choice("verified","旧版原型 · 整组制作 / 看图 / 展开","旧版 verified v1 协议；仍保留整栋深化和最终复核"));
-            if(qualityTier.equals("ultra"))choices.add(new StudioChoiceScreen.Choice("staged","分阶段原型 · Ultra 实验","3 次独立概念、差量蓝图、4 次角色原型；选择后预算至少 22 次，生成前明确确认。例如 "+StudioAssembly.stagedBudgetSummary(StudioAssembly.tier(qualityTier).maximumCalls())+"；以所选预算为准"));
+            if(qualityTier.equals("ultra"))choices.add(new StudioChoiceScreen.Choice("staged","分阶段原型 · Ultra 实验","3 次独立概念、差量蓝图、4 次角色原型；新任务使用代表选层 v1，以首次实际展开几何固定比较楼层，无代表时披露；不是质量或通行认证。选择后预算至少 22 次，生成前明确确认。例如 "+StudioAssembly.stagedBudgetSummary(StudioAssembly.tier(qualityTier).maximumCalls())+"；以所选预算为准"));
         }
         client.setScreen(new StudioChoiceScreen(this,"v4 · 原型流程（明确选择）",choices,assemblyPrototypeMode,v->{assemblyPrototypeMode=v;if(v.equals("staged"))assemblyCalls=Math.max(22,assemblyCalls);}));
     }

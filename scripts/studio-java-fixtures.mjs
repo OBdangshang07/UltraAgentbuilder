@@ -78,6 +78,10 @@ for(const mode of ['verified','staged'])for(const calls of mode==='staged'?[22,2
  prototypePolicies.push({request,policy:generationPreflight(request)});
 }
 await fs.writeFile('mod/build/test-fixtures/prototype-preflight.json',JSON.stringify(prototypePolicies));
+const cameraPolicies=prototypePolicies.filter(f=>f.request.assemblyPrototypes==='staged').map(f=>{
+ const request={...f.request,assemblyEvidence:'representative-v1'};return {request,policy:generationPreflight(request)};
+});
+await fs.writeFile('mod/build/test-fixtures/camera-evidence-preflight.json',JSON.stringify(cameraPolicies));
 const recoveryPolicies=[];
 for(const qualityTier of ['lite','pro','max','ultra'])for(const enabled of [false,true]){
  const request={agent:'codex',model:'offline-vision',effort:'max',prompt:'32×224×32格，224米办公塔楼；免费费用合同测试',generationMode:'scene',sceneWorkflow:'components',qualityTier,

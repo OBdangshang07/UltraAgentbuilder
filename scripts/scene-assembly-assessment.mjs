@@ -53,7 +53,7 @@ if(referenceAudit){
 }else cumulativeBudget=await verifyReplacementBudget(ledger);
 const recordedPrototypeTransition=await optional(path.join(assemblyRoot,'prototype-transition.json'));
 let acceptedPrototype=null,acceptedPrototypeRecipes=null,verifiedPrototypeTransition=null;
-let decomposedAudit=null;
+let decomposedAudit=null,auditedCameraBasis=null;
 const stages=[],proposedPlans=[],conceptStudies=[],conceptReviewHistory=[],sourceHistory=new Map(),completeReviews=new Map(),completedPackages=new Set();let acceptedSource=null,acceptedGeometry=null,acceptedAssetHash=null,plan=null,conceptDecision=null,lastRevisionContext=null,previousQualityReview=null,lastFinalQualityReview=null,qualitySelection=null;
 const visualRevisionContextEnabled=snapshot.files.some(f=>f.path==='bridge/design-revision-context.mjs');
 for(const stage of job.assemblyStages??[]){
@@ -207,12 +207,29 @@ for(const stage of job.assemblyStages??[]){
   if(stage.imageCount!==undefined){if(stage.imageEvidenceHash!==evidenceHash||stage.imageCount!==evidence.views.length)throw new Error('Native attachment identity mismatch');}
   else if(['concept-review','correct-concept-review','review','correct-review'].includes(stage.phase))throw new Error('Native review lacks its image attachment receipt');
   const {readNativeEvidence,readNativeRevisionComparison}=await mod('bridge/native-evidence.mjs');
-  const {measurements,prototypeEvidence,prototypeExpansion,...transport}=evidence;delete transport.evidenceHash;
+  const {measurements,prototypeEvidence,prototypeExpansion,cameraBasis,...transport}=evidence;delete transport.evidenceHash;
   const paired=evidence.kind==='native-revision',actual=paired?await readNativeRevisionComparison(r.assetDirectory,hash(transport)):await readNativeEvidence(r.assetDirectory,evidence.requestHash);
   const {evidenceHash:transportHash,...stored}=actual.evidence;
   const expandedReview=prototypeExpansion?.version===2;
   const reviewedSource=expandedReview?hash(acceptedPrototype.plan.scene):stage.imageCount!==undefined?input.sourceHash:sourceHash;
   if(hash(transport)!==hash(stored)||evidence.sourceHash!==reviewedSource||prototypeEvidence.sourceHash!==reviewedSource)throw new Error('Native pixels or prototypes differ from reviewed source');
+  if(job.preflight?.assembly?.cameraEvidence||input.tier?.cameraEvidence||cameraBasis){
+   if(!snapshot.files.some(f=>f.path==='bridge/assembly-camera-evidence.mjs'))throw Error('Frozen runtime did not select representative cameras');
+   const {representativeEvidenceEnabled}=await mod('contracts/assembly-evidence-policy.mjs');
+   if(!representativeEvidenceEnabled(job.preflight?.assembly)||!representativeEvidenceEnabled(input.tier)||
+    hash(job.preflight.assembly)!==hash(input.tier)||!cameraBasis)throw Error('Representative camera evidence lacks its original confirmed policy');
+   if(!auditedCameraBasis){
+    if(!expandedReview||!acceptedPrototype||!decomposedAudit)throw Error('First representative basis is not the actual initial staged expansion');
+    if(cameraBasis.sourceHash!==hash(acceptedPrototype.plan.scene)||
+     cameraBasis.assetHash!==acceptedPrototype.feedback.diagnosticAssetHash)throw Error('Representative basis changed its first reviewed saved subject');
+    auditedCameraBasis=structuredClone(cameraBasis);
+   }else if(hash(cameraBasis)!==hash(auditedCameraBasis))throw Error('Representative comparison basis was replaced across revisions');
+   const {verifyAssemblyCameraBasis}=await mod('bridge/assembly-camera-evidence.mjs');
+   await verifyAssemblyCameraBasis({directory:r.assetDirectory,basis:cameraBasis,tier:input.tier,
+    representatives:decomposedAudit.cameraResponsibilities(),views:evidence.views});
+   const fullCaptures=paired?await Promise.all(actual.evidence.subjects.map(s=>readNativeEvidence(r.assetDirectory,s.requestHash))):[actual];
+   for(const capture of fullCaptures)if(hash(capture.evidence.views.map(v=>v.camera))!==hash(cameraBasis.views))throw Error('Full native capture changed its original representative comparison cameras');
+  }
   if(prototypeExpansion){
    const expected=acceptedPrototype&&(expandedReview?(await mod('bridge/assembly-prototypes.mjs')).prototypeVisualBinding(plan,acceptedPrototype):{programHash:hash(acceptedPrototype.program),witnessHash:acceptedPrototype.witness.witnessHash,expandedSourceHash:acceptedPrototype.evidence.expandedSourceHash,expandedGeometryHash:acceptedPrototype.evidence.expandedGeometryHash,expansionEvidenceHash:acceptedPrototype.evidence.evidenceHash,seedOnly:true,expandedPixelsSupplied:false});
    if(!prototypeEnabled||verifiedPrototypeTransition||!expected||hash(expected)!==hash(prototypeExpansion))throw Error('Native prototype recipe/seed evidence differs from accepted proposal');
@@ -304,6 +321,13 @@ if(job.state==='preview-ready'){
   if(hash(expected)!==hash(job.assemblySummary.prototypeExpansion))throw Error('Final prototype summary differs from verified transition');
  }else if(job.assemblySummary?.prototypeExpansion)throw Error('Final summary invented a prototype transition');
  if(decomposedAudit)await decomposedAudit.final(job.assemblySummary,hash(acceptedSource));
+ if(auditedCameraBasis){
+  const expected={mode:job.preflight.assembly.cameraEvidence.mode,basisHash:auditedCameraBasis.basisHash,
+   status:auditedCameraBasis.selection.status,initialSourceHash:auditedCameraBasis.sourceHash,
+   selectedFloorY:auditedCameraBasis.selection.selected?.base??null,fixedAcrossRevisions:true,
+   functionVerified:false,aestheticQualityVerified:false,canAuthorizePlacement:false};
+  if(hash(expected)!==hash(job.assemblySummary.cameraEvidence))throw Error('Final camera summary differs from its original verified basis');
+ }else if(job.assemblySummary?.cameraEvidence)throw Error('Final summary invented representative camera evidence');
  final={assetHash:job.assetHash,sourceHash:hash(acceptedSource),geometryHash,dimensions:compiled.manifest.dimensions,solidCount:compiled.manifest.setCount,quality:compiled.manifest.quality,components:compiled.scene.components.length,modules:compiled.scene.modules.length};
 }
 const known=stages.filter(s=>Number.isSafeInteger(s.usage?.totalTokens));

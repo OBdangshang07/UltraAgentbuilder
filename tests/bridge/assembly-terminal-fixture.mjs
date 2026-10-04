@@ -21,6 +21,7 @@ export async function terminalFixture(h,result){
   await fs.writeFile(path.join(h.directory,'cells.bin'),compiled.binary,{flag:'wx'});
   const visual=result.summary.finalVisualReview;
   const job={id:'synthetic-candidate-correction-audit',state:'preview-ready',model:'offline',
+    preflight:structuredClone(h.options.policy),
     assemblyCallsReserved:records.length,assemblyStages:records,assemblySummary:result.summary,
     assetHash:compiled.manifest.assetHash,recoveryEnabled:false,
     generations:records.filter(r=>r.responseReceived).map(r=>({stage:r.index,usage:null,diagnostic:null})),
