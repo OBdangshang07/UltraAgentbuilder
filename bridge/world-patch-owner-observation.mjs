@@ -4,6 +4,7 @@ import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {hash} from '../src/generation/compiler.mjs';
+import {collectWindowsOwnerQuery} from './windows-owner-query.mjs';
 
 // Independent P4 development evidence, not a recovery controller. Issuance
 // only creates a NEW owner in an empty directory. Inspection never creates or
@@ -85,15 +86,19 @@ export async function observeWindowsOwnerProcess(processId) {
   if (process.platform !== 'win32') throw Error('Exact Windows owner observation unavailable on this platform');
   const script = `
 $ErrorActionPreference = 'Stop'
+function Write-VoxelStage([string] $phase) { [Console]::Error.WriteLine('VOXEL_OWNER_STAGE:' + $phase) }
 $voxelOwnerPid = ${processId}
 function Get-VoxelDigest([string] $value) {
   $voxelDigest = [Security.Cryptography.SHA256]::Create()
   try { return -join ($voxelDigest.ComputeHash([Text.Encoding]::UTF8.GetBytes($value)) | ForEach-Object { $_.ToString('x2') }) }
   finally { $voxelDigest.Dispose() }
 }
+Write-VoxelStage 'machine'
 $voxelMachine = (Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Cryptography' -Name MachineGuid -ErrorAction Stop).MachineGuid
 if ([string]::IsNullOrWhiteSpace($voxelMachine)) { throw 'Missing local machine identity' }
+Write-VoxelStage 'boot-before'
 $voxelBoot = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
+Write-VoxelStage 'process'
 $voxelProcesses = @(Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $voxelOwnerPid) -ErrorAction Stop)
 if ($voxelProcesses.Count -gt 1) { throw 'Ambiguous process query' }
 $voxelFound = $null
@@ -102,27 +107,16 @@ if ($voxelProcesses.Count -eq 1) {
   if ([string]::IsNullOrWhiteSpace($voxelProcess.ExecutablePath) -or $null -eq $voxelProcess.CreationDate) { throw 'Incomplete process identity' }
   $voxelFound = @{ pid = [long]$voxelProcess.ProcessId; startedUtc = $voxelProcess.CreationDate.ToUniversalTime().ToString('o'); executablePathHash = (Get-VoxelDigest ([IO.Path]::GetFullPath($voxelProcess.ExecutablePath).ToLowerInvariant())) }
 }
+Write-VoxelStage 'boot-after'
 $voxelBootAfter = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
 if ($voxelBoot -cne $voxelBootAfter) { throw 'Boot changed during observation' }
+Write-VoxelStage 'serialize'
 @{ format = 'WindowsOwnerObservation'; version = 1; machineHash = (Get-VoxelDigest $voxelMachine.Trim().ToLowerInvariant()); bootUtc = $voxelBoot; observedUtc = [DateTime]::UtcNow.ToString('o'); queriedPid = $voxelOwnerPid; process = $voxelFound } | ConvertTo-Json -Compress -Depth 4
 `;
   const executable = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  const output = await new Promise((resolve, reject) => {
-    let bytes = 0, chunks = [], failed = false;
-    const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
-      windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'ignore']});
-    const fail = () => { failed = true; };
-    const timer = setTimeout(() => { fail(); child.kill(); }, 15000); timer.unref();
-    child.stdout.on('data', chunk => { bytes += chunk.length; if (bytes > 8192) { fail(); child.kill(); } else chunks.push(chunk); });
-    child.once('error', fail);
-    child.once('close', code => {
-      clearTimeout(timer);
-      // Even on timeout/error, settle only after OUR diagnostic helper closes.
-      // Never signal the queried owner or any provider/renderer process.
-      if (code !== 0 || failed) reject(Error('Exact Windows owner observation unavailable; no recovery authorized'));
-      else resolve(Buffer.concat(chunks).toString('utf8').trim());
-    });
-  });
+  const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
+    windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe']});
+  const output = await collectWindowsOwnerQuery(child);
   let value; try { value = JSON.parse(output.replace(/^\uFEFF/, '')); } catch { throw Error('Invalid exact Windows owner observation; no recovery authorized'); }
   return validateWindowsOwnerObservation(value);
 }
