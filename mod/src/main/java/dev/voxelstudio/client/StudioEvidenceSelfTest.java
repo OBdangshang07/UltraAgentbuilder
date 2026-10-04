@@ -34,6 +34,7 @@ final class StudioEvidenceSelfTest {
                 var identity=new JsonObject();identity.addProperty("instanceId",instance);identity.addProperty("pid",ProcessHandle.current().pid());
                 identity.addProperty("startedAt",ProcessHandle.current().info().startInstant().orElseThrow().toEpochMilli());
                 Files.writeString(output.resolve("renderer-process.json"),identity.toString(),StandardOpenOption.CREATE_NEW);processIdentity=identity;
+                c.getWindow().setTitle("UltraAgentbuilder - isolated asset evidence test (no world)");
             }
             if(c.world!=null||c.getServer()!=null)throw new IllegalStateException("Evidence harness must never load a world");
             if(c.currentScreen instanceof net.minecraft.client.gui.screen.AccessibilityOnboardingScreen){c.options.onboardAccessibility=false;c.options.write();c.setScreen(new TitleScreen());return;}
@@ -44,14 +45,23 @@ final class StudioEvidenceSelfTest {
             if(!ready||pending||++ticks%20!=0)return;
             Path control=output.resolve("renderer-control.json");if(!Files.isRegularFile(control))return;
             var command=JsonParser.parseString(Files.readString(control)).getAsJsonObject();
+            if(command.has("shutdownDiagnostic")){
+                var marker=JsonParser.parseString(Files.readString(output.resolve("renderer-authorization.json"))).getAsJsonObject();
+                if(!marker.has("shutdownDiagnostic")||!marker.get("shutdownDiagnostic").getAsBoolean())throw new IllegalStateException("Shutdown diagnostic not authorized");
+                String mode=command.get("shutdownDiagnostic").getAsString();
+                stopped=true; // Intentionally no success/failure receipt: negative diagnostic.
+                if("schedule-stop".equals(mode)){c.scheduleStop();return;}
+                if("window-close".equals(mode)){org.lwjgl.glfw.GLFW.glfwSetWindowShouldClose(c.getWindow().getHandle(),true);return;}
+                throw new IllegalStateException("Unknown shutdown diagnostic");
+            }
             if(command.has("stop")&&command.get("stop").getAsBoolean()){
                 var result=new JsonObject();result.addProperty("result","passed");result.addProperty("version",StudioRuntimeVersion.loaded());result.addProperty("assetOnly",true);result.addProperty("worldLoaded",false);result.addProperty("generationSubmittedByClient",false);result.addProperty("visible",true);result.addProperty("lastJobId",lastJob);result.addProperty("seconds",(System.nanoTime()-started)/1e9);
                 result.add("processIdentity",processIdentity.deepCopy());
-                Files.writeString(output.resolve("renderer-result.json"),result.toString(),StandardOpenOption.CREATE_NEW);stopped=true;StudioNativeEvidence.clear();c.scheduleStop();return;
+                Files.writeString(output.resolve("renderer-result.json"),result.toString(),StandardOpenOption.CREATE_NEW);StudioEvidenceShutdown.controlled(true);stopped=true;StudioNativeEvidence.clear();c.scheduleStop();return;
             }
             if(!command.has("jobId"))return;String id=command.get("jobId").getAsString();if(!id.matches("[0-9a-f-]{36}"))throw new IllegalStateException("Invalid observed job");lastJob=id;pending=true;
             StudioClient.BRIDGE.request("GET","/v1/jobs/"+id,null).whenComplete((job,error)->c.execute(()->{pending=false;if(error!=null){failure(c,error);return;}StudioNativeEvidence.observe(job);}));
         }catch(Exception error){failure(c,error);}
     }
-    private static void failure(MinecraftClient c,Throwable error){stopped=true;System.err.println("VOXEL_NATIVE_EVIDENCE_TEST FAILED "+error);try{var failure=new JsonObject();failure.addProperty("error",error.toString());Files.writeString(root().resolve("renderer-failure.json"),failure.toString());}catch(Exception ignored){}StudioNativeEvidence.clear();c.scheduleStop();}
+    private static void failure(MinecraftClient c,Throwable error){stopped=true;System.err.println("VOXEL_NATIVE_EVIDENCE_TEST FAILED "+error);try{var failure=new JsonObject();failure.addProperty("error",error.toString());Files.writeString(root().resolve("renderer-failure.json"),failure.toString());StudioEvidenceShutdown.controlled(false);}catch(Exception ignored){}StudioNativeEvidence.clear();c.scheduleStop();}
 }

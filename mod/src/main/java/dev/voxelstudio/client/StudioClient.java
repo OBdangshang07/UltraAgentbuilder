@@ -71,7 +71,7 @@ public final class StudioClient implements ClientModInitializer {
             @Override public Identifier getFabricId() { return new Identifier("voxel_studio", "projection_models"); }
             @Override public void reload(ResourceManager manager) { MinecraftClient.getInstance().execute(() -> { if (PROJECTION.asset != null) PROJECTION.renderer.rebuild(PROJECTION.placement()); PATCH_PREVIEW.reload(); }); }
         });
-        ClientLifecycleEvents.CLIENT_STOPPING.register(c -> { PATCH_PREVIEW.close();SELECTION.close();StudioNativeEvidence.clear(); BRIDGE.close(); PROJECTION.close(); });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(c -> { StudioEvidenceShutdown.observe(c,true);PATCH_PREVIEW.close();SELECTION.close();StudioNativeEvidence.clear(); BRIDGE.close(); PROJECTION.close(); });
         ClientChunkEvents.CHUNK_LOAD.register((w,c)->dev.voxelstudio.WorldChangeTracker.chunk(w,c.getPos().x,c.getPos().z));
         ClientChunkEvents.CHUNK_UNLOAD.register((w,c)->dev.voxelstudio.WorldChangeTracker.chunk(w,c.getPos().x,c.getPos().z));
     }
