@@ -52,6 +52,16 @@ function checkDeltaIdentities(edit,prefix){
 }
 export const decomposedProgramHash=state=>hash({version:1,sourceHash:hash(state.plan.scene),roles:state.roles,recipesByRole:state.recipesByRole});
 
+export function prototypeRoleRecipeBudget(state,role){
+ if(!PROTOTYPE_ROLES.includes(role))throw Error('Unknown prototype recipe budget role');
+ const maximumRecipes=prototypeExpansionSchema.properties.recipes.maxItems;
+ const retainedByRole=PROTOTYPE_ROLES.filter(r=>r!==role).map(r=>({role:r,count:(state.recipesByRole[r]??[]).length}));
+ const retainedRecipes=retainedByRole.reduce((n,r)=>n+r.count,0);
+ if(!Number.isSafeInteger(retainedRecipes)||retainedRecipes>maximumRecipes)throw Error('Retained prototype recipes exceed aggregate quota');
+ return {version:1,maximumRecipes,retainedRecipes,retainedByRole,maximumRoleRecipes:maximumRecipes-retainedRecipes,
+  otherRolesUnchanged:true,automaticRecipeRemoval:false,canAuthorizePlacement:false};
+}
+
 export function assemblyBlueprintStageSchema(selected,tier,callBudget){
  if(callBudget?.version!==(tier.referenceAnalysis?2:1)||
   tier.referenceAnalysis&&(callBudget.preludeCalls!==1||callBudget.completedPrelude!==1)||
@@ -92,6 +102,9 @@ export function prototypeRoleStageSchema(state,role){
  const authority=state.roles.find(r=>r.role===role),task=state.plan.packages.find(p=>p.id===authority?.task);
  if(!task||role!==PROTOTYPE_ROLES[state.completedRoles.length])throw Error('Prototype role is not the next required responsibility');
  const schema=structuredClone(prototypeRoleEditSchema);
+ const recipeBudget=prototypeRoleRecipeBudget(state,role);
+ schema.properties.recipes.maxItems=recipeBudget.maximumRoleRecipes;
+ schema.properties.recipes.description='ONLY this role\'s replacement list. Aggregate maximum '+recipeBudget.maximumRecipes+'; '+recipeBudget.retainedRecipes+' recipes retained from other roles, leaving at most '+recipeBudget.maximumRoleRecipes+' for this role. Other roles are unchanged. No automatic removal or quota increase.';
  for(const [field,value] of [['role',role],['task',task.id],['planHash',hash(state.plan)],['programHash',decomposedProgramHash(state)]])schema.properties[field]={type:'string',enum:[value]};
  const edit=assemblyStageSchema(sceneDraftEditSchema,{sourceHash:hash(state.plan.scene),previousDraft:state.plan.scene,task});
  schema.$defs=edit.$defs;delete edit.$defs;schema.properties.edit=edit;
@@ -114,7 +127,9 @@ export function applyPrototypeRoleEdit(state,response,tier){
  // Guidance narrows decoding to owned IDs. Runtime separately reports every
  // offending source instead of reducing scope violations to a schema slogan.
  runtimeSchema.properties.representatives=structuredClone(prototypeRoleEditSchema.properties.representatives);
+ const recipeLimit=runtimeSchema.properties.recipes.maxItems;
  runtimeSchema.properties.recipes=structuredClone(prototypeRoleEditSchema.properties.recipes);
+ runtimeSchema.properties.recipes.maxItems=recipeLimit;
  check(response,runtimeSchema);
  checkDeltaIdentities(response.edit,'$.edit');
  const authority=state.roles.find(r=>r.role===role),task=state.plan.packages.find(p=>p.id===authority.task);

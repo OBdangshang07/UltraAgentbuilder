@@ -47,9 +47,9 @@ export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,p
   if(input.formatCorrection!==undefined)check(originalFormatCorrectionsUsed===1,'original format correction reservation missing');
   const staged=tier.prototypes?.mode==='staged',design=!!tier.designReview;
   integer(originalBudgetCallIndex,1,originalCallIndex,'original prepared budget prefix');
-  if(originalBudgetCallIndex!==originalCallIndex)check(!staged&&input.formatCorrection&&
+  if(originalBudgetCallIndex!==originalCallIndex)check((!staged||['revise-design','correct-design'].includes(phase))&&input.formatCorrection&&
     Number.isSafeInteger(input.formatCorrection.stage)&&input.formatCorrection.stage>=originalBudgetCallIndex&&
-    input.formatCorrection.stage<originalCallIndex,'only a verified non-staged format correction retains an earlier prepared budget');
+    input.formatCorrection.stage<originalCallIndex,'only a verified plan/design format correction retains an earlier prepared budget');
   if(staged){
     integer(tier.prototypes.candidateCount,1,3,'candidate count');
     integer(tier.prototypes.recoveryReserve,0,26,'original decomposition reserve');

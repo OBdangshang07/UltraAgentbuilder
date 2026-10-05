@@ -1,3 +1,13 @@
+import {hash} from '../generation/compiler.mjs';
+import {designWorkspaceCapacity,stagedDesignAllocationEnabled} from '../../contracts/scene-design-allocation.mjs';
+
+// Exact, inert failure evidence, never an adopted/candidate-local baseline.
+// Keep the complete wrapper so a rejected edit cannot lose its recipe changes.
+export function unapprovedPrototypeProposal(response){
+  return {version:1,response:structuredClone(response),responseHash:hash(response),approved:false,canAuthorizePlacement:false,
+    interpretation:'Complete preserved rejected response, including its recipes. This is unapproved failure evidence, not the accepted plan/program and not automatic adoption. Bind your new answer to the current input planHash/sourceHash/prototypeProgramHash, not identities inside this rejected wrapper. Recipes in the new answer are a complete replacement list. Retain intended valid changes only through an explicit proposal passing all original checks; no permissions, calls or world authority are added.'};
+}
+
 // Only transform compiler-owned feedback, never arbitrary source/design data.
 // Full samples remain in feedback.json; calls receive bounded, all-component
 // groups so a repeated error cannot bury unrelated components in the prompt.
@@ -28,6 +38,12 @@ export const PACKAGE_SCOPE_EVIDENCE='FROZEN PACKAGE AUTHORITY: packageScopeFeedb
 export const PACKAGE_SPATIAL_EVIDENCE=PACKAGE_SCOPE_EVIDENCE+'\npackageSpatialFeedback, when present, is a bounded WORLD-coordinate material/owner map around reported conflicts. Decode rows with its legend and run lengths. Compare accepted and candidate layers before choosing a position: the candidate producer can hide the previous wall, planter or protected air. producerBoundsSamples resolve selected repeated instances, not just at.offset. Inspect the next elevation too: a clear base cell does not imply an empty full-height column. Check the FULL volume of EVERY repeat and package regions; unshown cells are unknown, KEEP is not verified air, and maps never authorize overwrites. This read-only evidence proposes no automatic repair and does not waive strict whole-scene checks.';
 
 export function assemblyCorrectionInput(input){
+  // Derived guidance is part of the original model input. Recovery metadata
+  // must remain the final suffix, exactly as the controller approved it;
+  // inserting capacity guidance after that suffix changes prompt bytes even
+  // when the objects have the same canonical hash. No field is discarded.
+  const {providerRetryOf,providerRecovery,...original}=input;
+  const workspaceCapacity=input.priorPlan?.packages&&input.tier?.prototypes&&stagedDesignAllocationEnabled(input.tier)?designWorkspaceCapacity(input.priorPlan):null;
   const repairRequirement=input.repairBase&&input.critique?.feedback?.geometryPassed===false?{
     status:'rejected-candidate-must-change',acceptedSourceHash:input.sourceHash,candidateHash:input.repairBase.candidateHash,
     feedbackRoles:{feedback:'Last accepted source only; not an approval of repairBase.scene.',critique:'Rejected candidate errors; these are the current repair target.'},
@@ -35,11 +51,14 @@ export function assemblyCorrectionInput(input){
     interpretation:'Return a nonempty delta fixing the actual candidate error producers within the original task. Empty arrays everywhere retain the same failed building. A construction arithmetic pass is not an ownership/geometry pass; navigation warnings remain separately advisory. Preserve required features, other owners and full-scale geometry. No automatic movement, deletion, overwrite permission or new calls are granted.',
     canAuthorizePlacement:false,
   }:null;
-  return {...(repairRequirement?{repairRequirement}:{}),...input,
+  return {...(repairRequirement?{repairRequirement}:{}),...original,
+    ...(workspaceCapacity?{designWorkspaceCapacity:workspaceCapacity}:{}),
     ...(input.prior?.feedback?.candidates?{prior:{...input.prior,feedback:{...input.prior.feedback,candidates:input.prior.feedback.candidates.map(c=>c.feedback?{...c,feedback:correctionFeedback(c.feedback)}:c)}}}:{}),
     ...(input.feedback?{feedback:correctionFeedback(input.feedback)}:{}),
     ...(input.contractFeedback?{contractFeedback:correctionFeedback(input.contractFeedback)}:{}),
-    ...(input.critique?.feedback?{critique:{...input.critique,feedback:correctionFeedback(input.critique.feedback)}}:{})};
+    ...(input.critique?.feedback?{critique:{...input.critique,feedback:correctionFeedback(input.critique.feedback)}}:{}),
+    ...(Object.hasOwn(input,'providerRetryOf')?{providerRetryOf}:{}),
+    ...(Object.hasOwn(input,'providerRecovery')?{providerRecovery}:{})};
 }
 
 export const CORRECTION_EVIDENCE=`ENGINEERING FEEDBACK: constructionFeedback.issues groups repeated violations by component/rule/edge. Check every group, not only the first raw error. U is the horizontal panel coordinate; Y is vertical. margin <= startU and startU+(columns-1)*stepU+panelWidth <= hostSpan-margin (for nonexcluded panels). panelIndexRange is only a bounding range, not authority to remove every panel in it. Supplemental ownership may omit INVALID rectangular panels while retaining valid panels, entries and later details. Read its omissions/error/truncation and notChecked fields: every supplemental conflict is conditional until the FULL unchanged design is strictly recompiled. Never copy these audit omissions into the design to silence errors. Ownership firstWrite distinguishes clearing a solid from placing into a protected volume; bounds include all reported writes, not permission to erase that box. Resolve accidental intersections by deliberate placement/rhythm changes; authorize only intended receiving owners. Paths clear air ABOVE their paving. Entry frames, lintels, thresholds and canopies occupy space beyond the door leaves. Keep light fixtures out of door lintels and facade sills out of entrance head clearance. Scope and world-write protections are unchanged.`;

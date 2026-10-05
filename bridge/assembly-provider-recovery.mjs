@@ -56,11 +56,14 @@ export function createAssemblyProviderRecovery({directory,requestHash,runtimeHas
       const previous=input.providerRecovery,baseInput=stripAssemblyProviderRecovery(input),baseModel=stripAssemblyProviderRecovery(modelInput);
       check(previous===undefined||hash(previous)===hash(validated.get(index)??null),'unverified preceding recovery input');
       const originIndex=previous?.originIndex??index,originalFormats=previous?.originalFormatCorrectionsUsed??formatCorrectionsUsed;
-      // Non-staged serialization correction intentionally retains the prepared
-      // plan/revision budget. Derive its origin from the CLOSED original format
+      // Serialization of a plan/design edit retains its prepared callBudget,
+      // including staged design corrections. Blueprint/role stages separately
+      // recalculate their tails and must not borrow this exception. Derive the
+      // origin from the CLOSED original format
       // receipt, never infer it from a remaining counter or refund a call.
       let originalBudgetCallIndex=previous?.budget.originalBudgetCallIndex??originIndex;
-      if(!previous&&tier.prototypes?.mode!=='staged'&&baseInput.callBudget&&baseInput.formatCorrection){
+      const retainsPreparedBudget=tier.prototypes?.mode!=='staged'||['revise-design','correct-design'].includes(options.stageName);
+      if(!previous&&retainsPreparedBudget&&baseInput.callBudget&&baseInput.formatCorrection){
         const formatIndex=baseInput.formatCorrection.stage,formatCall=snapshot[formatIndex-1];
         check(Number.isSafeInteger(formatIndex)&&formatIndex>=1&&formatIndex<index&&
           formatCall?.state==='error'&&formatCall.error?.completedFormat===true,

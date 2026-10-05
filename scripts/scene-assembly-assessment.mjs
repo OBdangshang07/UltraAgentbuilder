@@ -61,6 +61,14 @@ for(const stage of job.assemblyStages??[]){
  let response=rawResponse;
  const stagedPrototype=input.tier?.prototypes?.mode==='staged',decomposedStage=stagedPrototype&&['assembly-blueprint','correct-blueprint','prototype-role','correct-prototype-role'].includes(stage.phase);
  const prototypeEnabled=['verified','staged'].includes(input.tier?.prototypes?.mode);
+ if(input.unapprovedPrototypeProposal!==undefined){
+  if(!prototypeEnabled||stage.phase!=='correct-design')throw Error('Rejected prototype evidence appeared outside its correction stage');
+  const previous=job.assemblyStages[predecessorIndex(stage)-1];
+  if(!previous||previous.state!=='rejected'||!['revise-design','correct-design'].includes(previous.phase))throw Error('Rejected prototype evidence lacks its original predecessor');
+  const original=await read(path.join(assemblyRoot,String(previous.index),'response.json'));
+  const {unapprovedPrototypeProposal}=await mod('src/design/correction-feedback.mjs');
+  if(hash(input.unapprovedPrototypeProposal)!==hash(unapprovedPrototypeProposal(original)))throw Error('Rejected prototype wrapper/recipes differ from the preserved predecessor');
+ }
  if(stagedPrototype&&!decomposedAudit){const {createDecomposedAudit}=await mod('bridge/assembly-decomposed-audit.mjs');decomposedAudit=createDecomposedAudit(assemblyRoot,{providerRecoveryAudit});}
  if(stagedPrototype&&['concept-review','correct-concept-review','revise-design','correct-design'].includes(stage.phase)&&decomposedAudit.verifyAllocationInput){
   await decomposedAudit.verifyAllocationInput(input,plan,acceptedPrototype);

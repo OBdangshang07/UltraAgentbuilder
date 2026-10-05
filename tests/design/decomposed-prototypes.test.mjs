@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {hash} from '../../src/generation/compiler.mjs';
 import {preparePrototypeSeeds,expandPrototypeSeeds} from '../../src/design/prototype-expansion.mjs';
-import {assemblyBlueprintSchema,assemblyBlueprintStageSchema,applyAssemblyBlueprint,applyPrototypeRoleEdit,prototypeRoleStageSchema,decomposedProgramHash,bindDecomposedPrototypeProgram} from '../../contracts/scene-decomposed-prototypes.mjs';
+import {assemblyBlueprintSchema,assemblyBlueprintStageSchema,applyAssemblyBlueprint,applyPrototypeRoleEdit,prototypeRoleStageSchema,prototypeRoleRecipeBudget,prototypeRoleEditSchema,decomposedProgramHash,bindDecomposedPrototypeProgram} from '../../contracts/scene-decomposed-prototypes.mjs';
 import {decompositionBlueprintBudget} from '../../bridge/assembly-decomposition-budget.mjs';
 import {schemaFeedback} from '../../contracts/schema-feedback.mjs';
 import {PROTOTYPE_ROLES} from '../../contracts/scene-decomposition-roles.mjs';
@@ -141,4 +141,40 @@ test('contract success does not accept out-of-range expansion: native geometry g
  const seed=preparePrototypeSeeds(result.plan.scene,result.program);
  assert.throws(()=>expandPrototypeSeeds({scene:result.plan.scene,program:result.program,...seed}),/outside/);
  assert.equal(result.canAuthorizePlacement,false);
+});
+
+function retainedRecipeState(count){
+ const {state}=fixture(),reply=roleReply(state);
+ reply.edit.components.put=Array.from({length:count},(_,i)=>shape('task0__seed'+i,[12,1+Math.floor(i/2),20+i%2],[1,1,1],'frame'));
+ reply.recipes=reply.edit.components.put.map(c=>({component:c.id,mode:'repeat',count:2,step:[0,100,0]}));
+ reply.representatives.forEach((r,i)=>r.components=[reply.edit.components.put[i].id]);
+ return applyPrototypeRoleEdit(state,reply,tier);
+}
+test('per-role decoder and runtime share exact aggregate headroom while retaining all other recipes',()=>{
+ const state=retainedRecipeState(61),before=hash(state),role='facade-corner',schema=prototypeRoleStageSchema(state,role);
+ const budget=prototypeRoleRecipeBudget(state,role);
+ assert.equal(budget.maximumRecipes,64);assert.equal(budget.retainedRecipes,61);assert.equal(budget.maximumRoleRecipes,3);
+ assert.equal(budget.automaticRecipeRemoval,false);assert.equal(budget.otherRolesUnchanged,true);assert.equal(budget.canAuthorizePlacement,false);
+ assert.equal(schema.properties.recipes.maxItems,3);assert.equal(prototypeRoleEditSchema.properties.recipes.maxItems,64);
+ const reply=roleReply(state);reply.edit.components.put.push(shape('task1__extra',[14,3,21],[1,1,1],'frame'));
+ reply.recipes=reply.edit.components.put.map(c=>({component:c.id,mode:'repeat',count:2,step:[0,100,0]}));
+ assert.equal(schemaFeedback(reply,schema).valid,true);
+ const next=applyPrototypeRoleEdit(state,reply,tier);
+ assert.deepEqual(next.recipesByRole['typical-floor-core'],state.recipesByRole['typical-floor-core']);
+ assert.equal(Object.values(next.recipesByRole).flat().length,64);
+ const over=structuredClone(reply);over.recipes.push(structuredClone(over.recipes[0]));
+ assert.equal(schemaFeedback(over,schema).valid,false);
+ assert.throws(()=>applyPrototypeRoleEdit(state,over,tier),error=>error.contract.issues.some(i=>i.path==='$.recipes'));
+ assert.equal(hash(state),before);
+});
+test('aggregate zero slots permits an empty role list, never silently deletes retained recipes or raises the limit',()=>{
+ const state=retainedRecipeState(64),before=hash(state),reply=roleReply(state),schema=prototypeRoleStageSchema(state,reply.role);
+ assert.equal(schema.properties.recipes.maxItems,0);assert.equal(schemaFeedback(reply,schema).valid,false);
+ assert.throws(()=>applyPrototypeRoleEdit(state,reply,tier));
+ reply.recipes=[];const next=applyPrototypeRoleEdit(state,reply,tier);
+ assert.equal(Object.values(next.recipesByRole).flat().length,64);assert.equal(hash(state),before);
+ assert.equal(prototypeRoleRecipeBudget(next,'entry-podium').maximumRoleRecipes,0);
+ const impossible=structuredClone(state);impossible.recipesByRole['typical-floor-core'].push(structuredClone(impossible.recipesByRole['typical-floor-core'][0]));
+ assert.throws(()=>prototypeRoleRecipeBudget(impossible,'facade-corner'),/exceed aggregate quota/);
+ assert.throws(()=>prototypeRoleRecipeBudget(state,'unknown'),/Unknown/);
 });

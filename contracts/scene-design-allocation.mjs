@@ -1,8 +1,17 @@
 import {hash} from '../src/generation/compiler.mjs';
-import {validateAssemblyPlan} from './scene-assembly.schema.mjs';
+import {validateAssemblyPlan,assemblyPlanSchema} from './scene-assembly.schema.mjs';
 import {checkDecomposedResponsibilities} from './scene-decomposed-prototypes.mjs';
 
 export const DESIGN_ALLOCATION_POLICY=Object.freeze({version:1,mode:'pre-freeze-purpose-regions'});
+export const DESIGN_FEATURE_IDENTITY_RULES='REQUIRED FEATURE IDENTITIES: copy every prior scene.featureBindings[].feature string verbatim. These strings are stable required-feature keys, not prose labels to improve or paraphrase. Keep each original key even when you deliberately update its implementation components. New descriptive wording belongs in the design brief, not a replacement identity. required-feature-identity feedback gives exact missing keys and the edited field path. Do not delete a required feature, weaken its implementation or invent a substitute merely to satisfy the key check; full geometry, allocation and visual review remain required. No automatic renaming or acceptance occurs.';
+
+export function designWorkspaceCapacity(plan){
+ const maximumRegions=assemblyPlanSchema.properties.packages.items.properties.regions.maxItems;
+ return {version:1,phase:'unapproved-design',maximumRegionsPerPackage:maximumRegions,
+  packages:plan.packages.map(p=>({id:p.id,regionCount:p.regions.length,unusedRegionSlots:maximumRegions-p.regions.length})),
+  interpretation:'This is read-only schema capacity, not a region proposal. At zero spare slots, adding workspace requires an explicit bounded merge/replacement in packages.put: every old region must fit wholly inside one resulting region, and the resulting list still cannot exceed maximumRegionsPerPackage. Compare only the specific deferred owned sources and all their actual instances named by the critique. Do not claim expansion in purpose prose, erase old work, transfer owners, cover the whole building indiscriminately or change protections/dependencies/interfaces. The model must supply actual coordinates; the compiler will not allocate, clip or merge them automatically.',
+  automaticRegionExpansion:false,componentOwnershipTransferred:false,canAuthorizePlacement:false};
+}
 export function stagedDesignAllocationEnabled(tier){
  const p=tier.prototypes;
  if(p?.mode!=='staged')return false;
@@ -11,6 +20,17 @@ export function stagedDesignAllocationEnabled(tier){
  return true;
 }
 const contains=(outer,inner)=>inner.origin.every((v,a)=>v>=outer.origin[a]&&v+inner.size[a]<=outer.origin[a]+outer.size[a]);
+
+export class DesignAllocationFeatureError extends Error{
+ constructor(missing){
+  super('Design allocation removed a required design feature: '+missing.map(b=>b.feature).join('; '));
+  this.name='DesignAllocationFeatureError';
+  this.contract={valid:false,checksComplete:true,truncated:false,issues:missing.map(b=>({
+   path:'$.sceneEdit.featureBindings',code:'required-feature-identity',feature:b.feature,expected:b.feature,
+   message:'Retain this exact previous feature key, not a paraphrase. Its implementation component bindings may be deliberately updated, but the required identity must survive. No automatic renaming or geometry approval is performed.'
+  }))};
+ }
+}
 
 /** Explicitly limited to a NEW, unapproved design. Manufacturing/local edits
  * still use the original frozen task and cell-level ownership checks. */
@@ -22,7 +42,8 @@ export function checkStagedDesignAllocation(before,after,representatives,tier){
  if(before.designIntent!==after.designIntent||['id','seed','bounds'].some(k=>hash(before.scene[k])!==hash(after.scene[k])))throw Error('Design allocation changed fixed identity, scale or intent');
  if(hash(before.scene.reservations)!==hash(after.scene.reservations))throw Error('Design allocation cannot change existing space protections');
  if(before.scene.constraints.passages.length!==after.scene.constraints.passages.length)throw Error('Design allocation cannot omit or regroup required passage interfaces');
- if(before.scene.featureBindings.some(b=>!after.scene.featureBindings.some(q=>q.feature===b.feature)))throw Error('Design allocation removed a required design feature');
+ const missingFeatures=before.scene.featureBindings.filter(b=>!after.scene.featureBindings.some(q=>q.feature===b.feature));
+ if(missingFeatures.length)throw new DesignAllocationFeatureError(missingFeatures);
  for(const c of before.scene.components)if(['mass','profileMass','stairs','void','roomZone','storeyRoom'].includes(c.kind)&&
   !after.scene.components.some(q=>q.id===c.id&&q.kind===c.kind&&(!['roomZone','storeyRoom'].includes(c.kind)||q.use===c.use)))throw Error('Design allocation removed a structural, core, space or circulation source: '+c.id);
  if(before.packages.length!==after.packages.length)throw Error('Design allocation cannot omit or regroup required construction packages');

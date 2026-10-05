@@ -4,7 +4,7 @@ import {basicScene,mass,facade,entry,shape,at,once} from './fixtures.mjs';
 import {inspectConstruction} from '../../src/design/construction-feedback.mjs';
 import {compileScene,inspectPartialConstructionOwnership} from '../../src/design/compiler.mjs';
 import {assessSceneCheckpoint} from '../../src/design/checkpoint.mjs';
-import {correctionFeedback,assemblyCorrectionInput} from '../../src/design/correction-feedback.mjs';
+import {correctionFeedback,assemblyCorrectionInput,unapprovedPrototypeProposal} from '../../src/design/correction-feedback.mjs';
 import {hash} from '../../src/generation/compiler.mjs';
 import {floorWorldTower} from './floor-components-fixtures.mjs';
 
@@ -78,6 +78,22 @@ test('package repair explicitly separates accepted feedback from the failed cand
  assert.equal(next.feedback.geometryPassed,true);assert.equal(next.critique.feedback.geometryPassed,false);assert.equal(next.repairBase,input.repairBase);
  assert.deepEqual(assemblyCorrectionInput(next),next);
  assert.equal(assemblyCorrectionInput({...input,repairBase:null}).repairRequirement,undefined);
+});
+
+test('failed prototype evidence retains the complete wrapper and recipes without adopting or aliasing them',()=>{
+ const response={format:'ScenePrototypePlanEdit',version:1,programHash:'a'.repeat(64),
+  edit:{planHash:'b'.repeat(64),sceneEdit:{featureBindings:[{feature:'unapproved label',components:['part']}]}},
+  recipes:[{component:'part',mode:'repeat',count:3,step:[0,5,0]}]};
+ const before=hash(response),evidence=unapprovedPrototypeProposal(response);
+ assert.equal(evidence.responseHash,before);assert.deepEqual(evidence.response,response);
+ assert.equal(evidence.approved,false);assert.equal(evidence.canAuthorizePlacement,false);
+ assert.match(evidence.interpretation,/current input planHash\/sourceHash\/prototypeProgramHash/);
+ const accepted=[{component:'part',mode:'repeat',count:2,step:[0,5,0]}];
+ const input={prototypeRecipes:accepted,unapprovedPrototypeProposal:evidence};
+ const next=assemblyCorrectionInput(input);assert.equal(next.prototypeRecipes,accepted);
+ assert.equal(next.unapprovedPrototypeProposal,evidence);assert.equal(accepted[0].count,2);
+ evidence.response.recipes[0].count=4;assert.equal(hash(response),before);
+ assert.equal(response.recipes[0].count,3);
 });
 
 test('group-cap overflow is explicit and cannot erase a failed status',()=>{

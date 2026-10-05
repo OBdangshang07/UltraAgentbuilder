@@ -4,7 +4,8 @@ import {hash} from '../../src/generation/compiler.mjs';
 import {compileScene} from '../../src/design/compiler.mjs';
 import {applyPrototypeExpansion} from '../../contracts/scene-prototype-expansion.mjs';
 import {checkDecomposedResponsibilities} from '../../contracts/scene-decomposed-prototypes.mjs';
-import {DESIGN_ALLOCATION_POLICY,stagedDesignAllocationEnabled,checkStagedDesignAllocation} from '../../contracts/scene-design-allocation.mjs';
+import {DESIGN_ALLOCATION_POLICY,stagedDesignAllocationEnabled,checkStagedDesignAllocation,DesignAllocationFeatureError,designWorkspaceCapacity} from '../../contracts/scene-design-allocation.mjs';
+import {assemblyCorrectionInput} from '../../src/design/correction-feedback.mjs';
 import {designAllocationCoverage,designAllocationFreeze} from '../../bridge/assembly-design-allocation.mjs';
 import {PROTOTYPE_ROLES} from '../../contracts/scene-decomposition-roles.mjs';
 import {assemblyPlan} from './assembly-fixtures.mjs';
@@ -71,4 +72,48 @@ test('manufacturing freeze binds the exact allocation, accepted review and check
   const wrong=structuredClone(receipt);change(wrong);assert.throws(()=>designAllocationFreeze(wrong,{plan,review,transition}),/exact accepted/);
  }
  assert.throws(()=>designAllocationFreeze(receipt,{plan,review:{...review,verdict:'revise'},transition}),/exact accepted/);
+});
+
+test('required feature identities are exact keys with actionable paths, not silently normalized labels',()=>{
+ const {plan,representatives}=fixture();
+ plan.scene.featureBindings=[{feature:'入口与核心筒',components:['task0__a']},
+  {feature:'Upper facade / 224m',components:['task1__a']}];
+ const before=hash(plan),next=structuredClone(plan);
+ next.scene.featureBindings[0].feature='入口与核心';next.scene.featureBindings.pop();
+ assert.throws(()=>checkStagedDesignAllocation(plan,next,representatives,tier),error=>{
+  assert.ok(error instanceof DesignAllocationFeatureError);
+  assert.deepEqual(error.contract.issues.map(i=>[i.path,i.code,i.expected]),[
+   ['$.sceneEdit.featureBindings','required-feature-identity','入口与核心筒'],
+   ['$.sceneEdit.featureBindings','required-feature-identity','Upper facade / 224m']]);
+  assert.equal(error.contract.valid,false);assert.equal(error.contract.checksComplete,true);return true;
+ });
+ assert.equal(hash(plan),before);assert.equal(next.scene.featureBindings[0].feature,'入口与核心');
+ const valid=structuredClone(plan);valid.scene.featureBindings[0].components=['task0__b'];
+ const receipt=checkStagedDesignAllocation(plan,valid,representatives,tier);
+ assert.equal(receipt.canAuthorizePlacement,false);assert.equal(hash(plan),before);
+});
+
+test('zero spare region guidance demands explicit bounded coordinates without changing allocation authority',()=>{
+ const {plan,representatives}=fixture();
+ const p=plan.packages[1];p.regions=Array.from({length:8},(_,i)=>({origin:[14,i*2,20],size:[2,2,2]}));
+ const before=hash(plan),capacity=designWorkspaceCapacity(plan);
+ assert.equal(capacity.maximumRegionsPerPackage,8);
+ assert.deepEqual(capacity.packages[1],{id:'task1',regionCount:8,unusedRegionSlots:0});
+ assert.equal(capacity.packages[0].unusedRegionSlots,7);
+ assert.equal(capacity.automaticRegionExpansion,false);assert.equal(capacity.componentOwnershipTransferred,false);
+ assert.equal(capacity.canAuthorizePlacement,false);assert.match(capacity.interpretation,/actual coordinates/);
+ const input={priorPlan:plan,tier},model=assemblyCorrectionInput(input);
+ assert.deepEqual(model.designWorkspaceCapacity,capacity);assert.equal(model.priorPlan,plan);
+ assert.deepEqual(assemblyCorrectionInput(model),model);
+ const recovery={providerRetryOf:12,providerRecovery:{fixture:'inert marker'}};
+ assert.equal(JSON.stringify(assemblyCorrectionInput({...input,...recovery})),JSON.stringify({...model,...recovery}));
+ assert.equal(hash(plan),before);
+ const merge=structuredClone(plan);merge.packages[1].regions=[{origin:[14,0,20],size:[2,18,2]}];
+ assert.equal(checkStagedDesignAllocation(plan,merge,representatives,tier).deltas.length,1);
+ merge.packages[1].regions[0].size[1]=14;
+ assert.throws(()=>checkStagedDesignAllocation(plan,merge,representatives,tier),/removed existing package workspace/);
+ const over=structuredClone(plan);over.packages[1].regions.push({origin:[14,18,20],size:[2,1,2]});
+ assert.throws(()=>checkStagedDesignAllocation(plan,over,representatives,tier));
+ assert.equal(hash(plan),before);
+ assert.equal(assemblyCorrectionInput({...input,tier:{...tier,prototypes:{version:4,mode:'staged'}}}).designWorkspaceCapacity,undefined);
 });

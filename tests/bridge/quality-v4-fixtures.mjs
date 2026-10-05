@@ -31,7 +31,10 @@ export function v4Response(input,options){
   return packageEdit(input);
 }
 export async function setupV4(payload=v4Request){
-  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'voxel-quality-v4-')),calls=[],uploads=[];
+  // Use one physical root for uploads and the durable harness. A Windows
+  // short-profile alias and its realpath must not produce different relative
+  // attachment paths. This changes only fixture setup, never the allowlist.
+  const directory=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'voxel-quality-v4-'))),calls=[],uploads=[];
   const rules=await fs.readFile(new URL('../../prompts/scene-v1.md',import.meta.url),'utf8');
   return {directory,calls,uploads,options:{directory,prompt:payload.prompt,rules,policy:generationPreflight(payload),signal:new AbortController().signal,onStage:async()=>{},
     nativeEvidence:o=>requestNativeEvidence({...o,jobDirectory:directory,timeoutMs:2000,onWaiting:async s=>{if(s.state==='waiting'){uploads.push(s.id);await acceptNativeEvidence(directory,s.id,fixtureUpload(s.request));}}}),

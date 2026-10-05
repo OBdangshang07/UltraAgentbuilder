@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {hash} from '../src/generation/compiler.mjs';
 import {conceptSetSchema,validateConceptSet,conceptSelectionSchema,validateConceptSelection,CONCEPT_SET_RULES,CONCEPT_SELECTION_RULES,massingAnchors} from '../contracts/scene-concepts.mjs';
-import {assemblyBlueprintStageSchema,applyAssemblyBlueprint,prototypeRoleStageSchema,applyPrototypeRoleEdit,decomposedProgramHash,bindDecomposedPrototypeProgram,DECOMPOSED_BLUEPRINT_RULES,DECOMPOSED_ROLE_RULES} from '../contracts/scene-decomposed-prototypes.mjs';
+import {assemblyBlueprintStageSchema,applyAssemblyBlueprint,prototypeRoleStageSchema,prototypeRoleRecipeBudget,applyPrototypeRoleEdit,decomposedProgramHash,bindDecomposedPrototypeProgram,DECOMPOSED_BLUEPRINT_RULES,DECOMPOSED_ROLE_RULES} from '../contracts/scene-decomposed-prototypes.mjs';
 import {decompositionBlueprintBudget,createDecompositionSchedule,PROTOTYPE_ROLES,decompositionConfiguration,decompositionPreludeProgress} from './assembly-decomposition-budget.mjs';
 import {inspectConcept} from './assembly-concepts.mjs';
 import {createNativeComparison} from './native-evidence.mjs';
@@ -176,6 +176,7 @@ export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,
    const result=await stage(correction?'correct-prototype-role':'prototype-role',task,{description:prompt,tier,role,task,planHash:hash(state.plan),sourceHash:hash(state.plan.scene),
     programHash:decomposedProgramHash(state),previousDraft:state.plan.scene,
     prototypeState:{version:state.version,roles:state.roles,completedRoles:state.completedRoles,recipesByRole:state.recipesByRole,representativesByRole:state.representativesByRole},prior,
+    prototypeRecipeBudget:prototypeRoleRecipeBudget(state,role),
     capacity:assemblyCapacity(state.plan,state.plan.scene,[],task),feedback:checked.feedback,decompositionBudget:budget,prototypeCorrectionBudget:correctionBudget,decompositionStageId:role,
     sourceIdentityPolicy:sourceIdentityGuidance(task,prior),prototypeSurfacePolicy:prototypeSurfaceGuidance(state.plan.scene,task),
     ...(allocationEnabled?{prototypeAllocationPolicy:structuredClone(PROTOTYPE_ALLOCATION_POLICY)}:{})},

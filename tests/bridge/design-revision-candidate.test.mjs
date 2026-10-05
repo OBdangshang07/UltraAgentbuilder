@@ -6,6 +6,7 @@ import {runSceneAssembly} from '../../bridge/scene-assembly.mjs';
 import {runDurableAssembly} from '../../bridge/assembly-durability.mjs';
 import {inspectCheckpoint} from '../../bridge/scene-checkpoints.mjs';
 import {hash} from '../../src/generation/compiler.mjs';
+import {unapprovedPrototypeProposal} from '../../src/design/correction-feedback.mjs';
 import {setupStaged,stagedRequest} from './decomposed-assembly-fixtures.mjs';
 import {planEdit} from '../design/assembly-fixtures.mjs';
 import {terminalFixture} from './assembly-terminal-fixture.mjs';
@@ -24,7 +25,7 @@ function serviceRooms(kind){
   });
 }
 async function setupLayoutRevision(kind,{partial=false}={}){
-  let reviewed=false,rejected,original,corrections=0;
+  let reviewed=false,rejected,original,corrections=0,lastRejected;
   const h=await setupStaged(({answer,input,options})=>{
     if(options.stageName==='concept-review'&&!reviewed){
       reviewed=true;answer.verdict='revise';answer.issues=[{id:'service-layout',
@@ -40,9 +41,11 @@ async function setupLayoutRevision(kind,{partial=false}={}){
       answer.edit=planEdit(input.priorPlan,target);
       answer.recipes[0].count=3;
       rejected=structuredClone(answer);
+      lastRejected=structuredClone(answer);
     }
     if(options.stageName==='correct-design'){
       corrections++;
+      assert.deepEqual(input.unapprovedPrototypeProposal,unapprovedPrototypeProposal(lastRejected));
       assert.ok(input.repairBase,'Layout failure must retain its unapproved candidate');
       assert.equal(input.repairBase.approved,false);
       assert.equal(input.repairBase.canAuthorizePlacement,false);
@@ -67,6 +70,7 @@ async function setupLayoutRevision(kind,{partial=false}={}){
       assert.equal(answer.edit.sceneEdit.components.put.length,partial?1:2);
       assert.deepEqual(answer.edit.packages,{put:[],remove:[]});
       answer.recipes=structuredClone(input.prototypeRecipes);
+      if(partial&&corrections===1)lastRejected=structuredClone(answer);
     }
     return answer;
   });
@@ -96,6 +100,50 @@ test('a staged storey-room revision retains both invalid rooms for one small can
   assert.equal(candidate.accepted,false);assert.equal(candidate.feedback.canAuthorizePlacement,false);
   const audit=await (await terminalFixture(h,result)).audit('layout-good');
   assert.equal(audit.code,0,audit.output);assert.equal(audit.report.additionalModelCalls,0);
+});
+
+test('contract-invalid full wrapper supplies exact feature feedback and failed recipes while the accepted baseline stays separate',async()=>{
+ let reviewed=false,failed,accepted;
+ const h=await setupStaged(({answer,input,options})=>{
+  if(options.stageName==='assembly-blueprint')answer.sceneEdit.featureBindings=[{feature:'Stable required entry',components:['entrance']}];
+  if(options.stageName==='concept-review'&&!reviewed){reviewed=true;answer.verdict='revise';
+   answer.issues=[{id:'synthetic-rhythm',criterion:'facade',evidence:'Synthetic protocol only',change:'Change explicit geometry'}];}
+  if(options.stageName==='revise-design'){
+   accepted=structuredClone(input.priorPlan);const target=structuredClone(input.priorPlan);
+   target.scene.featureBindings[0].feature='Paraphrased entry';answer.edit=planEdit(input.priorPlan,target);
+   answer.recipes[0].count=3;failed=structuredClone(answer);
+  }
+  if(options.stageName==='correct-design'){
+   assert.equal(input.repairBase,undefined);assert.deepEqual(input.priorPlan,accepted);
+   assert.deepEqual(input.unapprovedPrototypeProposal,unapprovedPrototypeProposal(failed));
+   assert.equal(input.prototypeRecipes[0].count,2);assert.equal(input.unapprovedPrototypeProposal.response.recipes[0].count,3);
+   assert.deepEqual(input.contractFeedback.contract.issues.map(i=>[i.path,i.code,i.expected]),[
+    ['$.edit.sceneEdit.featureBindings','required-feature-identity','Stable required entry']]);
+   assert.match(h.calls.find(c=>c.phase==='revise-design').instructions,/REQUIRED FEATURE IDENTITIES/);
+   assert.equal(input.designWorkspaceCapacity.maximumRegionsPerPackage,8);
+   // Explicitly propose the changed recipe again. Failure DATA alone has not
+   // adopted it; this new response still passes all original compiler gates.
+   answer.recipes=structuredClone(input.unapprovedPrototypeProposal.response.recipes);
+  }
+  return answer;
+ });
+ const result=await runSceneAssembly(h.options);
+ assert.equal(result.records.find(r=>r.phase==='revise-design').state,'rejected');
+ assert.equal(result.records.find(r=>r.phase==='correct-design').state,'accepted');
+ assert.equal(result.scene.components.find(c=>c.id==='task0__a').repeat.count,3);
+ assert.equal(result.scene.featureBindings[0].feature,'Stable required entry');
+ assert.equal(result.summary.completedPackages.length,5);assert.equal(result.summary.finalTextReviewAccepted,true);
+ const correction=h.calls.find(c=>c.phase==='correct-design');assert.deepEqual(correction.images,[]);
+ assert.equal(h.calls.length,19);
+ const terminal=await terminalFixture(h,result),audit=await terminal.audit('wrapper-original-good');
+ assert.equal(audit.code,0,audit.output);assert.equal(audit.report.additionalModelCalls,0);
+ const file=path.join(h.directory,'assembly',String(correction.index),'input.json');
+ const original=await fs.readFile(file),input=JSON.parse(original);
+ input.unapprovedPrototypeProposal.response.recipes[0].count=4;
+ input.unapprovedPrototypeProposal.responseHash=hash(input.unapprovedPrototypeProposal.response);
+ await fs.writeFile(file,JSON.stringify(input));
+ const bad=await terminal.audit('wrapper-rehashed-bad');assert.notEqual(bad.code,0);
+ assert.match(bad.output,/wrapper\/recipes differ/);await fs.writeFile(file,original);
 });
 
 test('a staged roomZone revision resumes after its corrected receipt without repeating the rejected edit or correction',async()=>{

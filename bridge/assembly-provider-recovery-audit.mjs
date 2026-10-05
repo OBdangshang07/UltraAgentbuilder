@@ -1,14 +1,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {hash} from '../src/generation/compiler.mjs';
-import {assemblyCorrectionInput} from '../src/design/correction-feedback.mjs';
+import {assemblyCorrectionInput,unapprovedPrototypeProposal} from '../src/design/correction-feedback.mjs';
 import {safeEvidenceFile,validateModelImageFiles} from './native-evidence.mjs';
 import {assemblyInvocationFingerprint} from './assembly-invocation.mjs';
 import {codexRequestFingerprint,checkCodexBinding} from './codex-persistent-receipt.mjs';
 import {parseModelJson} from './model-json.mjs';
 import {readJobReferenceInput} from './reference-generation-binding.mjs';
 import {createAssemblyProviderRecovery,stripAssemblyProviderRecovery,assemblyCapacityReceiptIdentity} from './assembly-provider-recovery.mjs';
-import {applyAssemblyBlueprint,applyPrototypeRoleEdit} from '../contracts/scene-decomposed-prototypes.mjs';
+import {applyAssemblyBlueprint,applyPrototypeRoleEdit,prototypeRoleRecipeBudget} from '../contracts/scene-decomposed-prototypes.mjs';
 import {validateAssemblyPlan,applyAssemblyPlanEdit,applyAssemblyPlanRepair} from '../contracts/scene-assembly.schema.mjs';
 import {decompositionTailBudget,decompositionRoleCorrectionBudget} from './assembly-decomposed-stages.mjs';
 import {decompositionBlueprintBudget,decompositionConfiguration} from './assembly-decomposition-budget.mjs';
@@ -82,6 +82,20 @@ export async function auditAssemblyProviderRecovery({directory,root,records,poli
     const input=await read(root,`${index}/input.json`),modelInput=await read(root,`${index}/model-input.json`),
       invocation=await read(root,`${index}/invocation.json`),options=invocation.options;
     same(modelInput,assemblyCorrectionInput(input),'canonical/model input differs');
+    if(input.unapprovedPrototypeProposal!==undefined){
+      check(record.phase==='correct-design'&&['verified','staged'].includes(tier.prototypes?.mode),'rejected prototype evidence outside its correction stage');
+      let prepared=input.providerRecovery?.originIndex??index;
+      const original=records[prepared-1];
+      if(original?.formatCorrectionOf){const malformed=records[original.formatCorrectionOf-1];prepared=inputs.get(malformed.index)?.providerRecovery?.originIndex??malformed.index;}
+      const previous=records[prepared-2];
+      check(previous?.state==='rejected'&&['revise-design','correct-design'].includes(previous.phase),'rejected prototype evidence lacks original predecessor');
+      same(input.unapprovedPrototypeProposal,unapprovedPrototypeProposal(await read(root,`${previous.index}/response.json`)),
+        'rejected prototype wrapper/recipes differ from original predecessor');
+    }
+    if(input.prototypeRecipeBudget!==undefined){
+      check(prototypeState&&['prototype-role','correct-prototype-role'].includes(record.phase),'recipe budget outside original role state');
+      same(input.prototypeRecipeBudget,prototypeRoleRecipeBudget(prototypeState,input.role),'aggregate recipe budget changed');
+    }
     check(invocation.version===1&&typeof invocation.prompt==='string'&&invocation.prompt.endsWith(JSON.stringify(modelInput))&&
       options?.stageName===record.phase&&options.stageCount===tier.maximumCalls&&Array.isArray(options.images)&&
       options.outputSchema&&typeof options.outputSchema==='object','original private invocation');

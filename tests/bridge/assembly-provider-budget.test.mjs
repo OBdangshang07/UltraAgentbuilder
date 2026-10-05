@@ -368,6 +368,23 @@ test('blueprint and plan recovery reject changed package ceilings, review count 
   assert.throws(()=>calculate({...args,input:{...args.input,callBudget:{...args.input.callBudget,minimumReviewCalls:1}}}),/review path changed/);
 });
 
+test('staged design serialization retains its original prepared budget without extending the exception to blueprint or role',()=>{
+ const t=staged(),callBudget=decompositionRevisionBudget(t,records(11),{round:1,packageCount:5,correctionsUsed:0,correcting:true});
+ const args={tier:t,phase:'correct-design',reservedCalls:14,originalCallIndex:14,originalBudgetCallIndex:12,
+  providerRetriesUsed:1,formatCorrectionsUsed:1,originalFormatCorrectionsUsed:1,packageIds:packages(5),
+  input:{tier:t,callBudget,formatCorrection:{stage:13}}};
+ const before=hash(args),budget=calculate(args);
+ assert.equal(budget.canStart,true);assert.equal(budget.maximumCalls,26);assert.equal(budget.reservedCalls,14);
+ assert.equal(budget.protectedPackageCeiling,5);assert.equal(budget.requiredAfterCall,7);
+ assert.equal(budget.additionalModelCalls,0);assert.equal(budget.canAuthorizeRetry,false);assert.equal(hash(args),before);
+ for(const phase of ['assembly-blueprint','prototype-role','correct-blueprint','correct-prototype-role'])
+  assert.throws(()=>calculate({...args,phase}),/only a verified plan\/design format correction/);
+ assert.throws(()=>calculate({...args,input:{tier:t,callBudget}}),/only a verified/);
+ assert.throws(()=>calculate({...args,input:{...args.input,formatCorrection:{stage:14}}}),/only a verified/);
+ assert.throws(()=>calculate({...args,originalBudgetCallIndex:11}),/original funded/);
+ assert.throws(()=>calculate({...args,input:{...args.input,callBudget:{...callBudget,maximumPackages:1}}}));
+});
+
 test('scope bookkeeping cannot hide pending packages or reinterpret an incomplete building as final refinement/review',()=>{
   const args=component(staged(),11,1);
   for(const packageIds of [[],['task0','task0'],['bad-id','task1'],new Array(4),['task0','task1','task2','task3','task4','task5']])
