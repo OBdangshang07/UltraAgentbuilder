@@ -210,7 +210,7 @@ public final class StudioScreen extends Screen {
             sideButton(()->"制作精度："+qualityTier,StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"档位控制拆分深度与复核轮数，不缩小建筑，不保证每次质量达标",this::chooseQualityTier);
             sideButton(()->"组件化总预算：最多 "+assemblyCalls+" 次",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"总纲、组件、纠错、复核与精修都计入；可主动降低，生成前必须确认",this::chooseAssemblyCalls);
             sideButton(()->assemblyProviderRecovery?"容量恢复：开启 · 原预算内":"容量恢复：关闭（默认）",StudioTheme.Kind.NORMAL,()->idle()&&(assemblyProviderRecovery||canSelectProviderRecovery()),()->"仅 Codex 和明确已声明推理强度可选。最多两次等待 10 / 30 秒，失败不退预算；不换模型、不删功能、未知不重发。生成前单独列入费用确认。",()->{assemblyProviderRecovery=!assemblyProviderRecovery;tell(assemblyProviderRecovery?"本次制作设置已开启有限容量恢复":"容量恢复已关闭",assemblyProviderRecovery?StudioProviderRecovery.WARNING:"下一次预检将使用零提供方重试；没有改动原任务或调用模型。",StudioTheme.WARN);});
-            sideButton(()->assemblyQualityVersion==4?"质量 v4：前后对照 + 分项复核":assemblyQualityVersion==3?"质量 v3：实景候选 + 自动选案":assemblyQualityVersion==2?"质量 v2：代表原型 + 协调精修":"质量流程：稳定旧版",StudioTheme.Kind.NORMAL,()->idle(),()->"点击切换：旧版 / v2 / v3 / v4。v4 增加同角度修改前后对照、入口与顶部近景，并逐项追踪设计问题；至少 7 次，需支持图片的模型。",()->{assemblyQualityVersion=assemblyQualityVersion%4+1;if(assemblyQualityVersion>=3){assemblyImageReview=true;assemblyCalls=Math.max(7,assemblyCalls);}if(assemblyQualityVersion!=4&&!assemblyPrototypeMode.equals("off")){assemblyPrototypeMode="off";tell("已关闭原型流程","原型只支持 v4；切回 v4 后须重新明确选择。没有提交任务或调用模型。",StudioTheme.MUTED);}});
+            sideButton(()->assemblyQualityVersion==4?"质量 v4：前后对照 + 分项复核":assemblyQualityVersion==3?"质量 v3：实景候选 + 自动选案":assemblyQualityVersion==2?"质量 v2：代表原型 + 协调精修":"质量流程：稳定旧版",StudioTheme.Kind.NORMAL,()->idle(),()->"点击切换：旧版 / v2 / v3 / v4。v4 增加同角度修改前后对照、入口与顶部近景，并逐项追踪设计问题；至少 7 次，需支持图片的模型。",this::cycleAssemblyQuality);
             sideButton(()->assemblyImageReview?(assemblyQualityVersion>=2?"整体复核：原生材质 / 内饰切层":"整体复核：四视角几何图")+(supportsVisualReview()?"":"（需要支持图片的模型）"):"整体复核：仅文本",StudioTheme.Kind.NORMAL,()->idle()&&assemblyQualityVersion<3&&(assemblyImageReview||supportsVisualReview()),()->"v3 / v4 使用原生图像比较；v2 可选择文本。原生图只含建筑资产，不含世界、玩家、界面和桌面；生成前确认。",()->assemblyImageReview=!assemblyImageReview);
             if(assemblyQualityVersion==4)sideButton(()->"原型流程："+switch(assemblyPrototypeMode){case "verified"->"旧版整组制作 / 展开";case "staged"->"分阶段 · Ultra 实验";default->"关闭 · 保留原流程";},StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"明确选择关闭 / 旧版 / Ultra 分阶段。新流程分别生成概念、蓝图和四角色原型，预算至少 22 次；不会改变旧任务或自动授权调用。",this::choosePrototypeWorkflow);
             paragraph((assemblyPrototypeMode.equals("staged")?"3 次独立概念 + 差量蓝图 + 4 次角色原型；"+StudioAssembly.stagedBudgetSummary(assemblyCalls)+"。":"最多 "+assemblyPackageLimit()+" 个制作任务 / "+StudioAssembly.tier(qualityTier).reviewRounds()+" 轮最终复核；候选、选案和整体改稿也占预算。")+"图像反馈不等于审美认证，中间稿不可建造。",StudioTheme.WARN);
@@ -481,6 +481,18 @@ public final class StudioScreen extends Screen {
     private static void defaultEffort(){String preferred=model()==null?"default":string(model(),"defaultEffort","default");selectedEffort=efforts().contains(preferred)?preferred:efforts().get(0);}
     private static boolean canSelectProviderRecovery(){return agentReady&&model()!=null&&StudioProviderRecovery.canSelect(selectedAgent,selectedModel,selectedEffort,efforts());}
     private static List<String> efforts(){var m=model();if(m==null||!m.has("efforts"))return List.of("default");List<String> result=new ArrayList<>();for(var e:m.getAsJsonArray("efforts"))result.add(e.isJsonObject()?e.getAsJsonObject().get("reasoningEffort").getAsString():e.getAsString());return result.isEmpty()?List.of("default"):result;}
+    private void cycleAssemblyQuality(){
+        if(!idle())return;
+        assemblyQualityVersion=assemblyQualityVersion%4+1;
+        if(assemblyQualityVersion>=3){assemblyImageReview=true;assemblyCalls=Math.max(7,assemblyCalls);}
+        if(assemblyQualityVersion!=4&&!assemblyPrototypeMode.equals("off")){
+            assemblyPrototypeMode="off";
+            tell("已关闭原型流程","原型只支持 v4；切回 v4 后须重新明确选择。没有提交任务或调用模型。",StudioTheme.MUTED);
+        }
+        // Labels alone cannot add/remove the v4-only prototype row. Rebuild
+        // the normal sidebar, retaining its prompt, settings and clamped scroll.
+        clearAndInit();
+    }
     private void chooseModel(){List<StudioChoiceScreen.Choice> choices=new ArrayList<>();for(var entry:models){var m=entry.getAsJsonObject();String id=m.get("id").getAsString();choices.add(new StudioChoiceScreen.Choice(id,id,string(m,"name",id)));}client.setScreen(new StudioChoiceScreen(this,"选择制作模型",choices,selectedModel,id->{selectedModel=id;defaultEffort();}));}
     private void chooseEffort(){var choices=efforts().stream().map(e->new StudioChoiceScreen.Choice(e,StudioMessages.effort(e)+" · "+e,"所选模型支持的推理选项；不是生成质量或速度保证")).toList();client.setScreen(new StudioChoiceScreen(this,"选择推理级别",choices,selectedEffort,e->selectedEffort=e));}
     private void chooseOutputBudget(){var m=model();String configured=m!=null&&m.has("configuredOutputBudget")&&!m.get("configuredOutputBudget").isJsonNull()?m.get("configuredOutputBudget").getAsString():"由 Harness 决定";client.setScreen(new StudioOutputBudgetScreen(this,outputBudget,configured,v->outputBudget=v));}
