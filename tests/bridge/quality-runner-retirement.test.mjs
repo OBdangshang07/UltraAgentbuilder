@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import {spawn} from 'node:child_process';
 import {hash} from '../../src/generation/compiler.mjs';
 import {retireExitedQualityRunner,readExitedQualityRetirement} from '../../scripts/quality-runner-retirement.mjs';
 import {settledQualityAttempt,claimQualityGoal} from '../../scripts/quality-goal-authorization.mjs';
 
 const authorization='2026-09-28 / 用户：授权在目标达成前的所有调用';
-async function fixture(){
+async function fixture({runnerPid=10001,codexChildPid=10002}={}){
  const project=await fs.mkdtemp(path.join(os.tmpdir(),'voxel-runner-incident-'));
  const root=path.join(project,'build/quality-native-original'),data=path.join(root,'data'),dir=path.join(data,'jobs/job-original');
  await fs.mkdir(path.join(dir,'assembly-journal'),{recursive:true});await fs.mkdir(path.join(project,'build/quality-goal-authorizations'));
@@ -18,12 +19,12 @@ async function fixture(){
  const ledgerFile=path.join(root,'ledger.json');await write(ledgerFile,ledger);
  const jobFile=path.join(dir,'job.json');await write(jobFile,{id:record.jobId,key:record.key,state:'generating',assemblyCallsReserved:1});
  const call={index:1,state:'pending'};await write(path.join(dir,'assembly-journal/call-1.json'),{value:call,sha256:hash(call)});
- await write(path.join(data,'bridge.lock'),{pid:10001});await write(path.join(data,'connection.json'),{port:9,token:'offline-private-do-not-print'});
- await write(path.join(project,'build/quality-goal-authorizations/active.json'),{root,key:record.key,protocolHash:ledger.protocolHash,pid:10001});
+ await write(path.join(data,'bridge.lock'),{pid:runnerPid});await write(path.join(data,'connection.json'),{port:9,token:'offline-private-do-not-print'});
+ await write(path.join(project,'build/quality-goal-authorizations/active.json'),{root,key:record.key,protocolHash:ledger.protocolHash,pid:runnerPid});
  const logFile=path.join(project,'build/original-runner.log');await fs.writeFile(logFile,'Debugger attached.\nERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING\n');
  const incidentFile=path.join(project,'incident.json'),incident={type:'engineering-diagnostic-induced-runner-exit',runnerExitCode:1,runnerFailure:'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING during diagnostic inspector evaluation',
   unknownOutcomeResolved:false,originalInvocationMayResubmit:false,additionalModelCalls:0,worldModified:false,originalLedger:ledgerFile,originalJobId:record.jobId,
-  originalInvocationReserved:1,completedReceipts:0,runnerPid:10001,codexChildPid:10002,runnerLog:logFile,providerThreadId:'unknown-thread',providerTurnId:'unknown-turn'};
+  originalInvocationReserved:1,completedReceipts:0,runnerPid,codexChildPid,runnerLog:logFile,providerThreadId:'unknown-thread',providerTurnId:'unknown-turn'};
  await write(incidentFile,incident);
  return {project,root,data,dir,ledgerFile,jobFile,incidentFile,incident,ledger,write};
 }
@@ -63,8 +64,31 @@ test('retirement rejects changed forensic bytes and a reappearing live connectio
  }
 });
 
+test('production liveness reader refuses the actual live test process and preserves its fixture lease',async()=>{
+ const f=await fixture({runnerPid:process.pid}),before=await fs.readFile(f.ledgerFile),jobBefore=await fs.readFile(f.jobFile);
+ await assert.rejects(retireExitedQualityRunner({incidentFile:f.incidentFile,authorization}),/Original runner remains active/);
+ assert.deepEqual(await fs.readFile(f.ledgerFile),before);assert.deepEqual(await fs.readFile(f.jobFile),jobBefore);
+ assert.equal(JSON.parse(await fs.readFile(path.join(f.project,'build/quality-goal-authorizations/active.json'))).pid,process.pid);
+ await assert.rejects(fs.access(path.join(f.root,'orphaned-runner')),{code:'ENOENT'});
+ await assert.rejects(fs.access(path.join(f.root,'failure-retirement.json')),{code:'ENOENT'});
+});
+
+async function closedFixtureProcess(exitCode){
+ const child=spawn(process.execPath,['-e','process.exit('+exitCode+')'],{windowsHide:true,stdio:'ignore'});
+ const outcome=await new Promise((resolve,reject)=>{
+  child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));
+ });
+ assert.equal(outcome.code,exitCode);assert.equal(outcome.signal,null);
+ assert.ok(Number.isSafeInteger(child.pid)&&child.pid>1);return child.pid;
+}
+
 test('new exclusive claim can audit retired runner without mistaking its own lease for an old one',async()=>{
- const f=await fixture();await retireExitedQualityRunner({incidentFile:f.incidentFile,authorization,isAlive:()=>false});
+ // This path uses the production OS liveness reader. Fixed fictional PIDs
+ // can resolve to live CI processes; bind two OWNED children and wait for
+ // their original close events instead. All forensic answers remain synthetic.
+ const [runnerPid,codexChildPid]=await Promise.all([closedFixtureProcess(1),closedFixtureProcess(0)]);
+ assert.notEqual(runnerPid,codexChildPid);
+ const f=await fixture({runnerPid,codexChildPid});await retireExitedQualityRunner({incidentFile:f.incidentFile,authorization});
  const before=await fs.readFile(f.ledgerFile),root=path.join(f.project,'build/new-independent-run');await fs.mkdir(root);
  const claim=await claimQualityGoal({directory:path.join(f.project,'build/quality-goal-authorizations'),attempt:'new-independent',root,key:'new-key',protocolHash:hash({new:true}),priorLedger:f.ledgerFile});
  assert.equal(claim.history[0].reservedCalls,1);assert.equal(claim.history[0].receipts,0);assert.equal(claim.history[0].unknownOutcomeResolved,false);
