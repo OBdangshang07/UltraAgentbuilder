@@ -54,6 +54,11 @@ export function assemblyCorrectionInput(input){
   return {...(repairRequirement?{repairRequirement}:{}),...original,
     ...(workspaceCapacity?{designWorkspaceCapacity:workspaceCapacity}:{}),
     ...(input.prior?.feedback?.candidates?{prior:{...input.prior,feedback:{...input.prior.feedback,candidates:input.prior.feedback.candidates.map(c=>c.feedback?{...c,feedback:correctionFeedback(c.feedback)}:c)}}}:{}),
+    // Decomposed role corrections carry the rejected report under prior.
+    // Apply the SAME compiler-owned feedback summary, preserving the whole
+    // rejected response/recipes and failed scope/navigation evidence. The
+    // canonical input and feedback files remain unchanged; never adopt prior.
+    ...(input.prior?.feedback&&!input.prior.feedback.candidates?{prior:{...input.prior,feedback:correctionFeedback(input.prior.feedback)}}:{}),
     ...(input.feedback?{feedback:correctionFeedback(input.feedback)}:{}),
     ...(input.contractFeedback?{contractFeedback:correctionFeedback(input.contractFeedback)}:{}),
     ...(input.critique?.feedback?{critique:{...input.critique,feedback:correctionFeedback(input.critique.feedback)}}:{}),
