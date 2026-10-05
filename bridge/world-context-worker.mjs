@@ -14,6 +14,7 @@ import {prepareFrozenWorldPatchSendInput} from './world-patch-send-input.mjs';
 
 const {operation, id, payload, limits} = workerData;
 const requestedRoot = workerData.root;
+const jointPreparation = ['reference-patch-task-disclosure', 'reference-patch-review-task'].includes(operation);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const pending = /^\.pending-([a-f0-9-]{36})-([a-f0-9-]{36})$/;
 const files = ['_owner.json', 'payload.json', 'snapshot.json', 'summary.json', 'record.json'];
@@ -48,10 +49,10 @@ for (const part of path.relative(ancestor, requestedParent).split(path.sep).filt
 }
 const canonicalParent = await fs.realpath(requestedParent), root = path.join(canonicalParent, path.basename(requestedRoot));
 await directory(canonicalParent);
-await directory(root, true);
+await directory(root, !jointPreparation);
 let owner;
 try { owner = await json(path.join(root, '_store.json'), 1024); }
-catch (e) { if (e.code !== 'ENOENT') throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
+catch (e) { if (e.code !== 'ENOENT' || jointPreparation) throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
 exactKeys(owner, ['format', 'version', 'ownerId'], 'store owner');
 if (owner.format !== 'WorldContextStore' || owner.version !== 1 || !uuid.test(owner.ownerId)) fail('Invalid context store ownership');
 
@@ -115,6 +116,21 @@ async function inventory() {
 function publicRecord(record) { const {ownerId, ...result} = record; return result; }
 async function run() {
   const capsuleRoot = path.join(canonicalParent, 'world-patch-tasks');
+  if (['reference-patch-task-disclosure', 'reference-patch-review-task'].includes(operation)) {
+    // Internal preparation only. No HTTP route, adapter, reservation, capsule
+    // publication or world write. Capabilities here are bound advertisements.
+    const bytes = Buffer.from(payload);
+    if (!bytes.length || bytes.length > 32768) fail('Joint context task binding quota exceeded', 413);
+    const input = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+    const reviewing = operation === 'reference-patch-review-task';
+    exactKeys(input, reviewing ? ['intent','capability','runtimeHash','confirmation'] : ['intent','capability','runtimeHash'], 'joint stored preparation input');
+    const {readReferenceWorldPatchPreparationSource} = await import('./reference-world-patch-source.mjs');
+    const {prepareSavedReferenceWorldPatchTaskDisclosure, reviewSavedReferenceWorldPatchTaskDisclosure} = await import('./reference-world-patch-task-disclosure.mjs');
+    const source = await readReferenceWorldPatchPreparationSource({dataDir: canonicalParent, contextId: id, intent: input.intent});
+    const bound = {intent: input.intent, capability: input.capability, runtimeHash: input.runtimeHash, reference: source.reference};
+    return reviewing ? reviewSavedReferenceWorldPatchTaskDisclosure(source.saved, bound, input.confirmation)
+      : prepareSavedReferenceWorldPatchTaskDisclosure(source.saved, bound);
+  }
   if (['patch-send-input', 'patch-original-input'].includes(operation)) {
     const bytes = Buffer.from(payload);
     if (!bytes.length || bytes.length > 4096) fail('Patch SEND byte quota exceeded', 413);

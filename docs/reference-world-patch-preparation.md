@@ -43,9 +43,10 @@ opaque proof that source files or current server state were checked.
 
 ## Still required for the actual feature
 
-Production integration must independently read and verify original stored
-capture/attachments on a bounded worker lane, enforce expiration and current
-capabilities, freeze a new versioned joint capsule, and persist exact source,
+The follow-up [stored-source preparation](reference-world-patch-source-preparation.md)
+adds internal bounded-worker reading and expiration checks. It still adds no
+public route, provider call, capsule or player UI. Production integration must
+check current capabilities, freeze a new versioned joint capsule, and persist exact source,
 pixel, prompt/schema, budget and invocation identities. SEND must be consume-once,
 preserve unknown outcomes and never borrow legacy confirmation. No images may
 be silently inserted into the existing text-only capsule.
