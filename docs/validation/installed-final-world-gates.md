@@ -54,6 +54,24 @@ This proves this exact shader/JAR/asset combination, not all Iris versions,
 shader packs, hardware, changing-world physics or performance targets. The
 fixture also used deterministic `randomTickSpeed=0`.
 
+## Exact-helper zero-SEND consent — passed on 2026-10-06
+
+A third new installed-game fixture exercised the same helper intended for the
+next real same-session test. Normal quality-setting transitions rebuilt their
+conditional rows and retained the prompt, total budget and correction limit.
+Leaving the staged workflow required explicitly reselecting bounded recovery.
+The current request and world matched the normal confirmation snapshot.
+
+Generate was pressed once, but the test stopped before budget confirmation.
+There were zero confirmations, model calls and building writes; no task identity
+or same-session handoff was created. The original game and Bridge exited and
+exclusive ownership was archived. A separate follow-up checked the frozen
+tooling and these original lifecycle records.
+
+This establishes the pre-SEND consent boundary only. It does not demonstrate
+successful generation or placement. A new real same-session test is being
+prepared with a total limit of 26 model calls; no completion is reported here.
+
 ## Limits and remaining gates
 
 This is an original-FINAL import/world-transaction gate, not the stronger
@@ -68,9 +86,7 @@ simple crown do not meet the intended CBD design-quality target. A successful
 world transaction must not be presented as solving generation speed or design
 quality. Earlier failed or unknown runs remain separate outcomes.
 
-Next gates are independent zero-SEND consent testing of the future same-session
-helper, then a new bounded
-real-model same-session test. Selection/context, multimodal integration,
+Next is the new bounded real-model same-session test. Selection/context, multimodal integration,
 quality, performance and release gates remain open.
 
 Private model answers, invocation records, test tooling, screenshots and worlds
