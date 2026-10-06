@@ -149,7 +149,7 @@ test('actual worker termination before commit preserves the original partial arc
   assert.equal(message.state, 'before-original-commit'); assert.equal(path.dirname(message.capsuleDirectory), f.root);
   const id = path.basename(message.capsuleDirectory); assert.match(id, /^[a-f0-9]{64}$/);
   const lock = await fs.readFile(path.join(f.root, '_publish.lock')), payload = await fs.readFile(path.join(message.capsuleDirectory, 'payload.json'));
-  await worker.terminate();
+  assert.equal(await worker.terminate(), 1, 'Original publisher must still be live when explicitly terminated');
   await assert.rejects(f.store.operation('patch-frozen-task', id), /Incomplete/);
   await assert.rejects(freeze(f), /Incomplete/);
   assert.deepEqual(await fs.readFile(path.join(f.root, '_publish.lock')), lock);

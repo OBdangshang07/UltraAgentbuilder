@@ -15,14 +15,14 @@ const failure = (message, statusCode = 400) => Object.assign(new Error(message),
 export class WorldContextStore {
   constructor({dataDir}) { this.root = path.join(path.resolve(dataDir), 'world-contexts'); this.queue = []; this.active = null; this.closed = false; }
   operation(operation, id, payload, {signal} = {}) {
-    if (!(['patch-frozen-task', 'patch-send-input', 'patch-original-input'].includes(operation) ? PATCH_CAPSULE_ID : CONTEXT_ID).test(id)) return Promise.reject(failure('Invalid context capture/capsule identity'));
-    if (!['capture', 'get', 'discard', 'disclosure', 'task-disclosure', 'analysis-input', 'patch-task-disclosure', 'patch-review-task', 'patch-freeze-task', 'patch-frozen-task', 'patch-send-input', 'patch-original-input', 'reference-patch-task-disclosure', 'reference-patch-review-task'].includes(operation)) return Promise.reject(failure('Invalid context operation'));
+    if (!(['patch-frozen-task', 'patch-send-input', 'patch-original-input', 'reference-patch-frozen-task'].includes(operation) ? PATCH_CAPSULE_ID : CONTEXT_ID).test(id)) return Promise.reject(failure('Invalid context capture/capsule identity'));
+    if (!['capture', 'get', 'discard', 'disclosure', 'task-disclosure', 'analysis-input', 'patch-task-disclosure', 'patch-review-task', 'patch-freeze-task', 'patch-frozen-task', 'patch-send-input', 'patch-original-input', 'reference-patch-task-disclosure', 'reference-patch-review-task', 'reference-patch-freeze-task', 'reference-patch-frozen-task'].includes(operation)) return Promise.reject(failure('Invalid context operation'));
     if (this.closed) return Promise.reject(failure('Context store closed', 503));
     if (signal?.aborted) return Promise.reject(failure('Context operation cancelled', 409));
     if (operation === 'capture' && (!(payload instanceof Uint8Array) || payload.byteLength > CONTEXT_STORE_LIMITS.inputBytes)) return Promise.reject(failure('Context payload byte quota exceeded', 413));
     if (operation === 'disclosure' && (!(payload instanceof Uint8Array) || !payload.byteLength || payload.byteLength > 4096)) return Promise.reject(failure('Context task binding quota exceeded', 413));
     if (['patch-send-input', 'patch-original-input'].includes(operation) && (!(payload instanceof Uint8Array) || !payload.byteLength || payload.byteLength > 4096)) return Promise.reject(failure('Patch SEND byte quota exceeded', 413));
-    if (['task-disclosure', 'analysis-input', 'patch-task-disclosure', 'patch-review-task', 'patch-freeze-task', 'reference-patch-task-disclosure', 'reference-patch-review-task'].includes(operation) && (!(payload instanceof Uint8Array) || !payload.byteLength || payload.byteLength > 32768)) return Promise.reject(failure('Context task intent quota exceeded', 413));
+    if (['task-disclosure', 'analysis-input', 'patch-task-disclosure', 'patch-review-task', 'patch-freeze-task', 'reference-patch-task-disclosure', 'reference-patch-review-task', 'reference-patch-freeze-task'].includes(operation) && (!(payload instanceof Uint8Array) || !payload.byteLength || payload.byteLength > 32768)) return Promise.reject(failure('Context task intent quota exceeded', 413));
     if (this.active && this.queue.length >= CONTEXT_STORE_LIMITS.queue) return Promise.reject(failure('Context worker queue full; no model invoked', 429));
     return new Promise((resolve, reject) => {
       const task = {operation, id, payload, resolve, reject, signal, settled: false};

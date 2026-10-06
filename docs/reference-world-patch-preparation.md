@@ -44,9 +44,11 @@ opaque proof that source files or current server state were checked.
 ## Still required for the actual feature
 
 The follow-up [stored-source preparation](reference-world-patch-source-preparation.md)
-adds internal bounded-worker reading and expiration checks. It still adds no
-public route, provider call, capsule or player UI. Production integration must
-check current capabilities, freeze a new versioned joint capsule, and persist exact source,
+adds internal bounded-worker reading and expiration checks. The follow-up
+[immutable joint capsule](reference-world-patch-capsule.md) archives those exact
+sources and their new joint confirmation. Neither milestone adds a public
+route, provider call or player UI. Production integration must
+check current capabilities and persist exact source,
 pixel, prompt/schema, budget and invocation identities. SEND must be consume-once,
 preserve unknown outcomes and never borrow legacy confirmation. No images may
 be silently inserted into the existing text-only capsule.

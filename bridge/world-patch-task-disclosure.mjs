@@ -82,11 +82,17 @@ export function reviewSavedWorldPatchTaskDisclosure(saved, intent, confirmation,
  * permission. The caller must independently verify the private source files
  * and the committed capsule manifest. Expired sources may be audited, not
  * promoted to fresh server baselines or new consent. No HTTP time override. */
-export function validateFrozenSavedWorldPatchTask(saved, prepared, confirmation, review, frozenAt, options) {
+export function validateFrozenSavedWorldPatchTaskDisclosure(saved, prepared, frozenAt, options) {
   if (!Number.isSafeInteger(frozenAt) || frozenAt < saved.record?.createdAt || frozenAt > Date.now()) fail('Invalid original patch freeze time');
   const now = () => frozenAt;
   const expected = prepareAt(saved, prepared?.task?.request?.intent, options, now);
   if (contextHash(prepared) !== contextHash(expected)) fail('Frozen patch disclosure no longer matches original source/rules');
+  return expected; // Disclosure DATA only; no legacy confirmation or SEND authority.
+}
+
+export function validateFrozenSavedWorldPatchTask(saved, prepared, confirmation, review, frozenAt, options) {
+  const expected = validateFrozenSavedWorldPatchTaskDisclosure(saved, prepared, frozenAt, options);
+  const now = () => frozenAt;
   const expectedReview = reviewAt(saved, expected.task.request.intent, confirmation, options, now);
   if (contextHash(review) !== contextHash(expectedReview)) fail('Frozen patch review no longer matches original source/confirmation');
   return {prepared: expected, review: expectedReview};

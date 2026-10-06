@@ -14,7 +14,7 @@ import {prepareFrozenWorldPatchSendInput} from './world-patch-send-input.mjs';
 
 const {operation, id, payload, limits} = workerData;
 const requestedRoot = workerData.root;
-const jointPreparation = ['reference-patch-task-disclosure', 'reference-patch-review-task'].includes(operation);
+const jointPreparation = ['reference-patch-task-disclosure', 'reference-patch-review-task', 'reference-patch-freeze-task'].includes(operation);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const pending = /^\.pending-([a-f0-9-]{36})-([a-f0-9-]{36})$/;
 const files = ['_owner.json', 'payload.json', 'snapshot.json', 'summary.json', 'record.json'];
@@ -49,12 +49,14 @@ for (const part of path.relative(ancestor, requestedParent).split(path.sep).filt
 }
 const canonicalParent = await fs.realpath(requestedParent), root = path.join(canonicalParent, path.basename(requestedRoot));
 await directory(canonicalParent);
-await directory(root, !jointPreparation);
 let owner;
-try { owner = await json(path.join(root, '_store.json'), 1024); }
-catch (e) { if (e.code !== 'ENOENT' || jointPreparation) throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
-exactKeys(owner, ['format', 'version', 'ownerId'], 'store owner');
-if (owner.format !== 'WorldContextStore' || owner.version !== 1 || !uuid.test(owner.ownerId)) fail('Invalid context store ownership');
+if (operation !== 'reference-patch-frozen-task') {
+  await directory(root, !jointPreparation);
+  try { owner = await json(path.join(root, '_store.json'), 1024); }
+  catch (e) { if (e.code !== 'ENOENT' || jointPreparation) throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
+  exactKeys(owner, ['format', 'version', 'ownerId'], 'store owner');
+  if (owner.format !== 'WorldContextStore' || owner.version !== 1 || !uuid.test(owner.ownerId)) fail('Invalid context store ownership');
+}
 
 async function owned(name) {
   const match = pending.exec(name), contextId = match ? match[1] : name;
@@ -116,9 +118,22 @@ async function inventory() {
 function publicRecord(record) { const {ownerId, ...result} = record; return result; }
 async function run() {
   const capsuleRoot = path.join(canonicalParent, 'world-patch-tasks');
+  if (operation === 'reference-patch-frozen-task') {
+    const {readFrozenReferenceWorldPatchTaskCapsule} = await import('./reference-world-patch-task-capsule.mjs');
+    return readFrozenReferenceWorldPatchTaskCapsule({dataDir: canonicalParent, capsuleId: id});
+  }
+  if (operation === 'reference-patch-freeze-task') {
+    const bytes = Buffer.from(payload); if (!bytes.length || bytes.length > 32768) fail('Joint freeze binding quota exceeded', 413);
+    const value = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+    exactKeys(value, ['intent','capability','runtimeHash','confirmation'], 'joint original capsule freeze');
+    const {confirmation, ...input} = value;
+    const {freezeReferenceWorldPatchTask} = await import('./reference-world-patch-task-capsule.mjs');
+    return freezeReferenceWorldPatchTask({dataDir: canonicalParent, contextId: id, input, confirmation});
+  }
   if (['reference-patch-task-disclosure', 'reference-patch-review-task'].includes(operation)) {
-    // Internal preparation only. No HTTP route, adapter, reservation, capsule
-    // publication or world write. Capabilities here are bound advertisements.
+    // Internal preparation only. This branch adds no HTTP route, adapter,
+    // reservation, capsule publication or world write; freeze is separate.
+    // Capabilities here are bound advertisements, not provider receipts.
     const bytes = Buffer.from(payload);
     if (!bytes.length || bytes.length > 32768) fail('Joint context task binding quota exceeded', 413);
     const input = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));

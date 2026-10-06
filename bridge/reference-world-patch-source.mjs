@@ -14,6 +14,9 @@ const uuid = value => typeof value === 'string' && REFERENCE_OWNER.test(value);
 const fail = message => {throw Error(message);};
 const decode = bytes => JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+export const REFERENCE_PATCH_CONTEXT_FILE_LIMITS = Object.freeze({'context-store.json': 1024, 'context-owner.json': 1024,
+  'record.json': 16384, 'payload.json': WORLD_SELECTION_LIMITS.snapshotBytes,
+  'snapshot.json': WORLD_SELECTION_LIMITS.snapshotBytes, 'summary.json': 1048576});
 async function canonicalDirectory(target) {
   target = path.resolve(target); let ancestor = path.parse(target).root;
   for (const part of ['', ...path.relative(ancestor, target).split(path.sep).filter(Boolean)]) {
@@ -45,21 +48,16 @@ async function read(target, maximum) {
     return bytes.subarray(0, total);
   } finally {await handle.close();}
 }
-async function json(target, maximum) {return decode(await read(target, maximum));}
-
-export async function readReferenceWorldPatchPreparationSource({dataDir, contextId, intent}) {
-  if (!uuid(contextId) || !uuid(intent?.referenceOwnerId) || typeof intent.referenceSetHash !== 'string'
-    || !digest.test(intent.referenceSetHash)) fail('Exact stored joint context/reference identities required');
-  dataDir = await canonicalDirectory(dataDir);
-  const contextRoot = await canonicalDirectory(path.join(dataDir, 'world-contexts'));
-  const folder = await canonicalDirectory(path.join(contextRoot, contextId));
-  const maxima = {'_owner.json': 1024, 'payload.json': WORLD_SELECTION_LIMITS.snapshotBytes,
-    'snapshot.json': WORLD_SELECTION_LIMITS.snapshotBytes, 'summary.json': 1048576, 'record.json': 16384};
-  const entries = await fs.readdir(folder);
-  if (entries.length !== Object.keys(maxima).length || entries.some(name => !Object.hasOwn(maxima, name))) fail('Incomplete/unknown original joint context files; preserved');
-  const store = await json(path.join(contextRoot, '_store.json'), 1024);
-  const marker = await json(path.join(folder, '_owner.json'), maxima['_owner.json']);
-  const record = await json(path.join(folder, 'record.json'), maxima['record.json']);
+// Pure private-source reconstruction shared with archive auditing. observedAt
+// is an ORIGINAL audit timestamp, not a preparation/SEND clock override. Fresh
+// source preparation below fixes it to Date.now and rechecks expiry afterwards.
+export function rebuildReferenceWorldPatchContextSource(files, contextId, observedAt) {
+  exactKeys(files, Object.keys(REFERENCE_PATCH_CONTEXT_FILE_LIMITS), 'joint original context files');
+  if (!uuid(contextId) || !Number.isSafeInteger(observedAt) || observedAt < 0 || observedAt > Date.now()) fail('Invalid original joint context audit identity/time');
+  for (const [name, maximum] of Object.entries(REFERENCE_PATCH_CONTEXT_FILE_LIMITS)) {
+    if (!(files[name] instanceof Uint8Array) || files[name].byteLength < 1 || files[name].byteLength > maximum) fail('Original joint context source byte quota');
+  }
+  const store = decode(files['context-store.json']), marker = decode(files['context-owner.json']), record = decode(files['record.json']);
   exactKeys(store, ['format','version','ownerId'], 'joint original context store');
   exactKeys(marker, ['format','version','ownerId','id'], 'joint original context owner');
   exactKeys(record, ['format','version','ownerId','id','createdAt','expiresAt','payloadSha256','payloadBytes',
@@ -70,30 +68,49 @@ export async function readReferenceWorldPatchPreparationSource({dataDir, context
     || marker.format !== 'WorldContextOwner' || marker.version !== 1 || marker.ownerId !== store.ownerId || marker.id !== contextId
     || record.format !== 'SavedWorldContext' || record.version !== 1 || record.ownerId !== store.ownerId || record.id !== contextId
     || contextHash(recordContent) !== recordHash || !Number.isSafeInteger(record.createdAt) || record.createdAt < 0
-    || record.createdAt > Date.now() || record.expiresAt !== record.createdAt + 24 * 60 * 60 * 1000
+    || record.createdAt > observedAt || record.expiresAt !== record.createdAt + 24 * 60 * 60 * 1000
     || record.modelSent !== false || record.canAuthorizePlacement !== false
     || record.sourceAuthority !== 'client-submitted-block-facts-not-a-server-signature' || record.privacy !== 'block-states-only') {
     fail('Original joint context ownership/record binding rejected');
   }
-  if (record.expiresAt <= Date.now()) fail('Joint original context expired; reread the environment');
-  const payloadBytes = await read(path.join(folder, 'payload.json'), maxima['payload.json']);
+  if (record.expiresAt <= observedAt) fail('Joint original context expired; reread the environment');
+  const payloadBytes = files['payload.json'];
   if (payloadBytes.length !== record.payloadBytes || sha(payloadBytes) !== record.payloadSha256) fail('Original joint context payload mismatch');
   const payload = decode(payloadBytes); exactKeys(payload, ['selection','capture'], 'joint original context payload');
   const rebuilt = createContextSnapshot(payload.selection, payload.capture);
-  const snapshot = validateContextSnapshot(await json(path.join(folder, 'snapshot.json'), maxima['snapshot.json']));
+  const snapshot = validateContextSnapshot(decode(files['snapshot.json']));
   if (contextHash(snapshot) !== contextHash(rebuilt) || snapshot.snapshotHash !== record.snapshotHash
     || snapshot.selectionHash !== record.selectionHash) fail('Original joint context snapshot mismatch');
-  const summary = await json(path.join(folder, 'summary.json'), maxima['summary.json']), computed = summarizeContextSnapshot(snapshot);
+  const summary = decode(files['summary.json']), computed = summarizeContextSnapshot(snapshot);
   const identity = {worldId: snapshot.selection.world.worldId, dimension: snapshot.selection.world.dimension,
     selectionRevision: snapshot.selection.revision, contextRevision: snapshot.fence.end};
   if (contextHash(summary) !== contextHash(computed) || summary.summaryHash !== record.summaryHash
     || contextHash(identity) !== contextHash(record.identity) || record.totalCells !== summary.totalCells
     || record.knownCells !== summary.knownCells || record.unknownCells !== summary.unknownCells) fail('Original joint context identity/summary mismatch');
 
+  const {ownerId, ...publicRecord} = record;
+  return {record: publicRecord, snapshot, summary};
+}
+
+export async function readReferenceWorldPatchPreparationSource({dataDir, contextId, intent}) {
+  if (!uuid(contextId) || !uuid(intent?.referenceOwnerId) || typeof intent.referenceSetHash !== 'string'
+    || !digest.test(intent.referenceSetHash)) fail('Exact stored joint context/reference identities required');
+  dataDir = await canonicalDirectory(dataDir);
+  const contextRoot = await canonicalDirectory(path.join(dataDir, 'world-contexts'));
+  const folder = await canonicalDirectory(path.join(contextRoot, contextId));
+  const names = ['_owner.json','record.json','payload.json','snapshot.json','summary.json'], entries = await fs.readdir(folder);
+  if (entries.length !== names.length || entries.some(name => !names.includes(name))) fail('Incomplete/unknown original joint context files; preserved');
+  const contextFiles = {};
+  for (const [name, maximum] of Object.entries(REFERENCE_PATCH_CONTEXT_FILE_LIMITS)) {
+    const target = name === 'context-store.json' ? path.join(contextRoot, '_store.json')
+      : path.join(folder, name === 'context-owner.json' ? '_owner.json' : name);
+    contextFiles[name] = await read(target, maximum);
+  }
+  const saved = rebuildReferenceWorldPatchContextSource(contextFiles, contextId, Date.now());
   await assertReferenceDraftWritable(dataDir, intent.referenceOwnerId);
   const referenceRoot = await canonicalDirectory(path.join(dataDir, 'reference-drafts', intent.referenceOwnerId));
   const setFolder = await canonicalDirectory(path.join(referenceRoot, 'reference-sets', intent.referenceSetHash));
-  const manifest = await json(path.join(setFolder, 'manifest.json'), 65536);
+  const referenceManifestBytes = await read(path.join(setFolder, 'manifest.json'), 65536), manifest = decode(referenceManifestBytes);
   if (!Array.isArray(manifest.references) || manifest.references.length < 1 || manifest.references.length > REFERENCE_LIMITS.images) fail('Bounded original joint reference manifest required');
   const expectedNames = ['manifest.json', ...manifest.references.map((_, i) => `image-${i}.png`)];
   const referenceEntries = await fs.readdir(setFolder);
@@ -105,7 +122,6 @@ export async function readReferenceWorldPatchPreparationSource({dataDir, context
   }
   // The joint preparation redecodes these exact bytes and checks the complete
   // canonical manifest, IDs, quotas, annotations and selected set/owner hash.
-  if (record.expiresAt <= Date.now()) fail('Joint original context expired during source reading');
-  const {ownerId, ...publicRecord} = record;
-  return {saved: {record: publicRecord, snapshot, summary}, reference: {manifest, images}};
+  if (saved.record.expiresAt <= Date.now()) fail('Joint original context expired during source reading');
+  return {saved, reference: {manifest, images}, contextFiles, referenceManifestBytes};
 }

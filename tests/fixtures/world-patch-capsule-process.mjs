@@ -7,6 +7,9 @@ import {freezeSavedWorldPatchTask} from '../../bridge/world-patch-task-capsule.m
 // fault switch and not a mocked provider. Terminating this worker must leave
 // the original unknown claim and partial files without adopting them.
 const originalOpen = fs.open;
+// A pending Promise alone can let a worker exit naturally. Keep the fixture
+// alive so the crash test proves explicit termination of the publisher.
+parentPort.on('message', () => {});
 fs.open = async function (target, ...args) {
   if (path.basename(target) === 'manifest.json' && args[0] === 'wx') {
     parentPort.postMessage({state: 'before-original-commit', capsuleDirectory: path.dirname(target)});
