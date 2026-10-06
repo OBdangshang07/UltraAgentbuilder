@@ -64,8 +64,9 @@ Its state remains `frozen-not-sent`, with `maximumCalls=1`, and all of
 `canAuthorizePlacement` and both transferable-consent flags are false.
 Private archive reads must not be exposed as HTTP responses.
 
-Production still needs a separately versioned joint SEND fingerprint, fresh
-capability checks, consume-once consent/invocation and unknown-result handling,
+The follow-up [joint SEND binding](reference-world-patch-send-bindings.md) adds
+private exact-input and invocation-fingerprint preparation, not dispatch.
+Production still needs fresh capability checks, consume-once consent/invocation and unknown-result handling,
 exact-picture transport, compiled-patch provenance and player UI. Then a real
 closed joint task must pass difference preview, fresh server BEFORE checks,
 separate world-write confirmation, protected undo and saved-world audit in the

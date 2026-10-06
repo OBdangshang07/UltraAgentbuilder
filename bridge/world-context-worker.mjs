@@ -50,7 +50,7 @@ for (const part of path.relative(ancestor, requestedParent).split(path.sep).filt
 const canonicalParent = await fs.realpath(requestedParent), root = path.join(canonicalParent, path.basename(requestedRoot));
 await directory(canonicalParent);
 let owner;
-if (operation !== 'reference-patch-frozen-task') {
+if (!['reference-patch-frozen-task','reference-patch-send-input','reference-patch-original-input'].includes(operation)) {
   await directory(root, !jointPreparation);
   try { owner = await json(path.join(root, '_store.json'), 1024); }
   catch (e) { if (e.code !== 'ENOENT' || jointPreparation) throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
@@ -121,6 +121,13 @@ async function run() {
   if (operation === 'reference-patch-frozen-task') {
     const {readFrozenReferenceWorldPatchTaskCapsule} = await import('./reference-world-patch-task-capsule.mjs');
     return readFrozenReferenceWorldPatchTaskCapsule({dataDir: canonicalParent, capsuleId: id});
+  }
+  if (['reference-patch-send-input','reference-patch-original-input'].includes(operation)) {
+    const bytes = Buffer.from(payload); if (!bytes.length || bytes.length > 4096) fail('Joint SEND binding quota exceeded', 413);
+    const send = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+    const {prepareFrozenReferenceWorldPatchSendInput} = await import('./reference-world-patch-send-input.mjs');
+    return prepareFrozenReferenceWorldPatchSendInput({dataDir: canonicalParent, capsuleId: id, send,
+      originalReceiptOnly: operation === 'reference-patch-original-input'});
   }
   if (operation === 'reference-patch-freeze-task') {
     const bytes = Buffer.from(payload); if (!bytes.length || bytes.length > 32768) fail('Joint freeze binding quota exceeded', 413);
