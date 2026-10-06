@@ -50,7 +50,7 @@ for (const part of path.relative(ancestor, requestedParent).split(path.sep).filt
 const canonicalParent = await fs.realpath(requestedParent), root = path.join(canonicalParent, path.basename(requestedRoot));
 await directory(canonicalParent);
 let owner;
-if (!['reference-patch-frozen-task','reference-patch-send-input','reference-patch-original-input'].includes(operation)) {
+if (!['reference-patch-frozen-task','reference-patch-send-input','reference-patch-original-input','reference-patch-freeze-images','reference-patch-original-images'].includes(operation)) {
   await directory(root, !jointPreparation);
   try { owner = await json(path.join(root, '_store.json'), 1024); }
   catch (e) { if (e.code !== 'ENOENT' || jointPreparation) throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
@@ -128,6 +128,15 @@ async function run() {
     const {prepareFrozenReferenceWorldPatchSendInput} = await import('./reference-world-patch-send-input.mjs');
     return prepareFrozenReferenceWorldPatchSendInput({dataDir: canonicalParent, capsuleId: id, send,
       originalReceiptOnly: operation === 'reference-patch-original-input'});
+  }
+  if (['reference-patch-freeze-images','reference-patch-original-images'].includes(operation)) {
+    // Internal bounded local work only, not an HTTP action or a dispatcher.
+    // Termination preserves unknown claims/partial files; no takeover/retry.
+    const bytes = Buffer.from(payload); if (!bytes.length || bytes.length > 4096) fail('Joint image SEND binding quota exceeded', 413);
+    const send = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+    const {freezeReferenceWorldPatchTaskImages, readReferenceWorldPatchTaskImages} = await import('./reference-world-patch-task-images.mjs');
+    const input = {dataDir: canonicalParent, capsuleId: id, send};
+    return operation === 'reference-patch-freeze-images' ? freezeReferenceWorldPatchTaskImages(input) : readReferenceWorldPatchTaskImages(input);
   }
   if (operation === 'reference-patch-freeze-task') {
     const bytes = Buffer.from(payload); if (!bytes.length || bytes.length > 32768) fail('Joint freeze binding quota exceeded', 413);
