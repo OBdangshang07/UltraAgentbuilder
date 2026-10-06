@@ -10,7 +10,7 @@ import {inspectAssemblyPrototypes} from './assembly-prototypes.mjs';
 import {assemblyCapacity,readAssemblyBaseline} from '../src/design/assembly-scope.mjs';
 import {inspectCheckpoint} from './scene-checkpoints.mjs';
 import {sourceIdentityGuidance,SOURCE_IDENTITY_RULES} from '../contracts/scene-source-identity-guidance.mjs';
-import {prototypeSurfaceGuidance,BLUEPRINT_SURFACE_RULES,ROLE_SURFACE_RULES} from '../contracts/scene-prototype-surface-guidance.mjs';
+import {prototypeSurfaceGuidance,BLUEPRINT_SURFACE_RULES,ROLE_SURFACE_RULES,BLUEPRINT_FACADE_SURFACE_RULES,ROLE_FACADE_SURFACE_RULES} from '../contracts/scene-prototype-surface-guidance.mjs';
 import {stagedDesignAllocationEnabled} from '../contracts/scene-design-allocation.mjs';
 import {inspectPrototypeRoleAllocation,PROTOTYPE_ALLOCATION_POLICY,PROTOTYPE_ALLOCATION_RULES} from './assembly-design-allocation.mjs';
 import {expandedPrototypeRoutesEnabled,PROTOTYPE_SEED_SCOPE_INSPECTION,EXPANDED_PROTOTYPE_ROUTE_RULES} from '../contracts/assembly-prototype-validation.mjs';
@@ -149,7 +149,7 @@ export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,
   if(!callBudget.canStart)throw Error('Unfunded decomposition blueprint; no complete-task work omitted');
   const result=await stage(attempt?'correct-blueprint':'assembly-blueprint',null,{description:prompt,tier,selectedConcept,sourceHash:hash(selected.scene),callBudget,prior,
    minimumHeight:policy.minimumHeight,maximumBounds:policy.maximumBounds,decompositionBudget:decompositionTailBudget(tier,records,6+callBudget.maximumPackages),decompositionStageId:'blueprint'},
-   DECOMPOSED_BLUEPRINT_RULES+'\n'+BLUEPRINT_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+'\nCORRECTION: if prior is supplied, it is a rejected delta. Return a corrected delta against the SAME selected source, preserving already-valid structural work, not a new full scene. Every required task, function and selected massing anchor must remain.',
+   DECOMPOSED_BLUEPRINT_RULES+'\n'+BLUEPRINT_SURFACE_RULES+'\n'+BLUEPRINT_FACADE_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+'\nCORRECTION: if prior is supplied, it is a rejected delta. Return a corrected delta against the SAME selected source, preserving already-valid structural work, not a new full scene. Every required task, function and selected massing anchor must remain.',
    assemblyBlueprintStageSchema(selected,tier,callBudget),async(response,dir)=>{
     if(response?.sourceHash!==hash(selected.scene)||response?.sceneEdit?.sourceHash!==hash(selected.scene))throw Error('Stale selected blueprint identity');
     let candidate;try{candidate=applyAssemblyBlueprint(selected,response,{...tier,maxPackages:callBudget.maximumPackages});}catch(error){return failure(error);}
@@ -182,7 +182,7 @@ export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,
     capacity:assemblyCapacity(state.plan,state.plan.scene,[],task),feedback:checked.feedback,decompositionBudget:budget,prototypeCorrectionBudget:correctionBudget,decompositionStageId:role,
     sourceIdentityPolicy:sourceIdentityGuidance(task,prior),prototypeSurfacePolicy:prototypeSurfaceGuidance(state.plan.scene,task),
     ...(allocationEnabled?{prototypeAllocationPolicy:structuredClone(PROTOTYPE_ALLOCATION_POLICY)}:{})},
-    DECOMPOSED_ROLE_RULES+'\n'+SOURCE_IDENTITY_RULES+'\n'+ROLE_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+(expandedRoutes?'\n'+EXPANDED_PROTOTYPE_ROUTE_RULES:'')+'\nCORRECTION: prior is an unapproved role delta. Fix every reported source/geometry/expansion issue against the SAME original state. No failed seed or partial model text is adopted; preserve valid work within this role and do not modify another role.',
+    DECOMPOSED_ROLE_RULES+'\n'+SOURCE_IDENTITY_RULES+'\n'+ROLE_SURFACE_RULES+'\n'+ROLE_FACADE_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+(expandedRoutes?'\n'+EXPANDED_PROTOTYPE_ROUTE_RULES:'')+'\nCORRECTION: prior is an unapproved role delta. Fix every reported source/geometry/expansion issue against the SAME original state. No failed seed or partial model text is adopted; preserve valid work within this role and do not modify another role.',
     prototypeRoleStageSchema(state,role),async(response,dir)=>{
      if(response?.planHash!==hash(state.plan)||response?.programHash!==decomposedProgramHash(state)||response?.edit?.sourceHash!==hash(state.plan.scene))throw Error('Stale prototype role identity');
      let candidate;try{candidate=applyPrototypeRoleEdit(state,response,tier);}catch(error){return failure(error);}

@@ -250,10 +250,13 @@ test('model-facing correction receives exact duplicate indices and naming budget
 test('actual staged dispatcher supplies floor responsibility instructions and source-bound surface disclosure',async()=>{
  const h=await setupStaged();const result=await runSceneAssembly(h.options);
  const blueprint=h.calls.find(c=>c.phase==='assembly-blueprint');assert.match(blueprint.instructions,/INTERIOR SURFACE RESPONSIBILITIES BEFORE FREEZE/);
+ assert.match(blueprint.instructions,/FACADE SURFACE RESPONSIBILITIES BEFORE FREEZE/);
  const roles=h.calls.filter(c=>c.phase==='prototype-role');assert.equal(roles.length,4);
  for(const call of roles){
   assert.match(call.instructions,/READ prototypeSurfacePolicy BEFORE CONSTRUCTING ROOMS/);
+  assert.match(call.instructions,/READ prototypeSurfacePolicy.hostedFacadeSources BEFORE EDITING A FACADE/);
   const data=call.input.prototypeSurfacePolicy;assert.equal(data.sourceHash,call.input.sourceHash);assert.equal(data.task,call.input.task.id);
+  assert.equal(data.version,2);assert.ok(Array.isArray(data.hostedFacadeSources));
   assert.equal(data.sourceDeclarationsOnly,true);assert.equal(data.actualOwnersMustBeInspected,true);
   assert.equal(data.automaticOwnershipTransfer,false);assert.equal(data.authorityExpanded,false);assert.equal(data.canAuthorizePlacement,false);
   assert.ok(data.surfaceSources.some(v=>v.id==='main'&&!v.taskOwnsSource));
