@@ -8,7 +8,8 @@ import {inspectDesignAllocation,designAllocationFreeze,inspectPrototypeRoleAlloc
 import {decompositionBlueprintBudget,createDecompositionSchedule,PROTOTYPE_ROLES,decompositionConfiguration} from './assembly-decomposition-budget.mjs';
 import {inspectDecomposedRepresentatives,decompositionTailBudget,decompositionRoleCorrectionBudget} from './assembly-decomposed-stages.mjs';
 import {readAssemblyPrototypeCandidate} from './assembly-prototypes.mjs';
-import {readAssemblyBaseline,checkPackageGeometry} from '../src/design/assembly-scope.mjs';
+import {readAssemblyBaseline,checkPackageGeometry,checkPackageCellScope} from '../src/design/assembly-scope.mjs';
+import {expandedPrototypeRoutesEnabled} from '../contracts/assembly-prototype-validation.mjs';
 import {isAssemblyProviderRecoveryAudit} from './assembly-provider-recovery-audit.mjs';
 
 const read=async file=>JSON.parse(await fs.readFile(file,'utf8'));
@@ -60,7 +61,7 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
     const task=state.plan.packages.find(p=>p.id===state.roles[state.completedRoles.length].task);
     requiredAfterCall=(3-state.completedRoles.length)+state.plan.packages.length+2;
     if(hash(task)!==hash(input.task)||hash(state.plan.scene)!==hash(input.previousDraft))throw Error('Decomposed role changed its authority baseline');
-    if([3,4,5].includes(input.tier.prototypes.version)){
+    if([3,4,5,6].includes(input.tier.prototypes.version)){
      let primaryAttempts=0;
      for(let index=1;index<preparedIndex;index++){
       const previous=providerRecoveryAudit?providerRecoveryAudit.inputAt(index):await read(path.join(assemblyRoot,String(index),'input.json'));
@@ -87,7 +88,8 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
      const prototype=recipes.length?await readAssemblyPrototypeCandidate({directory:path.join(dir,'prototype'),plan:candidate.plan,recipes,seedFeedback:feedback}):null;
      const diagnostic=path.join(dir,'diagnostic'),seed=await readAssemblyBaseline(diagnostic,feedback.diagnosticAssetHash);
      const base=await readAssemblyBaseline(previousDiagnostic,previousFeedback.diagnosticAssetHash);
-     if(feedback.geometryPassed!==true||hash(checkPackageGeometry(base,seed,input.task,previousFeedback,feedback))!==hash(feedback.packageCheck))throw Error('Decomposed seed scope differs from saved authority');
+     const checked=expandedPrototypeRoutesEnabled(input.tier)&&recipes.length?checkPackageCellScope(base,seed,input.task):checkPackageGeometry(base,seed,input.task,previousFeedback,feedback);
+     if(feedback.geometryPassed!==true||hash(checked)!==hash(feedback.packageCheck))throw Error('Decomposed seed scope differs from saved authority');
      if(prototype){
       const prior=previousExpanded??{diagnostic:previousDiagnostic,feedback:previousFeedback};
       const expandedBase=await readAssemblyBaseline(prior.diagnostic,prior.feedback.diagnosticAssetHash),expanded=await readAssemblyBaseline(prototype.diagnostic,prototype.feedback.diagnosticAssetHash);
@@ -115,9 +117,9 @@ export function createDecomposedAudit(assemblyRoot,{providerRecoveryAudit=null}=
     const witness=await inspectDecomposedRepresentatives(candidate,diagnostic,feedback);
     if(hash(witness)!==hash(await read(path.join(dir,'representative-witness.json'))))throw Error('Decomposed representative witness differs from saved cells/owners');
     const seed=await readAssemblyBaseline(diagnostic,feedback.diagnosticAssetHash),base=await readAssemblyBaseline(previousDiagnostic,previousFeedback.diagnosticAssetHash);
-    const checked=checkPackageGeometry(base,seed,input.task,previousFeedback,feedback);
-    if(hash(checked)!==hash(feedback.packageCheck))throw Error('Decomposed seed scope differs from saved authority');
     recipes=PROTOTYPE_ROLES.flatMap(role=>candidate.recipesByRole[role]??[]);
+    const checked=expandedPrototypeRoutesEnabled(input.tier)&&recipes.length?checkPackageCellScope(base,seed,input.task):checkPackageGeometry(base,seed,input.task,previousFeedback,feedback);
+    if(hash(checked)!==hash(feedback.packageCheck))throw Error('Decomposed seed scope differs from saved authority');
     if(recipes.length){
      prototype=await readAssemblyPrototypeCandidate({directory:path.join(dir,'prototype'),plan:candidate.plan,recipes,seedFeedback:feedback});
      const prior=previousExpanded??{diagnostic:previousDiagnostic,feedback:previousFeedback};

@@ -1,6 +1,7 @@
 import {hash} from '../src/generation/compiler.mjs';
 import {validateAssemblyPlan,assemblyPlanSchema} from './scene-assembly.schema.mjs';
 import {checkDecomposedResponsibilities} from './scene-decomposed-prototypes.mjs';
+import {expandedPrototypeRoutesEnabled} from './assembly-prototype-validation.mjs';
 
 export const DESIGN_ALLOCATION_POLICY=Object.freeze({version:1,mode:'pre-freeze-purpose-regions'});
 export const DESIGN_FEATURE_IDENTITY_RULES='REQUIRED FEATURE IDENTITIES: copy every prior scene.featureBindings[].feature string verbatim. These strings are stable required-feature keys, not prose labels to improve or paraphrase. Keep each original key even when you deliberately update its implementation components. New descriptive wording belongs in the design brief, not a replacement identity. required-feature-identity feedback gives exact missing keys and the edited field path. Do not delete a required feature, weaken its implementation or invent a substitute merely to satisfy the key check; full geometry, allocation and visual review remain required. No automatic renaming or acceptance occurs.';
@@ -14,8 +15,9 @@ export function designWorkspaceCapacity(plan){
 }
 export function stagedDesignAllocationEnabled(tier){
  const p=tier.prototypes;
+ if(p?.version===6)expandedPrototypeRoutesEnabled(tier);
  if(p?.mode!=='staged')return false;
- if(p.version!==5){if(p.designAllocation!==undefined)throw Error('Legacy staged policy cannot acquire design allocation authority');return false;}
+ if(![5,6].includes(p.version)){if(p.designAllocation!==undefined)throw Error('Legacy staged policy cannot acquire design allocation authority');return false;}
  if(hash(p.designAllocation??null)!==hash(DESIGN_ALLOCATION_POLICY))throw Error('Invalid staged design allocation policy');
  return true;
 }

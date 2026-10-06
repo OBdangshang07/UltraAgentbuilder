@@ -13,6 +13,7 @@ import {sourceIdentityGuidance,SOURCE_IDENTITY_RULES} from '../contracts/scene-s
 import {prototypeSurfaceGuidance,BLUEPRINT_SURFACE_RULES,ROLE_SURFACE_RULES} from '../contracts/scene-prototype-surface-guidance.mjs';
 import {stagedDesignAllocationEnabled} from '../contracts/scene-design-allocation.mjs';
 import {inspectPrototypeRoleAllocation,PROTOTYPE_ALLOCATION_POLICY,PROTOTYPE_ALLOCATION_RULES} from './assembly-design-allocation.mjs';
+import {expandedPrototypeRoutesEnabled,PROTOTYPE_SEED_SCOPE_INSPECTION,EXPANDED_PROTOTYPE_ROUTE_RULES} from '../contracts/assembly-prototype-validation.mjs';
 
 const write=(directory,name,value)=>fs.writeFile(path.join(directory,name),JSON.stringify(value,null,2),{flag:'wx'});
 const failure=error=>({accepted:false,error:error.message,feedback:{geometryPassed:false,canAuthorizePlacement:false,
@@ -31,7 +32,7 @@ export function decompositionRoleCorrectionBudget(tier,records,{roleIndex,packag
   !Number.isSafeInteger(correction)||correction<0||!Number.isSafeInteger(tier.maximumCalls)||tier.maximumCalls>26||
   !Number.isSafeInteger(tier.maximumComponentCorrections)||tier.maximumComponentCorrections<0||records.length>tier.maximumCalls)throw Error('Invalid prototype correction progress');
  const extension=correction>tier.maximumComponentCorrections,p=tier.prototypes;
- const throughReview=[4,5].includes(p?.version)&&p.roleCorrections?.version===2&&p.roleCorrections.mode==='tail-funded-through-review'
+ const throughReview=[4,5,6].includes(p?.version)&&p.roleCorrections?.version===2&&p.roleCorrections.mode==='tail-funded-through-review'
   &&p.roleCorrections.reservedTailCorrections===2&&tier.recovery?.mode==='safe';
  const extended=throughReview||p?.version===3&&p.roleCorrections?.version===1&&p.roleCorrections.mode==='tail-funded'&&p.roleCorrections.reservedTailCorrections===2&&tier.recovery?.mode==='safe';
  const remaining=tier.maximumCalls-records.length,requiredAfterCall=3-roleIndex+packageCount+2;
@@ -141,6 +142,7 @@ export async function inspectDecomposedRepresentatives(state,directory,feedback)
 export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,policy,signal,stage,records,inspect=inspectCheckpoint,capacityProgress}){
  const tier=policy.assembly,config=configuration(tier),selected=selectedConcept.selected;
  const allocationEnabled=stagedDesignAllocationEnabled(tier);
+ const expandedRoutes=expandedPrototypeRoutesEnabled(tier);
  let state,checked,stageDirectory,blueprintStage,prior=null;
  for(let attempt=0;attempt<=tier.maximumPlanCorrections;attempt++){
   const callBudget=decompositionBlueprintBudget(config,{reservedCalls:records.length,completedCandidates:config.candidateCount,selectionAccepted:true,...decompositionPreludeProgress(tier,records,capacityProgress)});
@@ -180,12 +182,14 @@ export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,
     capacity:assemblyCapacity(state.plan,state.plan.scene,[],task),feedback:checked.feedback,decompositionBudget:budget,prototypeCorrectionBudget:correctionBudget,decompositionStageId:role,
     sourceIdentityPolicy:sourceIdentityGuidance(task,prior),prototypeSurfacePolicy:prototypeSurfaceGuidance(state.plan.scene,task),
     ...(allocationEnabled?{prototypeAllocationPolicy:structuredClone(PROTOTYPE_ALLOCATION_POLICY)}:{})},
-    DECOMPOSED_ROLE_RULES+'\n'+SOURCE_IDENTITY_RULES+'\n'+ROLE_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+'\nCORRECTION: prior is an unapproved role delta. Fix every reported source/geometry/expansion issue against the SAME original state. No failed seed or partial model text is adopted; preserve valid work within this role and do not modify another role.',
+    DECOMPOSED_ROLE_RULES+'\n'+SOURCE_IDENTITY_RULES+'\n'+ROLE_SURFACE_RULES+(allocationEnabled?'\n'+PROTOTYPE_ALLOCATION_RULES:'')+(expandedRoutes?'\n'+EXPANDED_PROTOTYPE_ROUTE_RULES:'')+'\nCORRECTION: prior is an unapproved role delta. Fix every reported source/geometry/expansion issue against the SAME original state. No failed seed or partial model text is adopted; preserve valid work within this role and do not modify another role.',
     prototypeRoleStageSchema(state,role),async(response,dir)=>{
      if(response?.planHash!==hash(state.plan)||response?.programHash!==decomposedProgramHash(state)||response?.edit?.sourceHash!==hash(state.plan.scene))throw Error('Stale prototype role identity');
      let candidate;try{candidate=applyPrototypeRoleEdit(state,response,tier);}catch(error){return failure(error);}
      await write(dir,'decomposition-state.json',candidate);await write(dir,'plan.json',candidate.plan);await write(dir,'changes.json',candidate.changes);await write(dir,'scene.json',candidate.plan.scene);
-     const assembly={baselineDirectory:checked.diagnostic,baseAssetHash:checked.feedback.diagnosticAssetHash,task,previousFeedback:checked.feedback};
+     const recipes=PROTOTYPE_ROLES.flatMap(r=>candidate.recipesByRole[r]??[]);
+     const assembly={baselineDirectory:checked.diagnostic,baseAssetHash:checked.feedback.diagnosticAssetHash,task,previousFeedback:checked.feedback,
+      ...(expandedRoutes&&recipes.length?{inspection:PROTOTYPE_SEED_SCOPE_INSPECTION}:{})};
      const diagnostic=path.join(dir,'diagnostic'),feedback=await inspect(candidate.plan.scene,policy,diagnostic,signal,assembly);
      if(feedback.sourceHash!==hash(candidate.plan.scene)||feedback.canAuthorizePlacement!==false)throw Error('Prototype role inspection identity mismatch');
      await write(dir,'feedback.json',feedback);
@@ -193,7 +197,6 @@ export async function runDecomposedPrototypeStages({root,prompt,selectedConcept,
      if(!report.accepted)return {...report,state:candidate,plan:candidate.plan};
      let witness;try{witness=await inspectDecomposedRepresentatives(candidate,diagnostic,feedback);}catch(error){return {...report,...failure(error),state:candidate,plan:candidate.plan};}
      await write(dir,'representative-witness.json',witness);
-     const recipes=PROTOTYPE_ROLES.flatMap(r=>candidate.recipesByRole[r]??[]);
      if(recipes.length){
       // Compare the NEW full expansion to the prior full expansion, not the
       // seed-only baseline: prior roles' repeated owners remain protected.

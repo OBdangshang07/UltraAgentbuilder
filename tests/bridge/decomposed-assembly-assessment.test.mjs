@@ -6,11 +6,11 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn} from 'node:child_process';
 import {hash} from '../../src/generation/compiler.mjs';
 import {freezeSceneRuntime} from '../../scripts/scene-runtime-snapshot.mjs';
-import {setupLegacyStaged,setupStaged} from './decomposed-assembly-fixtures.mjs';
+import {setupLegacyStaged,setupStaged,stagedRequest} from './decomposed-assembly-fixtures.mjs';
 import {planEdit} from '../design/assembly-fixtures.mjs';
 import {shape} from '../design/fixtures.mjs';
 
-for(const profile of ['legacy-v3','review-funded-v4','allocation-v5','allocation-v5-role-correction'])test(profile+' read-only terminal audit reconstructs all independent responses, scoped seed/full owners and role receipts; tampering fails',async()=>{
+for(const profile of ['legacy-v3','review-funded-v4','allocation-v5','allocation-v5-role-correction','expanded-routes-v6'])test(profile+' read-only terminal audit reconstructs all independent responses, scoped seed/full owners and role receipts; tampering fails',async()=>{
  const expectedCalls=profile==='legacy-v3'?19:profile==='allocation-v5'?18:profile==='allocation-v5-role-correction'?17:16;
  let revised=false;
  const change=profile==='allocation-v5'?({answer,input,options})=>{
@@ -27,7 +27,7 @@ for(const profile of ['legacy-v3','review-funded-v4','allocation-v5','allocation
   if(options.stageName==='prototype-role'&&input.role==='entry-podium')answer.representatives[1].components.push('entryContext');
   return answer;
  }:null;
- const h=await (profile==='legacy-v3'?setupLegacyStaged():setupStaged(change,undefined,{legacyV4:profile==='review-funded-v4'})),project=fileURLToPath(new URL('../../',import.meta.url));
+ const h=await (profile==='legacy-v3'?setupLegacyStaged():setupStaged(change,profile==='expanded-routes-v6'?{...stagedRequest,assemblyPrototypeValidation:'expanded-routes-v1'}:undefined,{legacyV4:profile==='review-funded-v4'})),project=fileURLToPath(new URL('../../',import.meta.url));
  const snapshot=await freezeSceneRuntime(project,path.join(h.directory,'runtime')),mod=file=>import(pathToFileURL(path.join(snapshot.runtime,file)));
  const {runSceneAssembly}=await mod('bridge/scene-assembly.mjs'),{compileScene}=await mod('src/design/compiler.mjs');let records=[];
  h.options.onStage=async r=>{records=r;};const startedAt=new Date().toISOString(),result=await runSceneAssembly(h.options);
@@ -63,6 +63,11 @@ for(const profile of ['legacy-v3','review-funded-v4','allocation-v5','allocation
  await tamper('assembly/6/input.json','false-correction-remaining',v=>v.prototypeCorrectionBudget.remaining++,/protected-tail budget mismatch/);
  await tamper('assembly/7/representative-witness.json','fake-surviving-cells',v=>v.roles[0].representatives[0].components[0].solidCells++,/representative witness differs/);
  await tamper('assembly/8/prototype/feedback.json','false-expanded-scope',v=>v.packageCheck.scopeVerified=false,/expanded scope\/proposal mismatch/);
+ if(profile==='expanded-routes-v6'){
+  await tamper('assembly/6/feedback.json','fake-seed-route-pass',v=>v.packageCheck.previouslyCheckedRoutesPreserved=true,/seed scope differs/);
+  await tamper('assembly/8/prototype/feedback.json','fake-expanded-route-pass',v=>v.packageCheck.previouslyCheckedRoutesPreserved=false,/expanded scope\/proposal mismatch/);
+  await tamper('assembly/6/input.json','downgraded-original-policy',v=>{v.tier.prototypes.version=5;delete v.tier.prototypes.validation;},/Decomposed stage changed its original policy/);
+ }
  await tamper('assembly/decomposed-prototypes.json','wrong-role-order',v=>v.roles.reverse(),/aggregate role\/prototype receipt mismatch/);
  await tamper('job.json','false-completeness',v=>v.assemblySummary.decomposition.architecturalCompletenessVerified=true,/Final decomposition summary differs/);
  if(profile==='allocation-v5'){

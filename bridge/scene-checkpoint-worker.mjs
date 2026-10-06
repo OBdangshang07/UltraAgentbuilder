@@ -2,15 +2,18 @@ import {parentPort,workerData} from 'node:worker_threads';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {assessSceneCheckpoint} from '../src/design/checkpoint.mjs';
-import {readAssemblyBaseline,checkPackageGeometry} from '../src/design/assembly-scope.mjs';
+import {readAssemblyBaseline,checkPackageGeometry,checkPackageCellScope} from '../src/design/assembly-scope.mjs';
 import {packageSpatialFeedback} from '../src/design/package-spatial-feedback.mjs';
+import {expandedPrototypeRoutesEnabled,PROTOTYPE_SEED_SCOPE_INSPECTION} from '../contracts/assembly-prototype-validation.mjs';
 
 try{
   const {report,compiled}=assessSceneCheckpoint(workerData.scene,workerData.policy);
   if(workerData.assembly?.baselineDirectory&&compiled){
     const a=workerData.assembly;
+    if(a.inspection!==undefined&&(a.inspection!==PROTOTYPE_SEED_SCOPE_INSPECTION||!expandedPrototypeRoutesEnabled(workerData.policy.assembly)))throw Error('Unauthorized prototype seed inspection');
     const base=await readAssemblyBaseline(a.baselineDirectory,a.baseAssetHash);
-    try{if(report.geometryPassed)report.packageCheck=checkPackageGeometry(base,compiled,a.task,a.previousFeedback,report);}
+    try{if(report.geometryPassed)report.packageCheck=a.inspection===PROTOTYPE_SEED_SCOPE_INSPECTION
+      ?checkPackageCellScope(base,compiled,a.task):checkPackageGeometry(base,compiled,a.task,a.previousFeedback,report);}
     catch(error){report.geometryPassed=false;report.error=error.message;if(error.packageScopeFeedback)report.packageScopeFeedback=error.packageScopeFeedback;if(error.packageNavigationFeedback)report.packageNavigationFeedback=error.packageNavigationFeedback;}
     if(!report.geometryPassed){const evidence=packageSpatialFeedback(base,compiled,a.task,report);if(evidence)report.packageSpatialFeedback=evidence;}
   }

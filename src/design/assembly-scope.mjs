@@ -81,7 +81,9 @@ export async function readAssemblyBaseline(directory,expectedHash){
   if(cells.some(v=>v>=manifest.palette.length)||sourceOwners.some(v=>v>=designSources.traceSources.length))throw new Error('Assembly baseline palette/owner index');
   return {manifest,cells,designSources,sourceOwners};
 }
-export function checkPackageGeometry(base,next,task,previousFeedback,feedback){
+/** Intermediate seed cell/owner scope only. Never asserts preserved routes or
+ * permits final adoption: the caller still owes full expanded package checks. */
+export function checkPackageCellScope(base,next,task){
   if(hash(base.manifest.dimensions)!==hash(next.manifest.dimensions))throw new Error('Package cannot change dimensions');
   const owned=id=>id&&(task.editableComponents.includes(id)||id.startsWith(task.id+'__'));
   const {width:w,length:d}=base.manifest.dimensions;let changedCells=0,firstError=null,conflictCells=0;const conflicts=new Map();
@@ -102,6 +104,10 @@ export function checkPackageGeometry(base,next,task,previousFeedback,feedback){
   }
   if(firstError)throw Object.assign(new Error(firstError),{packageScopeFeedback:{authority:'frozen-package-scope',interpretation:PACKAGE_SCOPE_EVIDENCE,conflictCells,groups:[...conflicts.values()],truncated:[...conflicts.values()].reduce((n,g)=>n+g.cells,0)<conflictCells,canAuthorizePlacement:false,scopeExpanded:false}});
   if(!changedCells)throw new Error('Package made no actual block/material change');
+  return {changedCells,scopeVerified:true,previouslyCheckedRoutesPreserved:false,aestheticImprovementVerified:false};
+}
+export function checkPackageGeometry(base,next,task,previousFeedback,feedback){
+  const scope=checkPackageCellScope(base,next,task);
   // Check conservative evidence that was genuinely established before this
   // edit; never reinterpret an unverified old route as certified.
   const old=previousFeedback.navigationFeedback,now=feedback.navigationFeedback;
@@ -115,5 +121,5 @@ export function checkPackageGeometry(base,next,task,previousFeedback,feedback){
     for(const floor of group.checkedLowerFloors.filter(y=>!group.unverifiedFloors.includes(y)))if(!after?.checkedLowerFloors.includes(floor)||after.unverifiedFloors.includes(floor))throw regression('Package regressed local stair route '+group.component+' floor '+floor,'stair',group,after,{component:group.component,floor});
   }
   if(previousFeedback.quality?.navigation==='verified'&&feedback.quality?.issues.some(i=>i.code!=='partial-block-collision'))throw new Error('Package regressed previously verified navigation');
-  return {changedCells,scopeVerified:true,previouslyCheckedRoutesPreserved:true,aestheticImprovementVerified:false};
+  return {...scope,previouslyCheckedRoutesPreserved:true};
 }
