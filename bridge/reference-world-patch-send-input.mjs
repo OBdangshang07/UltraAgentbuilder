@@ -2,6 +2,7 @@ import {contextHash} from '../src/world/context-snapshot.mjs';
 import {hash} from '../src/generation/compiler.mjs';
 import {worldPatchProposalSchema} from '../contracts/world-patch.mjs';
 import {bindFrozenReferenceWorldPatchSend} from '../contracts/reference-world-patch-send.mjs';
+import {referenceWorldPatchInvocationBinding} from '../contracts/reference-world-patch-invocation.mjs';
 import {readFrozenReferenceWorldPatchTaskSource} from './reference-world-patch-task-capsule.mjs';
 import {assemblyInvocationFingerprint} from './assembly-invocation.mjs';
 
@@ -20,12 +21,7 @@ export async function prepareFrozenReferenceWorldPatchSendInput({dataDir, capsul
     if (actual !== reference.manifest.references[i].sha256) throw Error('Original joint picture fingerprint differs');
     return actual;
   });
-  const referenceInput = {format: 'FrozenReferenceWorldPatchInvocationBinding', version: 1,
-    purpose: 'reference-world-patch-design', capsuleId, manifestHash: receipt.manifestHash,
-    taskHash: receipt.taskHash, requestHash: receipt.requestHash, snapshotHash: receipt.snapshotHash,
-    selectionHash: receipt.selectionHash, referenceOwnerId: receipt.referenceOwnerId,
-    referenceSetHash: receipt.referenceSetHash, runtimeHash: receipt.runtimeHash,
-    imageCapabilityHash: receipt.imageCapabilityHash};
+  const referenceInput = referenceWorldPatchInvocationBinding(receipt);
   const invocationFingerprint = assemblyInvocationFingerprint({prompt: disclosure.modelPrompt, index: 1,
     outputSchema: worldPatchProposalSchema, stageName: 'reference-world-patch-design', stageCount: 1,
     imageHashes, referenceInput});
