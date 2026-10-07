@@ -5,9 +5,10 @@ import {DESIGN_ALLOCATION_POLICY} from '../contracts/scene-design-allocation.mjs
 import {assemblyProviderRecoveryPolicy} from '../contracts/assembly-provider-recovery.mjs';
 import {assemblyEvidencePolicy} from '../contracts/assembly-evidence-policy.mjs';
 import {prototypeValidationPolicy} from '../contracts/assembly-prototype-validation.mjs';
+import {assemblyCompletionReservePolicy} from '../contracts/assembly-completion-reserve.mjs';
 export function qualityTiers(){return structuredClone(catalog.tiers);}
 export function assemblyPreflight(input){
-  const fields=['qualityTier','assemblyCalls','assemblyConfirmed','assemblyDesignReview','assemblyRecovery','assemblyQuality','assemblyPrototypes','assemblyProviderRecovery','assemblyEvidence','assemblyPrototypeValidation'];
+  const fields=['qualityTier','assemblyCalls','assemblyConfirmed','assemblyDesignReview','assemblyRecovery','assemblyQuality','assemblyPrototypes','assemblyProviderRecovery','assemblyEvidence','assemblyPrototypeValidation','assemblyCompletionReserve'];
   if(input.sceneWorkflow!=='components'){
     if(fields.some(k=>input[k]!==undefined))throw new Error('Quality tier fields require explicit component workflow');return null;
   }
@@ -38,6 +39,10 @@ export function assemblyPreflight(input){
   if(input.assemblyPrototypeValidation!==undefined){
     if(input.assemblyPrototypeValidation!=='expanded-routes-v1'||tier.prototypes?.mode!=='staged')throw Error('Expanded-route validation requires an explicit new staged Ultra task');
     tier.prototypes.version=6;tier.prototypes.validation=prototypeValidationPolicy();
+  }
+  if(input.assemblyCompletionReserve!==undefined){
+    if(input.assemblyCompletionReserve!=='design-correction-v1'||tier.prototypes?.mode!=='staged')throw Error('Design-correction reserve requires an explicit new staged Ultra task');
+    tier.completionReserve=assemblyCompletionReservePolicy();
   }
   if(quality!==undefined&&!['v2','v3','v4'].includes(quality))throw new Error('Invalid assembly quality version');
   if(quality&&(!mode||input.assemblyRecovery!=='safe'))throw new Error('Quality v2/v3/v4 requires explicit design review and safe recovery');

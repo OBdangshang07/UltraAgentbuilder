@@ -14,6 +14,7 @@ import {prototypeSurfaceGuidance,BLUEPRINT_SURFACE_RULES,ROLE_SURFACE_RULES,BLUE
 import {stagedDesignAllocationEnabled} from '../contracts/scene-design-allocation.mjs';
 import {inspectPrototypeRoleAllocation,PROTOTYPE_ALLOCATION_POLICY,PROTOTYPE_ALLOCATION_RULES} from './assembly-design-allocation.mjs';
 import {expandedPrototypeRoutesEnabled,PROTOTYPE_SEED_SCOPE_INSPECTION,EXPANDED_PROTOTYPE_ROUTE_RULES} from '../contracts/assembly-prototype-validation.mjs';
+import {stagedDesignCorrectionReserve} from '../contracts/assembly-completion-reserve.mjs';
 
 const write=(directory,name,value)=>fs.writeFile(path.join(directory,name),JSON.stringify(value,null,2),{flag:'wx'});
 const failure=error=>({accepted:false,error:error.message,feedback:{geometryPassed:false,canAuthorizePlacement:false,
@@ -39,7 +40,8 @@ export function decompositionRoleCorrectionBudget(tier,records,{roleIndex,packag
  // Legacy v3 preserves its old exact semantics for independent replay. In v4
  // EVERY subsequent primary/correction retains the two design-review slots;
  // a later role's normal correction cannot spend an earlier extension's tail.
- const reservedTailCorrections=throughReview||extension&&extended?2:0,mandatoryCalls=1+requiredAfterCall+reservedTailCorrections;
+ const designCorrectionReserve=stagedDesignCorrectionReserve(tier);
+ const reservedTailCorrections=throughReview||extension&&extended?2+designCorrectionReserve:0,mandatoryCalls=1+requiredAfterCall+reservedTailCorrections;
  const authorized=!extension||extended,canStart=authorized&&remaining>=mandatoryCalls;
  return {version:1,roleIndex,packageCount,remaining,requiredAfterCall,mandatoryCalls,reservedTailCorrections,extension,correction,canStart,
   stopReason:canStart?null:!authorized?'prototype-correction-limit':'prototype-required-tail-unfunded',canAuthorizePlacement:false};
@@ -49,13 +51,20 @@ export function decompositionRoleCorrectionBudget(tier,records,{roleIndex,packag
 export function decompositionRevisionBudget(tier,records,{round,packageCount,correctionsUsed=0,correcting=false}){
  if(!Number.isSafeInteger(round)||round<0||!Number.isSafeInteger(packageCount)||packageCount<4||
   !Number.isSafeInteger(correctionsUsed)||correctionsUsed<0)throw Error('Invalid staged revision progress');
- const remaining=tier.maximumCalls-records.length,mandatoryCalls=packageCount+3;
+ // A NEW opted-in visual revision must also fund one rejected-edit correction.
+ // Once correcting, the current call spends that reserved slot; it still funds
+ // every package, the new concept review and the final complete-building review.
+ const reservedHeadroom=correcting?0:stagedDesignCorrectionReserve(tier);
+ // Validate an opted-in policy on corrections too, without keeping a spent
+ // correction reserved forever or silently adding another mandatory slot.
+ if(correcting)stagedDesignCorrectionReserve(tier);
+ const remaining=tier.maximumCalls-records.length,mandatoryCalls=packageCount+3+reservedHeadroom;
  const extension=round>=tier.designReview.maximumRevisions;
  const correctionExtension=correcting&&correctionsUsed>=tier.maximumComponentCorrections;
  const authorized=(!extension||tier.designReview.budgetedExtensions===true)&&(!correctionExtension||tier.designReview.budgetedCorrections===true);
  const canStart=authorized&&remaining>=mandatoryCalls,allocation=stagedDesignAllocationEnabled(tier);
  return {version:1,remaining,maximumPackages:packageCount,currentPackageCount:packageCount,mandatoryCalls,
-  minimumReviewCalls:2,reservedHeadroom:0,interfacesFrozen:true,responsibilitiesFrozen:!allocation,...(allocation?{designAllocation:structuredClone(tier.prototypes.designAllocation)}:{}),extension,correctionExtension,
+  minimumReviewCalls:2,reservedHeadroom,interfacesFrozen:true,responsibilitiesFrozen:!allocation,...(allocation?{designAllocation:structuredClone(tier.prototypes.designAllocation)}:{}),extension,correctionExtension,
   correctionsUsed,canStart,stopReason:canStart?null:!authorized?'staged-revision-limit':'staged-required-path-unfunded',canAuthorizePlacement:false};
 }
 const configuration=decompositionConfiguration;

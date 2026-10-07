@@ -4,6 +4,7 @@ import {assemblyCallBudget} from './assembly-budget.mjs';
 import {decompositionBlueprintBudget,decompositionConfiguration} from './assembly-decomposition-budget.mjs';
 import {decompositionTailBudget,decompositionRoleCorrectionBudget} from './assembly-decomposed-stages.mjs';
 import {PROTOTYPE_ROLES} from '../contracts/scene-decomposition-roles.mjs';
+import {stagedDesignCorrectionReserve} from '../contracts/assembly-completion-reserve.mjs';
 
 const check=(ok,label)=>{if(!ok)throw Error('Capacity recovery budget: '+label);};
 const integer=(v,min,max,label)=>{check(Number.isSafeInteger(v)&&v>=min&&v<=max,label);return v;};
@@ -46,6 +47,7 @@ export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,p
     'original completed package progress changed');
   if(input.formatCorrection!==undefined)check(originalFormatCorrectionsUsed===1,'original format correction reservation missing');
   const staged=tier.prototypes?.mode==='staged',design=!!tier.designReview;
+  const designCorrectionReserve=stagedDesignCorrectionReserve(tier);
   integer(originalBudgetCallIndex,1,originalCallIndex,'original prepared budget prefix');
   if(originalBudgetCallIndex!==originalCallIndex)check((!staged||['revise-design','correct-design'].includes(phase))&&input.formatCorrection&&
     Number.isSafeInteger(input.formatCorrection.stage)&&input.formatCorrection.stage>=originalBudgetCallIndex&&
@@ -147,6 +149,8 @@ export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,p
     check(input.callBudget.minimumReviewCalls===(design?2:1),'original plan/revision review path changed');
     pendingFirstConstruction=protectedPackageCeiling;
     requiredAfterCall=protectedPackageCeiling+(design?2:1);
+    if(staged&&designCorrectionReserve)check(input.callBudget.reservedHeadroom===(phase==='revise-design'?designCorrectionReserve:0),
+      'original staged design-correction reserve changed');
   }else if(['concept-review','correct-concept-review'].includes(phase)){
     noConstruction();check(design,'original unapproved design packages required');
     protectedPackageCeiling=fullPackageScope();pendingFirstConstruction=packageIds.length;
@@ -181,7 +185,7 @@ export function assemblyProviderRecoveryBudget({tier,phase,input,reservedCalls,p
     reviewCorrection:phase==='correct-review'?0:1,formatCorrection:(tier.maximumFormatCorrections??0)-formatCorrectionsUsed};
   const reservedHeadroom=Object.values(reserve).reduce((a,b)=>a+b,0);
   const protectedRoleHeadroom=input.prototypeCorrectionBudget?.reservedTailCorrections??0;
-  integer(protectedRoleHeadroom,0,2,'original role corrective tail');
+  integer(protectedRoleHeadroom,0,2+designCorrectionReserve,'original role corrective tail');
   const protectedHeadroom=Math.max(reservedHeadroom,protectedRoleHeadroom);
   const remaining=tier.maximumCalls-reservedCalls,mandatoryCalls=1+requiredAfterCall+protectedHeadroom;
   const canStart=providerRetriesUsed<recovery.maximumRetries&&remaining>=mandatoryCalls;

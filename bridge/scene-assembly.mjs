@@ -39,6 +39,7 @@ import {prepareAssemblyReferenceAnalysis,runAssemblyReferenceAnalysis,REFERENCE_
 import {isAssemblyProviderRecovery,stripAssemblyProviderRecovery} from './assembly-provider-recovery.mjs';
 import {representativeEvidenceEnabled} from '../contracts/assembly-evidence-policy.mjs';
 import {createAssemblyCameraBasis,verifyAssemblyCameraBasis} from './assembly-camera-evidence.mjs';
+import {stagedDesignCorrectionReserve} from '../contracts/assembly-completion-reserve.mjs';
 
 const PLAN=`Return a SceneAssemblyPlan: an original whole-building design intent, a complete full-height SceneSpec spatial skeleton and an adaptive list of 2..maxPackages design work packages. Do NOT return a finished building yet or shrink the requested scale. The skeleton contains real floor elevations, continuous core/stairs, entry and interfaces, not placeholders named after missing geometry. Every package must have meaningful visible detail work remaining. Choose architectural composition and material language before decomposition; no stock building template. Use fewer packages when appropriate, not arbitrary padding. Higher tiers separate more genuinely distinct tasks: functional zones, representative modules, special floors, facade corners/joints and landscape as relevant to the requested building. Typical storeys and repeated furniture use validated reusable modules, not one model call per storey/object.
 Each package has stable id (<=12 chars), purpose, dependencies, bounded WORLD regions and exclusive editableComponents from the skeleton. Unassigned initial components are read-only; no two packages may own the same mutable component. interfaces are indices into scene.constraints.passages, which all later edits must preserve. Anchors and local coordinates retain SceneSpec semantics. The task tree is orchestration data; it does not add arbitrary nesting/code to SceneSpec. Reserve actual space and precise ownership for later details, but do not grant blanket overwrite permission. Choose regions with room for intended projections. A package may add namespaced components/modules/material roles id__name and furnish ordinary mass/room air; it may not erase another package's solids, explicit voids or reservations. Plan valid shared boundaries and access before furnishing. All required interior/walkable functionality remains true. No images were supplied.`;
@@ -70,6 +71,7 @@ export async function runSceneAssembly({directory,responseDirectory=directory,pr
   const designFirst=!!tier.designReview,designReserve=designFirst?1:0;let conceptReview=restored?.conceptReview??null,lastVisualReview=null;
   const qualityV2=[2,3,4].includes(tier.quality?.version),qualityV3=[3,4].includes(tier.quality?.version),qualityV4=tier.quality?.version===4;
   const decomposedPrototypes=tier.prototypes?.mode==='staged';
+  const completionDesignReserve=stagedDesignCorrectionReserve(tier);
   const representativeCameras=representativeEvidenceEnabled(tier);
   const designAllocationEnabled=stagedDesignAllocationEnabled(tier);let designAllocationReceipt=null,allocationFreeze=null;
   const verifiedPrototypes=['verified','staged'].includes(tier.prototypes?.mode);let prototype=null,prototypeRecipes=null,prototypeTransition=null,decomposition=null;
@@ -120,6 +122,10 @@ export async function runSceneAssembly({directory,responseDirectory=directory,pr
     // and the funded tail. They do not increment geometric/format corrections.
     for(;;){
     signal.throwIfAborted();if(records.length>=tier.maximumCalls)throw Error('Assembly model-call budget exhausted');
+    if(completionDesignReserve&&['revise-design','correct-design'].includes(phase)){
+      const tail=input.callBudget.maximumPackages+2+(phase==='revise-design'?completionDesignReserve:0);
+      if(records.length+1+tail>tier.maximumCalls)throw Error('Design serialization/recovery would consume the protected complete-task tail');
+    }
     const index=records.length+1,dir=path.join(root,String(index));await fs.mkdir(dir,{recursive:false});await write(dir,'input.json',input);
     // Preserve the full, canonical recovery context. The model's compact view
     // is separate evidence; resume must not compare it to raw compiler reports.
@@ -179,7 +185,8 @@ export async function runSceneAssembly({directory,responseDirectory=directory,pr
       }
       // Never retry an uncertain/provider/truncated response. This is one
       // distinct, durably reserved correction inside the confirmed task budget.
-      const remaining=(input.decompositionBudget?.requiredAfterCall??(input.refinement?1:['concepts','correct-concepts'].includes(phase)?6:phase==='select-concept'?5:['plan','correct-plan','repair-plan'].includes(phase)?2+1+designReserve:['concept-review','correct-concept-review'].includes(phase)?ordered.length+1:['revise-design','correct-design'].includes(phase)?2+2:['component','correct-component'].includes(phase)?ordered.length-completed.length:0))+(input.prototypeCorrectionBudget?.reservedTailCorrections??0);
+      const designTail=completionDesignReserve&&['revise-design','correct-design'].includes(phase)?input.callBudget.maximumPackages+2+(phase==='revise-design'?completionDesignReserve:0):null;
+      const remaining=(designTail??input.decompositionBudget?.requiredAfterCall??(input.refinement?1:['concepts','correct-concepts'].includes(phase)?6:phase==='select-concept'?5:['plan','correct-plan','repair-plan'].includes(phase)?2+1+designReserve:['concept-review','correct-concept-review'].includes(phase)?ordered.length+1:['revise-design','correct-design'].includes(phase)?2+2:['component','correct-component'].includes(phase)?ordered.length-completed.length:0))+(input.prototypeCorrectionBudget?.reservedTailCorrections??0);
       if(!completedFormat||signal.aborted||formatCorrections>=(tier.maximumFormatCorrections??0)||records.length+1+remaining>tier.maximumCalls||!e?.persisted||!/^(?:deepseek|codex|claude)-response-[\w-]+$/.test(e.directory)||!/^answer-\d+\.txt$/.test(e.file)||typeof error.responseText!=='string'||!error.responseText.trim())throw error;
       const raw=await fs.readFile(path.join(responseDirectory,e.directory,e.file),'utf8');
       if(raw!==error.responseText||hash(raw)!==d.receivedTextSha256||hash(raw)!==error.parseFacts.originalSha256)throw new Error('Completed response evidence identity mismatch; no correction submitted');
