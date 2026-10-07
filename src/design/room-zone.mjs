@@ -32,10 +32,20 @@ export function validateRoomZone(c,host,resolved,origin){
  for(const wall of c.boundaries){
   if(faces.has(wall.face))throw new Error(`${c.id}: duplicate room boundary face`);faces.add(wall.face);
   const span=wall.face==='north'||wall.face==='south'?c.size[0]:c.size[2];
-  if(c.size[0]<3||c.size[2]<3)throw new Error(`${c.id}: partitioned room needs interior width/depth`);
+  if(c.size[0]<3||c.size[2]<3)throw Object.assign(new Error(`${c.id}: partitioned room needs interior width/depth`),{roomZoneFeedback:{
+   rule:'partition-footprint',component:c.id,host:c.host,size:[...c.size],
+   footprint:[c.size[0],c.size[2]],minimumFootprint:[3,3],boundaryFaces:c.boundaries.map(b=>b.face),
+   invalidAxes:[0,2].filter(a=>c.size[a]<3).map(a=>a===0?'X':'Z'),
+   canAuthorizePlacement:false,geometryChanged:false,
+   interpretation:'Any nonempty boundaries list requires BOTH X width and Z depth >=3, including walls and at least one interior cell. This also applies to storeyRoom footprint. These are validity bounds, not a proposed enlargement or permission to remove walls, required rooms or protections. Author an explicit valid layout within the original host and authorized scope.'}});
   const slots=new Set();
   for(const opening of wall.openings){
-   if(opening.u<1||opening.u+opening.width>=span||opening.height<2||opening.height>=c.size[1])throw new Error(`${c.id}: room opening exceeds side/head margins`);
+   if(opening.u<1||opening.u+opening.width>=span||opening.height<2||opening.height>=c.size[1])throw Object.assign(new Error(`${c.id}: room opening exceeds side/head margins`),{roomZoneFeedback:{
+    rule:'boundary-opening-margins',component:c.id,host:c.host,size:[...c.size],face:wall.face,
+    alongAxis:wall.face==='north'||wall.face==='south'?'X':'Z',span,opening:structuredClone(opening),
+    minimumU:1,endExclusive:opening.u+opening.width,maximumEndExclusive:span-1,
+    minimumHeight:2,maximumHeight:c.size[1]-1,canAuthorizePlacement:false,geometryChanged:false,
+    interpretation:'Retain one side cell on each end: u>=1 and u+width<span. Opening height is >=2 and LESS than total room height (including its floor). Redesign the explicit opening or room within the original scope; nothing is clipped, widened or moved.'}});
    if(opening.door!==null&&(opening.width>2||opening.height!==2))throw new Error(`${c.id}: a room door is width 1/2, height 2; use a clear opening for a larger portal`);
    for(let u=opening.u;u<opening.u+opening.width;u++){if(slots.has(u))throw new Error(`${c.id}: overlapping room openings`);slots.add(u);}
   }
