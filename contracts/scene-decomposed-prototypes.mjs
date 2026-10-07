@@ -26,7 +26,7 @@ export const assemblyBlueprintSchema=object({format:choice(['SceneAssemblyBluepr
 assemblyBlueprintSchema.$defs=structuredClone(sceneDraftEditSchema.$defs);
 export const prototypeRoleEditSchema=object({format:choice(['ScenePrototypeRoleEdit']),version:{type:'integer',enum:[1]},
  role:choice(PROTOTYPE_ROLES),task:structuredClone(taskId),planHash:digest,programHash:digest,edit:structuredClone(nestedEdit),
- recipes:array(structuredClone(prototypeExpansionSchema.properties.recipes.items),64),
+ recipes:array(structuredClone(prototypeExpansionSchema.properties.recipes.items),prototypeExpansionSchema.properties.recipes.maxItems),
  representatives:array(object({kind:choice(Object.values(REPRESENTATIVES).flat()),components:array(id,64,1)}),2,2)});
 prototypeRoleEditSchema.$defs=structuredClone(sceneDraftEditSchema.$defs);
 const check=(value,schema)=>{

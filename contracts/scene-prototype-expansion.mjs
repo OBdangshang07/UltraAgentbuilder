@@ -1,5 +1,5 @@
 import {hash} from '../src/generation/compiler.mjs';
-import {validateScene} from './scene-spec.schema.mjs';
+import {sceneSchema,validateScene} from './scene-spec.schema.mjs';
 import {schemaFeedback} from './schema-feedback.mjs';
 
 const object=properties=>({type:'object',additionalProperties:false,required:Object.keys(properties),properties});
@@ -18,7 +18,7 @@ export const prototypeRecipeSchema={anyOf:[
 export const prototypeExpansionSchema=object({
  format:{type:'string',enum:['ScenePrototypeExpansion']},version:integer(1,1),
  seedSourceHash:{type:'string',pattern:'^[a-f0-9]{64}$'},
- recipes:{type:'array',minItems:1,maxItems:64,items:prototypeRecipeSchema}
+ recipes:{type:'array',minItems:1,maxItems:sceneSchema.properties.components.maxItems,items:prototypeRecipeSchema}
 });
 const repeatKinds=new Set(['shape','module','void','roomZone','stairs','pergola','balcony','planter','path']);
 const floorKinds=new Set(['storeyRoom','storeyOpening','storeyFacade']);
@@ -27,7 +27,7 @@ export function prototypeDataError(message,issues){
  const error=Error(message+': '+JSON.stringify(issues).slice(0,6000));
  error.contract={valid:false,issues:issues.slice(0,128),truncated:issues.length>128,checksComplete:true};return error;
 }
-export const PROTOTYPE_EXPANSION_RULES=`Expansion recipes never grant source authority or edit geometry. Choose mode by the ACTUAL seed kind, not by the feature name. repeat: only shape/module/void/roomZone/stairs/pergola/balcony/planter/path; seed.repeat.count=1, count2..256, explicit nonzero step [dx,dy,dz]. storeys: only storeyRoom/storeyOpening/storeyFacade; seed.floors.count=1, count2..64, step EXACTLY [0,0,0]; consecutive source floors and their real ceiling heights determine placement. NEVER use a vertical metre stride for storeys. panelRows: only facade/panelFacade/edgeFacade; seed.count[1]=1, count2..64, step EXACTLY [0,positiveVerticalStride,0]; horizontal rhythm and exclusions remain unchanged. Already replicated components are NOT seeds. Nonrepeated finished features need no recipe. Mass/profileMass cannot use any recipe; their explicit floor schedules are structural source, not prototype repetitions. First/last AND exceptional instances must fit original scene bounds, package regions, host floors, ownership and clearances; nothing is clipped or normalized.`;
+export const PROTOTYPE_EXPANSION_RULES=`Expansion recipes never grant source authority or edit geometry. A complete program may contain at most ${prototypeExpansionSchema.properties.recipes.maxItems} recipes, aligned with the existing scene component capacity, and must fit the unchanged 65536-byte program quota. Each component may be targeted only once. Preserve other roles' recipes; add explicit recipes for previously unexpanded seeds when required, rather than deleting finished details to fit the old 64-recipe ceiling. This is a recipe-list capacity, NOT a floor count or permission to exceed any geometry/work quota. Choose mode by the ACTUAL seed kind, not by the feature name. repeat: only shape/module/void/roomZone/stairs/pergola/balcony/planter/path; seed.repeat.count=1, count2..256, explicit nonzero step [dx,dy,dz]. storeys: only storeyRoom/storeyOpening/storeyFacade; seed.floors.count=1, count2..64, step EXACTLY [0,0,0]; consecutive source floors and their real ceiling heights determine placement. NEVER use a vertical metre stride for storeys. panelRows: only facade/panelFacade/edgeFacade; seed.count[1]=1, count2..64, step EXACTLY [0,positiveVerticalStride,0]; horizontal rhythm and exclusions remain unchanged. Already replicated components are NOT seeds. Nonrepeated finished features need no recipe. Mass/profileMass cannot use any recipe; their explicit floor schedules are structural source, not prototype repetitions. First/last AND exceptional instances must fit original scene bounds, package regions, host floors, ownership and clearances; nothing is clipped or normalized.`;
 
 /** Explicit replication of ONE constructed seed. It cannot change palette,
  * module definitions, anchors, permissions, functions, bounds or source IDs.
