@@ -17,7 +17,9 @@ function serviceRooms(kind){
   return [8,13].map((z,i)=>{
     const common={kind,id:'task4__service'+i,host:'main',allowOverwrite:[],use:'room',
       purpose:'Synthetic service-room correction regression',floorMaterial:'floor',
-      boundaries:[{face:i?'north':'south',material:'wall',openings:[]}]};
+      // Opposite depth walls genuinely occupy every cell at depth=2. A lone
+      // north/south wall leaves one interior cell and is no longer a failure.
+      boundaries:[{face:'north',material:'wall',openings:[]},{face:'south',material:'wall',openings:[]}]};
     return kind==='storeyRoom'?{...common,floors:{source:'main',first:21,count:3},
       offset:[19,z],footprint:[5,2],ceilingInset:0}:
       {...common,at:{relativeTo:'main',anchor:'min',offset:[19,105,z]},

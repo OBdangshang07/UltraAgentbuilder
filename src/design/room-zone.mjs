@@ -31,13 +31,21 @@ export function validateRoomZone(c,host,resolved,origin){
  const faces=new Set();
  for(const wall of c.boundaries){
   if(faces.has(wall.face))throw new Error(`${c.id}: duplicate room boundary face`);faces.add(wall.face);
-  const span=wall.face==='north'||wall.face==='south'?c.size[0]:c.size[2];
-  if(c.size[0]<3||c.size[2]<3)throw Object.assign(new Error(`${c.id}: partitioned room needs interior width/depth`),{roomZoneFeedback:{
+ }
+ // emitRoomZone occupies exactly one cell on each DECLARED side. Omitted
+ // sides emit no wall. Reserve at least one cell between those real planes;
+ // an arbitrary 3x3 minimum wrongly rejects a one-sided/narrow service room.
+ // Openings do not discount a wall: a doorway alone is not a room interior.
+ const minimumFootprint=[1+Number(faces.has('west'))+Number(faces.has('east')),1+Number(faces.has('north'))+Number(faces.has('south'))];
+ if(c.size[0]<minimumFootprint[0]||c.size[2]<minimumFootprint[1])throw Object.assign(new Error(`${c.id}: partitioned room needs interior width/depth`),{roomZoneFeedback:{
    rule:'partition-footprint',component:c.id,host:c.host,size:[...c.size],
-   footprint:[c.size[0],c.size[2]],minimumFootprint:[3,3],boundaryFaces:c.boundaries.map(b=>b.face),
-   invalidAxes:[0,2].filter(a=>c.size[a]<3).map(a=>a===0?'X':'Z'),
+   footprint:[c.size[0],c.size[2]],minimumFootprint,boundaryFaces:[...faces],
+   interiorXZ:{min:[Number(faces.has('west')),Number(faces.has('north'))],endExclusive:[c.size[0]-Number(faces.has('east')),c.size[2]-Number(faces.has('south'))]},
+   invalidAxes:[0,2].filter((a,i)=>c.size[a]<minimumFootprint[i]).map(a=>a===0?'X':'Z'),
    canAuthorizePlacement:false,geometryChanged:false,
-   interpretation:'Any nonempty boundaries list requires BOTH X width and Z depth >=3, including walls and at least one interior cell. This also applies to storeyRoom footprint. These are validity bounds, not a proposed enlargement or permission to remove walls, required rooms or protections. Author an explicit valid layout within the original host and authorized scope.'}});
+   interpretation:'The one-cell declared wall planes must leave at least one room-interior cell on BOTH X and Z axes: width>=1+west+east, depth>=1+north+south. Openings do not discount walls. Omitted sides emit no wall. These validity bounds also apply to storeyRoom; they do not authorize resizing, deleting required partitions or changing host, workspace, floors or protections.'}});
+ for(const wall of c.boundaries){
+  const span=wall.face==='north'||wall.face==='south'?c.size[0]:c.size[2];
   const slots=new Set();
   for(const opening of wall.openings){
    if(opening.u<1||opening.u+opening.width>=span||opening.height<2||opening.height>=c.size[1])throw Object.assign(new Error(`${c.id}: room opening exceeds side/head margins`),{roomZoneFeedback:{

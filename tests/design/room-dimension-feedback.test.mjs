@@ -25,29 +25,31 @@ function details(scene){
  const issue=compact.constructionFeedback.issues.find(i=>i.component==='services');
  return {issue,e:issue.roomZoneFeedback??issue.layoutFeedback?.roomZoneFeedback};
 }
-for(const kind of ['roomZone','storeyRoom'])for(const face of ['north','east','south','west'])
- for(const footprint of [[2,4],[4,2],[1,1]])test(`${kind} ${face} wall retains exact invalid footprint and both-axis requirement ${footprint}`,()=>{
-  const s=fixture(kind,footprint,[wall(face)]),before=hash(s);
+for(const kind of ['roomZone','storeyRoom'])for(const [faces,footprint,minimum] of [
+ [['east','west'],[2,4],[3,1]],[['north','south'],[4,2],[1,3]],
+ [['north','west'],[1,1],[2,2]],[['north','east','south','west'],[2,4],[3,3]]
+])test(`${kind} ${faces.join('/')} retains exact invalid footprint and actual-axis requirement ${footprint}`,()=>{
+  const s=fixture(kind,footprint,faces.map(face=>wall(face))),before=hash(s);
   assert.doesNotThrow(()=>validateScene(s)); // Descriptions do not silently narrow legacy schema.
   assert.throws(()=>compileScene(s),/partitioned room needs interior width\/depth/);
   const {e,issue}=details(s);assert.equal(e.rule,'partition-footprint');assert.deepEqual(e.footprint,footprint);
-  assert.deepEqual(e.minimumFootprint,[3,3]);assert.deepEqual(e.boundaryFaces,[face]);
-  assert.deepEqual(e.invalidAxes,footprint.map((n,a)=>n<3?['X','Z'][a]:null).filter(Boolean));
+  assert.deepEqual(e.minimumFootprint,minimum);assert.deepEqual(e.boundaryFaces,faces);
+  assert.deepEqual(e.invalidAxes,footprint.map((n,a)=>n<minimum[a]?['X','Z'][a]:null).filter(Boolean));
   assert.equal(e.canAuthorizePlacement,false);assert.equal(e.geometryChanged,false);assert.equal(hash(s),before);
   if(kind==='storeyRoom'){assert.equal(issue.layoutFeedback.row,0);assert.equal(issue.layoutFeedback.floorIndex,0);}
- });
+});
 for(const kind of ['roomZone','storeyRoom'])test(`${kind} preserves narrow open zones and requires an explicit partition-layout repair`,()=>{
  for(const use of ['room','circulation']){
   const s=fixture(kind,[2,4],[]);s.components[1].use=use;assert.doesNotThrow(()=>compileScene(s));
  }
- const invalid=fixture(kind,[2,4],[wall('west',[portal()])]),before=hash(invalid);
+ const invalid=fixture(kind,[2,4],[wall('west',[portal()]),wall('east')]),before=hash(invalid);
  assert.throws(()=>compileScene(invalid),/partitioned room/);assert.equal(hash(invalid),before);
  const repaired=structuredClone(invalid);
  if(kind==='storeyRoom')repaired.components[1].footprint=[3,4];else repaired.components[1].size[0]=3;
  const compiled=compileScene(repaired);assert.equal(inspectConstruction(repaired).status,'passed');
  // Successful normal bundles omit diagnosticOnly; failed diagnostic bundles set true.
  assert.equal(compiled.manifest.diagnosticOnly,undefined);assert.equal(hash(invalid),before);
- assert.equal(repaired.components[1].boundaries.length,1);assert.equal(repaired.components[1].boundaries[0].openings.length,1);
+ assert.equal(repaired.components[1].boundaries.length,2);assert.equal(repaired.components[1].boundaries[0].openings.length,1);
 });
 test('a floor-linked opening reports the actual exceptional floor, not a typical copied height',()=>{
  const s=fixture('storeyRoom',[4,4],[wall('north',[portal({height:3})])]);
@@ -70,8 +72,8 @@ for(const kind of ['roomZone','storeyRoom'])for(const [face,opening] of [
 test('schema and prompt expose conditional partitions without changing supported field families',async()=>{
  const branch=kind=>sceneSchema.$defs.component.anyOf.find(s=>s.properties.kind.enum.includes(kind));
  for(const kind of ['roomZone','storeyRoom']){
-  const p=branch(kind).properties;assert.match(p.boundaries.description,/BOTH.*>=3/);
-  assert.match(p[kind==='roomZone'?'size':'footprint'].description,/BOTH.*>=3/);
+  const p=branch(kind).properties;assert.match(p.boundaries.description,/width>=1\+west\+east, depth>=1\+north\+south/);
+  assert.match(p[kind==='roomZone'?'size':'footprint'].description,/width>=1\+west\+east, depth>=1\+north\+south/);
  }
  assert.equal(branch('roomZone').properties.size.items.minimum,1);
  assert.equal(branch('storeyRoom').properties.footprint.items.minimum,1);
