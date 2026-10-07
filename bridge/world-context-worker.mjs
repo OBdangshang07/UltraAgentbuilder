@@ -50,7 +50,7 @@ for (const part of path.relative(ancestor, requestedParent).split(path.sep).filt
 const canonicalParent = await fs.realpath(requestedParent), root = path.join(canonicalParent, path.basename(requestedRoot));
 await directory(canonicalParent);
 let owner;
-if (!['reference-patch-frozen-task','reference-patch-send-input','reference-patch-original-input','reference-patch-freeze-images','reference-patch-original-images'].includes(operation)) {
+if (!['reference-patch-frozen-task','reference-patch-send-input','reference-patch-original-input','reference-patch-freeze-images','reference-patch-original-images','reference-patch-provider-input','reference-patch-provider-recheck'].includes(operation)) {
   await directory(root, !jointPreparation);
   try { owner = await json(path.join(root, '_store.json'), 1024); }
   catch (e) { if (e.code !== 'ENOENT' || jointPreparation) throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
@@ -118,6 +118,18 @@ async function inventory() {
 function publicRecord(record) { const {ownerId, ...result} = record; return result; }
 async function run() {
   const capsuleRoot = path.join(canonicalParent, 'world-patch-tasks');
+  if (['reference-patch-provider-input','reference-patch-provider-recheck'].includes(operation)) {
+    // PRIVATE local preparation, not a provider dispatch. Use the same bounded
+    // lane for source/pixel revalidation; do not initialize a missing store.
+    const bytes = Buffer.from(payload);
+    if (!bytes.length || bytes.length > 4096) fail('Joint provider preparation quota exceeded', 413);
+    const value = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+    const rechecking = operation === 'reference-patch-provider-recheck';
+    exactKeys(value, rechecking ? ['send','selected','preparationHash'] : ['send','selected'], 'private joint provider preparation');
+    const {prepareReferenceWorldPatchProviderInput, recheckReferenceWorldPatchProviderInput} = await import('./reference-world-patch-provider-input.mjs');
+    const input = {dataDir: canonicalParent, capsuleId: id, ...value};
+    return rechecking ? recheckReferenceWorldPatchProviderInput(input) : prepareReferenceWorldPatchProviderInput(input);
+  }
   if (operation === 'reference-patch-frozen-task') {
     const {readFrozenReferenceWorldPatchTaskCapsule} = await import('./reference-world-patch-task-capsule.mjs');
     return readFrozenReferenceWorldPatchTaskCapsule({dataDir: canonicalParent, capsuleId: id});
