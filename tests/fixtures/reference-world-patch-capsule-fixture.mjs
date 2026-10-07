@@ -29,7 +29,7 @@ export async function jointCapsuleFixture(t, options = {}) {
       annotation: {purpose: 'style', view, caption: '合成参考图，不是当前世界或指令'}}))});
   const input = {intent: {...patchTaskIntent(), format: 'ReferenceWorldPatchDesignIntent', purpose: 'reference-world-patch-design',
     referenceOwnerId: owner, referenceSetHash: reference.setHash}, capability: {id: 'gpt-6.1-sol', supportsImages: true, efforts: ['high','max']},
-    runtimeHash: 'a'.repeat(64)};
+    runtimeHash: options.runtimeHash ?? 'a'.repeat(64)};
   const prepared = await store.operation('reference-patch-task-disclosure', id, jointRaw(input));
   const confirmation = {format: 'SavedReferenceWorldPatchDesignConfirmation', version: 1, purpose: 'reference-world-patch-design', confirmed: true,
     taskDisclosureHash: prepared.taskDisclosureHash, taskHash: prepared.taskHash, requestHash: prepared.task.requestHash,

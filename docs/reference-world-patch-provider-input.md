@@ -23,8 +23,9 @@ All model-sent, live-capability, new-call and world-authority fields remain
 false. The selected advertisement is not independent evidence of live provider
 support. Private context-worker preparation is wired as described below;
 there is still no HTTP route or provider dispatch. Future integration requires
-a separately owned joint job,
-consume-once write-ahead reservation, live selected capability checks at actual
+a separately owned joint job (the internal consume-once SEND registry is now
+documented in [reference-world-patch-job-registry.md](reference-world-patch-job-registry.md)),
+write-ahead call reservation, live selected capability checks at actual
 turn start, persistent original-turn/pixel receipt binding, original-response
 compilation, UI disclosure and separate current-world apply/undo/save acceptance.
 
@@ -68,10 +69,11 @@ that targeted result, not an additional count. These local targeted checks do
 not stand in for this source change's complete CI, installed candidate or real
 multimodal/game acceptance.
 
-This step is not a joint SEND implementation. It leaves model-sent,
+This worker step is not a joint model SEND implementation. It leaves model-sent,
 live-provider verification, new-call and world-write authority false. Actual
-integration still requires the owned consume-once reservation and original-turn
-receipt path described above, followed by UI and installed game acceptance.
+integration still requires the new job registry to be wired to the separately
+verified invocation reservation and original-turn receipt path described above,
+followed by UI and installed game acceptance.
 
 ```sh
 node scripts/studio-tests.mjs --test-concurrency=1 --only tests/bridge/reference-world-patch-provider-worker.test.mjs tests/bridge/reference-world-patch-provider-input.test.mjs tests/bridge/reference-world-patch-image-worker.test.mjs tests/bridge/world-context-store.test.mjs
