@@ -16,6 +16,8 @@ UltraAgentbuilder 是一个开发中的 Minecraft Fabric 模组：在游戏中�
 
 功能存在不等于完整验收通过。大型 CBD 外观品质、完整无人值守流程、多图融合质量、部分特殊方块通行和跨环境性能仍需继续验证，详见 [项目状态](docs/STATUS.md)。
 
+最新阶段结果见 [2026 年 10 月 8 日免费流程验收](docs/FREE_FLOW_VERIFICATION_20261008.md)：四项模拟流程与原始证据核验通过，但不代替真实模型生成、光影投影像素可见性或正式发行版验收。
+
 ## 安装与使用
 
 当前目标平台为 Windows x64、Minecraft Java 1.20.1、Fabric Loader 0.16.10 或兼容版本、Fabric API 0.92.5 加 1.20.1。开发构建使用 Java 17、Node.js 22.19.0 和 Gradle 8.12.1。
