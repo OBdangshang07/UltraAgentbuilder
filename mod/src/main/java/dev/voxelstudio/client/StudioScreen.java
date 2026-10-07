@@ -41,6 +41,7 @@ public final class StudioScreen extends Screen {
     private static int assemblyQualityVersion=1;
     private static String assemblyPrototypeMode="off";
     private static boolean assemblyProviderRecovery=false;
+    private static boolean assemblyCompletionReserve=false;
     private static ReferenceImageDraft referenceDraft=new ReferenceImageDraft();
     private static JsonObject designSources;
     private static String designRevision,selectedComponent;
@@ -110,6 +111,7 @@ public final class StudioScreen extends Screen {
         if(assemblyQualityVersion>=3&&(!assemblyImageReview||assemblyCalls<7))throw new IllegalArgumentException("质量 v3 / v4 需要原生图像比较且至少预留 7 次调用；未提交");
         if(assemblyImageReview){if(!supportsVisualReview())throw new IllegalArgumentException("所选模型没有声明图片能力；请选择图像模型，或切换质量旧版 / v2 的文本复核；未提交");req.addProperty("assemblyDesignReview",assemblyQualityVersion>=2?"native":"images");}
         StudioAssembly.configurePrototypes(req,assemblyQualityVersion==4?assemblyPrototypeMode:"off");
+        StudioCompletionReserve.configure(req,assemblyCompletionReserve);
         StudioRepresentativeEvidence.configure(req);
         StudioProviderRecovery.configure(req,assemblyProviderRecovery,efforts());
     }
@@ -134,7 +136,7 @@ public final class StudioScreen extends Screen {
         models=JsonParser.parseString("[{\"id\":\"offline-player-fixture\",\"name\":\"Offline test provider (no account)\",\"efforts\":[\"default\"],\"supportsImages\":true}]").getAsJsonArray();
         if(explicitEffort){selectedEffort="max";models.get(0).getAsJsonObject().add("efforts",JsonParser.parseString("[\"max\"]"));}
         description="离线工程链路测试，不是 AI 设计：32×224×32 格边界，实际高度 224 米的办公塔楼，保留楼梯和通路";
-        generationMode="components";qualityTier=extendedCorrections?"ultra":"lite";assemblyCalls=extendedCorrections?26:8;repairBudget=0;assemblyImageReview=true;assemblyQualityVersion=qualityVersion;assemblyPrototypeMode=prototypes;assemblyProviderRecovery=false;
+        generationMode="components";qualityTier=extendedCorrections?"ultra":"lite";assemblyCalls=extendedCorrections?26:8;repairBudget=0;assemblyImageReview=true;assemblyQualityVersion=qualityVersion;assemblyPrototypeMode=prototypes;assemblyProviderRecovery=false;assemblyCompletionReserve=false;
     }
     static JsonObject offlineFlowState(){
         if(!StudioFlowSelfTest.enabled())throw new IllegalStateException("Explicit isolated flow fixture required");
@@ -213,6 +215,7 @@ public final class StudioScreen extends Screen {
             sideButton(()->assemblyQualityVersion==4?"质量 v4：前后对照 + 分项复核":assemblyQualityVersion==3?"质量 v3：实景候选 + 自动选案":assemblyQualityVersion==2?"质量 v2：代表原型 + 协调精修":"质量流程：稳定旧版",StudioTheme.Kind.NORMAL,()->idle(),()->"点击切换：旧版 / v2 / v3 / v4。v4 增加同角度修改前后对照、入口与顶部近景，并逐项追踪设计问题；至少 7 次，需支持图片的模型。",this::cycleAssemblyQuality);
             sideButton(()->assemblyImageReview?(assemblyQualityVersion>=2?"整体复核：原生材质 / 内饰切层":"整体复核：四视角几何图")+(supportsVisualReview()?"":"（需要支持图片的模型）"):"整体复核：仅文本",StudioTheme.Kind.NORMAL,()->idle()&&assemblyQualityVersion<3&&(assemblyImageReview||supportsVisualReview()),()->"v3 / v4 使用原生图像比较；v2 可选择文本。原生图只含建筑资产，不含世界、玩家、界面和桌面；生成前确认。",()->assemblyImageReview=!assemblyImageReview);
             if(assemblyQualityVersion==4)sideButton(()->"原型流程："+switch(assemblyPrototypeMode){case "verified"->"旧版整组制作 / 展开";case "staged"->"分阶段 · Ultra 实验";default->"关闭 · 保留原流程";},StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"明确选择关闭 / 旧版 / Ultra 分阶段。新流程分别生成概念、蓝图和四角色原型，预算至少 22 次；不会改变旧任务或自动授权调用。",this::choosePrototypeWorkflow);
+            if(assemblyQualityVersion==4&&assemblyPrototypeMode.equals("staged"))sideButton(()->assemblyCompletionReserve?"收尾预留：开启 · 含一次改稿纠错":"收尾预留：关闭 · 保留旧策略",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->StudioCompletionReserve.WARNING,this::toggleCompletionReserve);
             paragraph((assemblyPrototypeMode.equals("staged")?"3 次独立概念 + 差量蓝图 + 4 次角色原型；"+StudioAssembly.stagedBudgetSummary(assemblyCalls)+"。":"最多 "+assemblyPackageLimit()+" 个制作任务 / "+StudioAssembly.tier(qualityTier).reviewRounds()+" 轮最终复核；候选、选案和整体改稿也占预算。")+"图像反馈不等于审美认证，中间稿不可建造。",StudioTheme.WARN);
         }
         if(generationMode.equals("checkpoints")){
@@ -484,6 +487,7 @@ public final class StudioScreen extends Screen {
     private void cycleAssemblyQuality(){
         if(!idle())return;
         assemblyQualityVersion=assemblyQualityVersion%4+1;
+        if(assemblyQualityVersion!=4)assemblyCompletionReserve=false;
         if(assemblyQualityVersion>=3){assemblyImageReview=true;assemblyCalls=Math.max(7,assemblyCalls);}
         if(assemblyQualityVersion!=4&&!assemblyPrototypeMode.equals("off")){
             assemblyPrototypeMode="off";
@@ -493,10 +497,15 @@ public final class StudioScreen extends Screen {
         // the normal sidebar, retaining its prompt, settings and clamped scroll.
         clearAndInit();
     }
+    private void toggleCompletionReserve(){
+        if(!idle()||!generationMode.equals("components")||!qualityTier.equals("ultra")||assemblyQualityVersion!=4||!assemblyPrototypeMode.equals("staged"))return;
+        assemblyCompletionReserve=!assemblyCompletionReserve;
+        tell(assemblyCompletionReserve?"新任务收尾预留已开启":"新任务恢复旧收尾策略",assemblyCompletionReserve?StudioCompletionReserve.WARNING:"仅改变下一次新任务的预检设置；旧任务不变，没有调用模型或修改世界。",StudioTheme.WARN);
+    }
     private void chooseModel(){List<StudioChoiceScreen.Choice> choices=new ArrayList<>();for(var entry:models){var m=entry.getAsJsonObject();String id=m.get("id").getAsString();choices.add(new StudioChoiceScreen.Choice(id,id,string(m,"name",id)));}client.setScreen(new StudioChoiceScreen(this,"选择制作模型",choices,selectedModel,id->{selectedModel=id;defaultEffort();}));}
     private void chooseEffort(){var choices=efforts().stream().map(e->new StudioChoiceScreen.Choice(e,StudioMessages.effort(e)+" · "+e,"所选模型支持的推理选项；不是生成质量或速度保证")).toList();client.setScreen(new StudioChoiceScreen(this,"选择推理级别",choices,selectedEffort,e->selectedEffort=e));}
     private void chooseOutputBudget(){var m=model();String configured=m!=null&&m.has("configuredOutputBudget")&&!m.get("configuredOutputBudget").isJsonNull()?m.get("configuredOutputBudget").getAsString():"由 Harness 决定";client.setScreen(new StudioOutputBudgetScreen(this,outputBudget,configured,v->outputBudget=v));}
-    private void chooseGenerationMode(){client.setScreen(new StudioChoiceScreen(this,"生成方式与调用次数",List.of(new StudioChoiceScreen.Choice("components","组件化制作 · lite / pro / max / ultra","整体设计 → 分组件拼装 → 文本复核；调用总上限单独确认"),new StudioChoiceScreen.Choice("single","原有完整建筑 · 1 次","保留兼容入口；自动修复预算另计"),new StudioChoiceScreen.Choice("scene","实验设计层 · 1 次 + 本地编译","通用体块/立面/模块/楼梯；0 自动修复，质量待真实评审"),new StudioChoiceScreen.Choice("checkpoints","实验设计检查点 · 最多 2–4 次","布局 → 编译反馈 → 细化；纠错包含在总预算内，只有新设计可用"),new StudioChoiceScreen.Choice("layered","原有外壳 → 内饰 · 最多 2 次","任一阶段失败即停止，完整合并校验后才可预览")),generationMode,v->{generationMode=v;if(!v.equals("single"))repairBudget=0;if(!v.equals("components"))assemblyProviderRecovery=false;}));}
+    private void chooseGenerationMode(){client.setScreen(new StudioChoiceScreen(this,"生成方式与调用次数",List.of(new StudioChoiceScreen.Choice("components","组件化制作 · lite / pro / max / ultra","整体设计 → 分组件拼装 → 文本复核；调用总上限单独确认"),new StudioChoiceScreen.Choice("single","原有完整建筑 · 1 次","保留兼容入口；自动修复预算另计"),new StudioChoiceScreen.Choice("scene","实验设计层 · 1 次 + 本地编译","通用体块/立面/模块/楼梯；0 自动修复，质量待真实评审"),new StudioChoiceScreen.Choice("checkpoints","实验设计检查点 · 最多 2–4 次","布局 → 编译反馈 → 细化；纠错包含在总预算内，只有新设计可用"),new StudioChoiceScreen.Choice("layered","原有外壳 → 内饰 · 最多 2 次","任一阶段失败即停止，完整合并校验后才可预览")),generationMode,v->{generationMode=v;if(!v.equals("single"))repairBudget=0;if(!v.equals("components")){assemblyProviderRecovery=false;assemblyCompletionReserve=false;}}));}
     private static int assemblyPackageLimit(){return assemblyPrototypeMode.equals("staged")?StudioAssembly.stagedPackageLimit(assemblyCalls):Math.min(StudioAssembly.tier(qualityTier).maxPackages(),assemblyCalls-(assemblyQualityVersion>=3?5:3));}
     private void choosePrototypeWorkflow(){
         List<StudioChoiceScreen.Choice> choices=new ArrayList<>();
@@ -505,9 +514,9 @@ public final class StudioScreen extends Screen {
             choices.add(new StudioChoiceScreen.Choice("verified","旧版原型 · 整组制作 / 看图 / 展开","旧版 verified v1 协议；仍保留整栋深化和最终复核"));
             if(qualityTier.equals("ultra"))choices.add(new StudioChoiceScreen.Choice("staged","分阶段原型 · Ultra 实验","3 次独立概念、差量蓝图、4 次角色原型；新任务使用代表选层 v1，以首次实际展开几何固定比较楼层，无代表时披露；不是质量或通行认证。选择后预算至少 22 次，生成前明确确认。例如 "+StudioAssembly.stagedBudgetSummary(StudioAssembly.tier(qualityTier).maximumCalls())+"；以所选预算为准"));
         }
-        client.setScreen(new StudioChoiceScreen(this,"v4 · 原型流程（明确选择）",choices,assemblyPrototypeMode,v->{assemblyPrototypeMode=v;if(v.equals("staged"))assemblyCalls=Math.max(22,assemblyCalls);}));
+        client.setScreen(new StudioChoiceScreen(this,"v4 · 原型流程（明确选择）",choices,assemblyPrototypeMode,v->{assemblyPrototypeMode=v;if(v.equals("staged"))assemblyCalls=Math.max(22,assemblyCalls);else assemblyCompletionReserve=false;}));
     }
-    private void chooseQualityTier(){client.setScreen(new StudioChoiceScreen(this,"组件化 · 制作精度",StudioAssembly.tiers().stream().map(t->new StudioChoiceScreen.Choice(t.id(),t.id()+" · "+t.maxPackages()+" 任务 / "+t.reviewRounds()+" 轮 / ≤"+t.maximumCalls()+" 次",t.description())).toList(),qualityTier,v->{qualityTier=v;assemblyCalls=StudioAssembly.tier(v).maximumCalls();if(!v.equals("ultra")&&assemblyPrototypeMode.equals("staged")){assemblyPrototypeMode="off";tell("已关闭 Ultra 分阶段原型","其他档位不会自动改用旧原型协议；如需旧版请重新明确选择。没有调用模型。",StudioTheme.MUTED);}}));}
+    private void chooseQualityTier(){client.setScreen(new StudioChoiceScreen(this,"组件化 · 制作精度",StudioAssembly.tiers().stream().map(t->new StudioChoiceScreen.Choice(t.id(),t.id()+" · "+t.maxPackages()+" 任务 / "+t.reviewRounds()+" 轮 / ≤"+t.maximumCalls()+" 次",t.description())).toList(),qualityTier,v->{qualityTier=v;assemblyCalls=StudioAssembly.tier(v).maximumCalls();if(!v.equals("ultra"))assemblyCompletionReserve=false;if(!v.equals("ultra")&&assemblyPrototypeMode.equals("staged")){assemblyPrototypeMode="off";tell("已关闭 Ultra 分阶段原型","其他档位不会自动改用旧原型协议；如需旧版请重新明确选择。没有调用模型。",StudioTheme.MUTED);}}));}
     private void chooseAssemblyCalls(){List<StudioChoiceScreen.Choice> choices=new ArrayList<>();var t=StudioAssembly.tier(qualityTier);int overhead=assemblyQualityVersion>=3?5:3;boolean staged=assemblyPrototypeMode.equals("staged");for(int n=staged?22:overhead+2;n<=t.maximumCalls();n++)choices.add(new StudioChoiceScreen.Choice(Integer.toString(n),"最多 "+n+" 次底层调用"+(n==t.maximumCalls()?" · 档位默认":""),staged?StudioAssembly.stagedBudgetSummary(n):"最多 "+Math.min(t.maxPackages(),n-overhead)+" 个制作任务；所有阶段均在总预算内"));client.setScreen(new StudioChoiceScreen(this,qualityTier+" · 调用总上限",choices,Integer.toString(assemblyCalls),v->assemblyCalls=Integer.parseInt(v)));}
     private void chooseCheckpointCalls(){client.setScreen(new StudioChoiceScreen(this,"检查点 · 底层调用总上限",List.of(new StudioChoiceScreen.Choice("2","最多 2 次 · 布局 + 细化","不留纠错次数；布局失败立即停止"),new StudioChoiceScreen.Choice("3","最多 3 次 · 含 1 次纠错","纠错消耗同一总预算，仍须完成细化"),new StudioChoiceScreen.Choice("4","最多 4 次 · 含 2 次纠错","最多 4 次底层模型调用，每次可能计费；不是成功次数")),Integer.toString(checkpointCalls),v->checkpointCalls=Integer.parseInt(v)));}
     private static void refreshAgent(){

@@ -21,7 +21,17 @@ An eighth earlier rejection may make the protected path unaffordable. The
 runtime stops before consuming the reserved tail; it never skips work, accepts
 an unapproved concept or silently raises the caller's limit.
 
-The option is a separately versioned Bridge request contract, not yet an
-automatic selection in the normal game UI. It supplies neither model-send nor
-world-placement authority. Real-model, exact-candidate game/consent verification
-is still required before ordinary player rollout.
+The normal game sidebar exposes an explicit, default-off experimental
+"completion reserve" choice after selecting components, Ultra, v4 and staged
+prototypes. Switching away clears that selection. Both ordinary and reference
+requests retain the exact choice; a changed setting invalidates prior consent.
+The confirmation verifies the exact returned policy and discloses its cost and
+early-stop tradeoff. Reference preparation v2 preserves it in the same shared
+budget; historical v1 preparations cannot acquire this option.
+
+This separately versioned request supplies neither model-send nor world-placement
+authority. Client/Bridge contract and synthetic scheduling tests are not actual
+installed UI or real-model acceptance. Real-model, exact-candidate game/consent
+verification is still required before ordinary player rollout. The client still
+uses staged prototype v5; this UI option does not opt in to the separate v6
+expanded-route validation policy.

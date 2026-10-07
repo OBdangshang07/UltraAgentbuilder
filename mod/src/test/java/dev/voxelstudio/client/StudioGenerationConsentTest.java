@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class StudioGenerationConsentTest {
     @Test void exactConsentRequiresEveryCurrentSettingAndTheSameWorldIdleAndKey(){
-        var original=JsonParser.parseString("{\"key\":\"same-task\",\"agent\":\"codex\",\"model\":\"model\",\"effort\":\"max\",\"prompt\":\"original\",\"generationMode\":\"scene\",\"sceneWorkflow\":\"components\",\"qualityTier\":\"ultra\",\"assemblyCalls\":26,\"assemblyDesignReview\":\"native\",\"assemblyQuality\":\"v4\",\"assemblyPrototypes\":\"staged\",\"assemblyRecovery\":\"safe\",\"assemblyProviderRecovery\":\"bounded\",\"worldHeight\":384,\"maxRepairs\":0}").getAsJsonObject();
+        var original=JsonParser.parseString("{\"key\":\"same-task\",\"agent\":\"codex\",\"model\":\"model\",\"effort\":\"max\",\"prompt\":\"original\",\"generationMode\":\"scene\",\"sceneWorkflow\":\"components\",\"qualityTier\":\"ultra\",\"assemblyCalls\":26,\"assemblyDesignReview\":\"native\",\"assemblyQuality\":\"v4\",\"assemblyPrototypes\":\"staged\",\"assemblyRecovery\":\"safe\",\"assemblyProviderRecovery\":\"bounded\",\"assemblyCompletionReserve\":\"design-correction-v1\",\"worldHeight\":384,\"maxRepairs\":0}").getAsJsonObject();
         var confirmed=original.deepCopy();confirmed.addProperty("assemblyConfirmed",true);assertTrue(StudioGenerationConsent.matches(confirmed,original,"world","world",true));
         for(String field:original.keySet()){
             var changed=original.deepCopy();changed.remove(field);assertFalse(StudioGenerationConsent.matches(confirmed,changed,"world","world",true),field);

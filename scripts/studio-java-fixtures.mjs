@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import {generationPreflight} from '../bridge/generation-policy.mjs';
+import {referenceAssemblyPreflight} from '../bridge/reference-assembly-policy.mjs';
 import { compileSpec } from '../src/generation/compiler.mjs';
 import { sampleSpec } from '../src/generation/sample.mjs';
 import {highriseParts} from '../tests/fixtures/highrise.mjs';
@@ -78,6 +79,11 @@ for(const mode of ['verified','staged'])for(const calls of mode==='staged'?[22,2
  prototypePolicies.push({request,policy:generationPreflight(request)});
 }
 await fs.writeFile('mod/build/test-fixtures/prototype-preflight.json',JSON.stringify(prototypePolicies));
+const completionPolicies=prototypePolicies.filter(f=>f.request.assemblyPrototypes==='staged').map(f=>{
+ const request={...f.request,assemblyConfirmed:true,assemblyCompletionReserve:'design-correction-v1',assemblyEvidence:'representative-v1',assemblyProviderRecovery:'bounded',effort:'max'};
+ return {request,policy:generationPreflight(request),referencePolicy:referenceAssemblyPreflight(request)};
+});
+await fs.writeFile('mod/build/test-fixtures/completion-reserve-preflight.json',JSON.stringify(completionPolicies));
 const cameraPolicies=prototypePolicies.filter(f=>f.request.assemblyPrototypes==='staged').map(f=>{
  const request={...f.request,assemblyEvidence:'representative-v1'};return {request,policy:generationPreflight(request)};
 });
