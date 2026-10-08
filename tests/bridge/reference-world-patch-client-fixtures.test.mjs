@@ -11,6 +11,11 @@ test('Java joint fixture is produced by actual paired HTTP and exact two-image a
   const f=await referenceWorldPatchClientFixture(t),preview=JSON.parse(f.preview),candidate=JSON.parse(f.candidate);
   assert.equal(f.fixtureAdapterCalls,1);assert.equal(f.realModelCalls,0);assert.equal(f.worldWrites,0);
   assert.equal(f.task.frozen.imageCount,2);assert.equal(f.task.status.maximumCalls,1);assert.equal(f.task.status.callsReserved,1);
+  assert.equal(f.task.imageFreeze.format,'ReferenceWorldPatchImageFreezeStatus');assert.equal(f.task.imageFreeze.version,1);
+  assert.equal(f.task.imageFreeze.capsuleId,f.reference.capsuleId);assert.equal(f.task.imageFreeze.state,'images-frozen-not-sent');
+  assert.equal(f.task.imageFreeze.modelSent,false);assert.equal(f.task.imageFreeze.canAuthorizePlacement,false);
+  assert.match(f.task.imageFreeze.transportHash,/^[a-f0-9]{64}$/);
+  assert.deepEqual(f.task.imageFreeze.imageHashes,f.task.referenceManifest.references.map(image=>image.sha256));
   assert.equal(f.reference.submissionHash,contextHash(f.task.send));assert.equal(f.reference.responseHash,contextHash(f.proposal));
   for(const value of [preview,candidate]){
     const {downloadHash,...content}=value;assert.equal(downloadHash,contextHash(content));

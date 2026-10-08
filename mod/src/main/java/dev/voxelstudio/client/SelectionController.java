@@ -140,11 +140,18 @@ final class SelectionController {
         }catch(Exception e){message=root(e);}
     }
     CompletableFuture<SelectionReadService.PatchRetention> retainPatchSend(SelectionReadService.Capture original,JsonObject reference,java.util.function.BooleanSupplier live){
+        return retainPatchSend(original,reference,live,WorldPatchJobReceipt::retentionBinding);
+    }
+    CompletableFuture<SelectionReadService.PatchRetention> retainReferencePatchSend(SelectionReadService.Capture original,JsonObject reference,java.util.function.BooleanSupplier live){
+        return retainPatchSend(original,reference,live,ReferenceWorldPatchJobReceipt::retentionBinding);
+    }
+    private CompletableFuture<SelectionReadService.PatchRetention> retainPatchSend(SelectionReadService.Capture original,JsonObject reference,java.util.function.BooleanSupplier live,
+            java.util.function.BiFunction<SelectionReadService.Capture,JsonObject,SelectionReadService.PatchSendBinding> verify){
         var result=new CompletableFuture<SelectionReadService.PatchRetention>();var c=MinecraftClient.getInstance();var exact=reference.deepCopy();
         c.execute(()->{try{
             if(!live.getAsBoolean()||server==null||player==null||read==null||draft==null||!read.id().equals(original.id())||draft.revision()!=original.selection().revision())throw new IllegalStateException("原 SEND 页面、世界或选区已改变；不保留替代基线");
             var owner=server;var user=player;long worldTicket=epoch,contextTicket=contextEpoch;
-            SelectionReadService.retainForPatchSend(owner,user,original,WorldPatchJobReceipt.retentionBinding(original,exact)).whenComplete((retention,error)->c.execute(()->{
+            SelectionReadService.retainForPatchSend(owner,user,original,verify.apply(original,exact)).whenComplete((retention,error)->c.execute(()->{
                 if(error!=null){result.completeExceptionally(error);return;}
                 if(!live.getAsBoolean()||server!=owner||!Objects.equals(player,user)||epoch!=worldTicket||contextEpoch!=contextTicket){retention.releaseIfNotDispatched();result.completeExceptionally(new IllegalStateException("原 SEND 保留期间页面或环境改变；不发送"));return;}
                 result.complete(retention);

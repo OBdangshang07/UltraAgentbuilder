@@ -35,7 +35,7 @@ export async function referenceWorldPatchClientFixture(t, options={}) {
       ...(value?{body:JSON.stringify(value)}:{})});
     assert.ok([200,202].includes(response.status),'Production synthetic joint HTTP must succeed');return Buffer.from(await response.arrayBuffer());
   };
-  await request(`/tasks/${f.receipt.capsuleId}/images`,f.send);
+  const imageFreeze=JSON.parse(await request(`/tasks/${f.receipt.capsuleId}/images`,f.send));
   await request(`/jobs/${f.receipt.capsuleId}/send`,f.send);
   let status;const deadline=Date.now()+15000;
   do{status=JSON.parse(await request(`/jobs/${f.receipt.capsuleId}`));
@@ -60,5 +60,5 @@ export async function referenceWorldPatchClientFixture(t, options={}) {
     supportsImages:true,advertisedEfforts:f.input.capability.efforts,runtimeHash};
   return {reference,preview,candidate,proposal,task:{contextId:f.id,id:f.id,selection:f.selection,contextRevision:original.saved.snapshot.fence.end,
     payload:f.payload.toString(),saved:f.saved,intent:f.input.intent,referenceManifest:original.reference.manifest,capability:expectedCapability,
-    prepared:f.prepared,confirmation:f.confirmation,frozen:f.receipt,baseDisclosure:original.baseDisclosure,send:f.send,status,capabilities},fixtureAdapterCalls:turns.length,realModelCalls:0,worldWrites:0};
+    prepared:f.prepared,confirmation:f.confirmation,frozen:f.receipt,baseDisclosure:original.baseDisclosure,send:f.send,status,capabilities,imageFreeze},fixtureAdapterCalls:turns.length,realModelCalls:0,worldWrites:0};
 }

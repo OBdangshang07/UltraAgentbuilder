@@ -327,6 +327,106 @@ public final class BridgeClient implements AutoCloseable {
             var input=new JsonObject();input.addProperty("confirmed",true);return connect().thenCompose(c->json(c,"POST","/v2/world-patch/jobs/"+WorldPatchTaskReceipt.text(exact,"capsuleId")+(observe?"/observe-original":"/recheck-response"),input.toString(),()->WorldPatchSend.allowed(live))).thenApply(v->WorldPatchJobReceipt.verify(exact,v));
         });
     }
+    /** Independent joint lifecycle. Strict decoding and bounded contexts lane;
+     * no legacy routes, fallback model, implicit retry or new-world baseline. */
+    private CompletableFuture<JsonObject> referencePatchExchange(Connection c,String method,String route,JsonObject input,int maximum,
+            UnaryOperator<JsonObject> verify,Runnable before){
+        final String body=input==null?null:ContextReceipt.canonicalJson(input);
+        if(body!=null&&body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>32768)return CompletableFuture.failedFuture(new IllegalArgumentException("联合请求超额；未发送"));
+        return submit(contexts,()->{
+            current(c);before.run();var b=builder(c,route,60);
+            if(method.equals("POST"))b.header("Content-Type","application/json; charset=utf-8").POST(HttpRequest.BodyPublishers.ofString(body));
+            else if(!method.equals("GET")||body!=null)throw new IllegalArgumentException("联合查询只能无正文 GET");
+            var response=send(c,b.build(),maximum);
+            String json=java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(response.body())).toString();
+            var value=WorldPatchCandidateReceipt.strictJson(json,()->Thread.currentThread().isInterrupted()).getAsJsonObject();
+            if(!Set.of(200,202).contains(response.statusCode()))throw new IllegalStateException("联合原操作不可读取，HTTP "+response.statusCode()+"；保留原记录，不补发");
+            var checked=verify.apply(value);current(c);return checked.deepCopy();
+        });
+    }
+    CompletableFuture<String> referencePatchRuntime(){
+        return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/reference-world-patch/capabilities",null,16384,
+            v->{ReferenceWorldPatchJobReceipt.capabilitiesRuntime(v);return v;},()->{})).thenApply(ReferenceWorldPatchJobReceipt::capabilitiesRuntime);
+    }
+    CompletableFuture<List<JsonObject>> referencePatchHistory(){return submit(contexts,()->new ReferenceWorldPatchReferences(data).list());}
+    CompletableFuture<JsonObject> readReferencePatchJob(JsonObject input){
+        final JsonObject r;try{r=ReferenceWorldPatchJobReceipt.verifyReference(input.deepCopy());}catch(Exception e){return CompletableFuture.failedFuture(e);}
+        return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/reference-world-patch/jobs/"+WorldPatchTaskReceipt.text(r,"capsuleId"),null,
+            ReferenceWorldPatchJobReceipt.MAX_STATUS_BYTES,v->ReferenceWorldPatchJobReceipt.verify(r,v),()->{}));
+    }
+    CompletableFuture<JsonObject> prepareReferencePatchTask(SelectionReadService.Capture capture,JsonObject intent,JsonObject manifest,JsonObject capability,BooleanSupplier live){
+        var i=intent.deepCopy();var m=manifest.deepCopy();var a=capability.deepCopy();
+        var input=new JsonObject();input.add("intent",i);
+        return readContext(capture).thenCompose(saved->connect().thenCompose(c->referencePatchExchange(c,"POST",
+            "/v1/reference-world-patch/contexts/"+capture.id()+"/disclosure",input,ReferenceWorldPatchTaskReceipt.MAX_BYTES,
+            v->ReferenceWorldPatchTaskReceipt.verify(capture,saved,i,m,a,v),()->WorldPatchSend.allowed(live))));
+    }
+    CompletableFuture<JsonObject> freezeReferencePatchTask(SelectionReadService.Capture capture,JsonObject prepared,JsonObject manifest,JsonObject capability,BooleanSupplier live){
+        var p=prepared.deepCopy();var m=manifest.deepCopy();var a=capability.deepCopy();var i=p.getAsJsonObject("task").getAsJsonObject("request").getAsJsonObject("intent").deepCopy();
+        return readContext(capture).thenCompose(saved->{
+            ReferenceWorldPatchTaskReceipt.verify(capture,saved,i,m,a,p);var approval=ReferenceWorldPatchTaskReceipt.confirmation(p);
+            var input=new JsonObject();input.add("intent",i);input.add("confirmation",approval);
+            return connect().thenCompose(c->referencePatchExchange(c,"POST","/v1/reference-world-patch/contexts/"+capture.id()+"/freeze",input,16384,
+                v->ReferenceWorldPatchTaskReceipt.verifyFrozen(p,approval,v),()->WorldPatchSend.allowed(live)));
+        });
+    }
+    /** Only queries the original provider turn after a separate confirmation.
+     * There is deliberately no joint recheck-response route or SEND fallback. */
+    CompletableFuture<JsonObject> observeReferencePatch(JsonObject input,BooleanSupplier live){
+        final JsonObject r;try{WorldPatchSend.allowed(live);r=ReferenceWorldPatchJobReceipt.verifyReference(input.deepCopy());}catch(Exception e){return CompletableFuture.failedFuture(e);}
+        return readReferencePatchJob(r).thenCompose(status->{
+            if(!WorldPatchTaskReceipt.text(status,"state").equals("unknown")||!WorldPatchTaskReceipt.flag(status,"canObserveOriginal"))
+                throw new IllegalStateException("没有可观察的联合原 turn；不创建替代任务");
+            var approval=new JsonObject();approval.addProperty("confirmed",true);
+            return connect().thenCompose(c->referencePatchExchange(c,"POST","/v1/reference-world-patch/jobs/"+WorldPatchTaskReceipt.text(r,"capsuleId")+"/observe-original",approval,
+                ReferenceWorldPatchJobReceipt.MAX_STATUS_BYTES,v->ReferenceWorldPatchJobReceipt.verify(r,v),()->WorldPatchSend.allowed(live)));
+        });
+    }
+    private static JsonObject referencePatchImages(JsonObject r,JsonObject manifest,JsonObject status){
+        WorldPatchTaskReceipt.keys(status,"format","version","capsuleId","transportHash","imageHashes","state","modelSent","canAuthorizePlacement");
+        if(!WorldPatchTaskReceipt.text(status,"format").equals("ReferenceWorldPatchImageFreezeStatus")||WorldPatchTaskReceipt.number(status,"version")!=1
+            ||!WorldPatchTaskReceipt.text(status,"state").equals("images-frozen-not-sent"))throw new IllegalStateException("联合原图冻结协议改变");
+        WorldPatchTaskReceipt.no(status,"modelSent","canAuthorizePlacement");WorldPatchTaskReceipt.digest(status,"transportHash");
+        WorldPatchTaskReceipt.same(status.get("capsuleId"),r.get("capsuleId"));var expected=new JsonArray();
+        for(var image:manifest.getAsJsonArray("references"))expected.add(image.getAsJsonObject().get("sha256"));
+        WorldPatchTaskReceipt.same(status.get("imageHashes"),expected);return status;
+    }
+    /** Persist joint claim BEFORE any dispatch. Images are frozen with zero
+     * calls and their original order/hashes checked. The same retained server
+     * Capture is fenced before image transfer and again before the sole SEND. */
+    CompletableFuture<ReferenceWorldPatchSubmission> sendReferencePatch(Supplier<CompletableFuture<SelectionReadService.Capture>> capture,
+            JsonObject prepared,JsonObject frozen,JsonObject manifest,JsonObject capability,String runtimeHash,BooleanSupplier live,
+            BiFunction<SelectionReadService.Capture,JsonObject,CompletableFuture<SelectionReadService.PatchRetention>> retain){
+        final JsonObject p,original,m,a;
+        try{WorldPatchSend.allowed(live);p=prepared.deepCopy();m=manifest.deepCopy();a=capability.deepCopy();
+            original=ReferenceWorldPatchTaskReceipt.verifyFrozen(p,ReferenceWorldPatchTaskReceipt.confirmation(p),frozen.deepCopy());
+        }catch(Exception e){return CompletableFuture.failedFuture(e);}
+        var i=p.getAsJsonObject("task").getAsJsonObject("request").getAsJsonObject("intent");
+        return referencePatchRuntime().thenCompose(currentRuntime->{
+            WorldPatchSend.allowed(live);if(currentRuntime==null||!currentRuntime.equals(runtimeHash))throw new IllegalStateException("联合 runtime/能力已改变；不发送");
+            return ContextPublication.checked(capture,cap->readContext(cap).thenApply(saved->{
+                ReferenceWorldPatchTaskReceipt.verify(cap,saved,i,m,a,p);return ReferenceWorldPatchJobReceipt.reference(cap,p,original,runtimeHash);
+            }));
+        }).thenCompose(r->{
+            Supplier<CompletableFuture<Void>> recheck=()->ContextPublication.checked(capture,cap->readContext(cap).thenApply(saved->{
+                ReferenceWorldPatchTaskReceipt.verify(cap,saved,i,m,a,p);return saved;
+            })).thenApply(ignored->null);
+            Runnable gate=()->{WorldPatchSend.allowed(live);if(System.currentTimeMillis()>=WorldPatchTaskReceipt.number(original,"recordExpiresAt"))throw new IllegalStateException("联合原快照过期；不发送");};
+            return connect().thenCompose(c->WorldPatchSend.once(live,
+                ()->submit(contexts,()->{current(c);WorldPatchSend.allowed(live);return new ReferenceWorldPatchReferences(data).claim(r);}),recheck,
+                ()->capture.get().thenCompose(cap->{WorldPatchSend.allowed(live);return retain.apply(cap,r.deepCopy());}).thenCompose(retention->{
+                    if(retention==null||retention.canAuthorizePlacement())throw new IllegalStateException("缺少联合原服务器只读保留");
+                    return retention.checkedBeforeDispatch().thenCompose(ignored->referencePatchExchange(c,"POST",
+                        "/v1/reference-world-patch/tasks/"+WorldPatchTaskReceipt.text(r,"capsuleId")+"/images",r.getAsJsonObject("send"),16384,
+                        v->referencePatchImages(r,m,v),gate))
+                        .thenCompose(images->retention.checkedBeforeDispatch()).thenCompose(ignored->referencePatchExchange(c,"POST",
+                            "/v1/reference-world-patch/jobs/"+WorldPatchTaskReceipt.text(r,"capsuleId")+"/send",r.getAsJsonObject("send"),ReferenceWorldPatchJobReceipt.MAX_STATUS_BYTES,
+                            v->ReferenceWorldPatchJobReceipt.verify(r,v),()->{gate.run();retention.markDispatchAttempted();}))
+                        .whenComplete((value,error)->retention.releaseIfNotDispatched());
+                }),()->readReferencePatchJob(r))).thenApply(status->new ReferenceWorldPatchSubmission(r,status));
+        });
+    }
     /** Bounded independent read lane. Never calls SEND, resumes a turn or
      * refreshes a world baseline, even if the transfer/parse fails. */
     CompletableFuture<WorldPatchCandidateReceipt.Download> loadPatchPreview(WorldPatchCandidateReceipt.Reference reference,BooleanSupplier cancelled){
