@@ -12,7 +12,7 @@ import java.util.*;
 final class WorldPatchPreviewController implements AutoCloseable {
     final WorldPatchPreviewRenderer renderer=new WorldPatchPreviewRenderer();
     private WorldPatchPreview preview;
-    private WorldPatchCandidateReceipt.AuditableDownload candidate;
+    private WorldPatchCheckedCandidate candidate;
     private WorldPatchPreview.Filter filter;
     private boolean pending,closed;
     boolean visible=true;
@@ -20,12 +20,12 @@ final class WorldPatchPreviewController implements AutoCloseable {
     String message="改造预览尚未接入；没有建造权限";
     private final VertexConsumerProvider.Immediate lines=VertexConsumerProvider.immediate(new BufferBuilder(16384));
     WorldPatchPreview preview(){return preview;}
-    WorldPatchCandidateReceipt.AuditableDownload candidate(){return candidate;}
+    WorldPatchCheckedCandidate candidate(){return candidate;}
     WorldPatchPreview.Filter filter(){return filter;}
     /** Deliberately no production loader: caller must first verify the exact
      * original snapshot and patch upstream. This local method grants no write. */
     void showReadOnly(WorldPatchPreview value){if(closed)throw new IllegalStateException("Preview closed");Objects.requireNonNull(value);clear();preview=value;filter=value.all(WorldPatchPreview.Mode.CHANGES);StudioClient.PROJECTION.visible=false;visible=true;pending=true;message="实验差异预览 · 原世界位置 · 不可建造";}
-    void showAuditableReadOnly(WorldPatchCandidateReceipt.AuditableDownload value){Objects.requireNonNull(value);showReadOnly(value.preview());candidate=value;}
+    void showAuditableReadOnly(WorldPatchCheckedCandidate value){Objects.requireNonNull(value);showReadOnly(value.preview());candidate=value;}
     void filter(WorldPatchPreview.Filter next){if(preview==null)throw new IllegalStateException("No preview");filter=preview.checked(next);renderer.clear();pending=true;}
     void reload(){if(preview!=null){renderer.clear();pending=true;}}
     void tick(MinecraftClient c){

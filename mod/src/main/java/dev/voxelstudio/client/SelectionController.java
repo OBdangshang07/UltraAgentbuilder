@@ -165,14 +165,36 @@ final class SelectionController {
             StudioClient.PATCH_PREVIEW.showAuditableReadOnly(download);message="原候选与差异投影已核验；尚未取得建造权限";c.setScreen(new WorldPatchPreviewScreen(parent));
         }));
     }
+    /** Separate joint reference type and HTTP parser; only the checked,
+     * original-coordinate candidate joins the common display/transaction data
+     * path. It never changes the server's retained Capture or grants writes. */
+    void loadReferencePatchPreview(Screen parent,ReferenceWorldPatchCandidateReceipt.Reference pin,java.util.function.BooleanSupplier live){
+        if(!live.getAsBoolean()){message="原联合预览页面已关闭；没有加载投影";return;}
+        if(contextBusy){message="环境操作正在进行；没有加载联合预览";return;}
+        if(pin==null||!matchesPreview(pin.binding())){message="当前环境不匹配原联合候选；不能重新绑定投影";return;}
+        long ticket=contextEpoch;contextBusy=true;message="只读核验联合原候选、图片身份与原快照；不会重发模型";
+        ContextPublication.checkedValue(this::checkedCapture,cap->{
+            if(!cap.selection().equals(pin.binding().selection())||cap.contextRevision()!=pin.binding().contextRevision())
+                return CompletableFuture.failedFuture(new IllegalStateException("不能替换联合任务的原服务器快照"));
+            return StudioClient.BRIDGE.loadReferencePatchCandidate(pin,()->ticket!=contextEpoch||!live.getAsBoolean());
+        }).whenComplete((download,error)->MinecraftClient.getInstance().execute(()->{
+            if(ticket!=contextEpoch)return;contextBusy=false;if(error!=null){message=root(error);return;}
+            if(!matchesPreview(pin.binding())){message="加载期间原环境改变，联合候选不发布";return;}
+            var c=MinecraftClient.getInstance();if(c.currentScreen!=parent||!live.getAsBoolean()){
+                message="联合原候选已核验；页面已关闭或重开，未开启投影，可显式再加载";return;
+            }
+            StudioClient.PATCH_PREVIEW.showAuditableReadOnly(download);message="联合原候选与差异投影已核验；尚无建造权限";
+            c.setScreen(new WorldPatchPreviewScreen(parent));
+        }));
+    }
     record BeforeRun(SelectionReadService.BeforeHandle handle,java.util.function.Supplier<CompletableFuture<SelectionReadService.BeforeReport>> current,Runnable cancel){}
     record PatchAuditRun(SelectionReadService.PatchAuditHandle handle,java.util.function.Supplier<CompletableFuture<SelectionReadService.PatchAuditReport>> current,Runnable cancel){}
     record PlacementRun(WorldPatchPlacementService.PrepareHandle handle,java.util.function.BiFunction<WorldPatchPlacementService.Confirmation,Boolean,CompletableFuture<WorldPatchPlacementService.Operation>> confirm,Runnable cancel){}
-    CompletableFuture<PlacementRun> preparePlacement(WorldPatchCandidateReceipt.AuditableDownload candidate,java.util.function.BooleanSupplier live){
+    CompletableFuture<PlacementRun> preparePlacement(WorldPatchCheckedCandidate candidate,java.util.function.BooleanSupplier live){
         var result=new CompletableFuture<PlacementRun>();var c=MinecraftClient.getInstance();var preview=candidate.preview();
         checkedCapture().whenComplete((capture,error)->c.execute(()->{
             if(error!=null){result.completeExceptionally(error);return;}if(!live.getAsBoolean()||!matchesPreview(preview.binding())||StudioClient.PATCH_PREVIEW.candidate()!=candidate||server==null||player==null){result.completeExceptionally(new IllegalStateException("原最终确认页面或候选已失效；没有写入"));return;}
-            var owner=server;var user=player;long worldTicket=epoch,contextTicket=contextEpoch;var handle=WorldPatchPlacementService.prepare(owner,user,capture,preview,candidate.originalResponse(),candidate.reference().responseHash());
+            var owner=server;var user=player;long worldTicket=epoch,contextTicket=contextEpoch;var handle=WorldPatchPlacementService.prepare(owner,user,capture,preview,candidate.originalResponse(),candidate.originalResponseHash());
             java.util.function.BooleanSupplier valid=()->live.getAsBoolean()&&server==owner&&Objects.equals(player,user)&&epoch==worldTicket&&contextEpoch==contextTicket&&StudioClient.PATCH_PREVIEW.candidate()==candidate&&matchesPreview(preview.binding());
             java.util.function.BiFunction<WorldPatchPlacementService.Confirmation,Boolean,CompletableFuture<WorldPatchPlacementService.Operation>> confirm=(confirmation,ack)->{
                 var accepted=new CompletableFuture<WorldPatchPlacementService.Operation>();c.execute(()->{if(!valid.getAsBoolean()||!Boolean.TRUE.equals(ack)){accepted.completeExceptionally(new IllegalStateException("缺少当前候选的明确确认或未验证提示确认"));return;}
@@ -195,13 +217,13 @@ final class SelectionController {
     }
     CompletableFuture<WorldPatchUndoService.Operation> currentPatchUndo(){if(server==null||player==null)return CompletableFuture.failedFuture(new IllegalStateException("没有当前单人世界"));return WorldPatchUndoService.current(server,player);}
     void cancelPatchUndo(WorldPatchUndoService.Operation operation){if(server!=null&&player!=null)WorldPatchUndoService.cancel(server,player,operation.id());}
-    CompletableFuture<PatchAuditRun> patchAudit(WorldPatchCandidateReceipt.AuditableDownload candidate,java.util.function.BooleanSupplier live){
+    CompletableFuture<PatchAuditRun> patchAudit(WorldPatchCheckedCandidate candidate,java.util.function.BooleanSupplier live){
         var result=new CompletableFuture<PatchAuditRun>();var c=MinecraftClient.getInstance();var preview=candidate.preview();
         checkedCapture().whenComplete((capture,error)->c.execute(()->{
             if(error!=null){result.completeExceptionally(error);return;}
             if(!live.getAsBoolean()||!matchesPreview(preview.binding())||StudioClient.PATCH_PREVIEW.candidate()!=candidate||server==null||player==null){result.completeExceptionally(new IllegalStateException("原核验页面或候选已失效，未开始核验"));return;}
             var owner=server;var user=player;long worldTicket=epoch,contextTicket=contextEpoch;
-            var handle=SelectionReadService.startPatchAudit(owner,user,capture,preview,candidate.originalResponse(),candidate.reference().responseHash());
+            var handle=SelectionReadService.startPatchAudit(owner,user,capture,preview,candidate.originalResponse(),candidate.originalResponseHash());
             java.util.function.BooleanSupplier valid=()->live.getAsBoolean()&&server==owner&&Objects.equals(player,user)&&epoch==worldTicket&&contextEpoch==contextTicket&&StudioClient.PATCH_PREVIEW.candidate()==candidate&&matchesPreview(preview.binding());
             java.util.function.Supplier<CompletableFuture<SelectionReadService.PatchAuditReport>> current=()->{
                 var checked=new CompletableFuture<SelectionReadService.PatchAuditReport>();c.execute(()->{

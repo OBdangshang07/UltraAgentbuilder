@@ -352,17 +352,23 @@ test('strict input, UTF-8/byte bounds, cancellation and closed lanes reject befo
   await f.store.close(); await assert.rejects(workerFreeze(f), /closed/); await assert.rejects(fs.stat(f.root), {code: 'ENOENT'});
 });
 
-test('same exact task queued twice publishes once, and exposes no joint HTTP or provider invocation', async t => {
+test('same exact task queued twice publishes once; default startup rejects joint actions without a provider invocation', async t => {
   const f = await fixture(t), [first, second] = await Promise.all([workerFreeze(f), workerFreeze(f)]);
   assert.deepEqual(first, second); assert.equal((await fs.readdir(f.root)).length, 2);
   let calls = 0; const adapter = {close() {}, async generate() {calls++; throw Error('No provider allowed');}};
   const service = await startBridge({dataDir: f.dir, adapter, claudeAdapter: adapter, deepseekAdapter: adapter}); t.after(() => service.close());
   const headers = {Authorization: 'Bearer ' + service.connection.token, 'Content-Type': 'application/json'};
-  for (const route of ['/v1/world-contexts/' + f.id + '/reference-patch-freeze-task',
-    '/v1/world-contexts/' + f.id + '/reference-patch-frozen-task', '/v1/reference-world-patch/tasks/' + first.capsuleId,
-    '/v1/world-contexts/' + f.id + '/reference-patch-send', '/v1/world-contexts/' + f.id + '/reference-patch-apply']) {
+  // Legacy aliases remain absent. The independent task audit route exists,
+  // but POST is always method-rejected, even when its process lane is off.
+  for (const [route, status] of [
+    ['/v1/world-contexts/' + f.id + '/reference-patch-freeze-task', 404],
+    ['/v1/world-contexts/' + f.id + '/reference-patch-frozen-task', 404],
+    ['/v1/reference-world-patch/tasks/' + first.capsuleId, 405],
+    ['/v1/world-contexts/' + f.id + '/reference-patch-send', 404],
+    ['/v1/world-contexts/' + f.id + '/reference-patch-apply', 404],
+  ]) {
     const response = await fetch('http://127.0.0.1:' + service.connection.port + route,
-      {method: 'POST', headers, body: JSON.stringify({...f.input, confirmation: f.confirmation})}); assert.equal(response.status, 404);
+      {method: 'POST', headers, body: JSON.stringify({...f.input, confirmation: f.confirmation})}); assert.equal(response.status, status, route);
   }
   assert.equal(calls, 0); assert.deepEqual(await audit(f, first), first); assert.deepEqual(await f.store.operation('get', f.id), f.saved);
 });

@@ -25,7 +25,7 @@ java {
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 17 }
 processResources { inputs.property 'version', project.version; filesMatching('fabric.mod.json') { expand 'version': project.version } }
-processResources { from('../contracts') { include 'context-analysis-protocol.json', 'world-patch-design-review-protocol.json'; into 'voxelstudio' } }
+processResources { from('../contracts') { include 'context-analysis-protocol.json', 'world-patch-design-review-protocol.json', 'reference-world-patch-review-protocol.json'; into 'voxelstudio' } }
 test {
     useJUnitPlatform()
     inputs.dir layout.buildDirectory.dir('test-fixtures')
@@ -60,7 +60,7 @@ test {
 tasks.register('prepareJavaFixtures', Exec) {
     workingDir projectDir.parentFile
     commandLine 'node', 'scripts/studio-java-fixtures.mjs'
-    inputs.files(fileTree('../src/generation'),fileTree('../src/design'),fileTree('../src/world'),fileTree('../tests/design'),fileTree('../tests/fixtures'),fileTree('../contracts'),fileTree('../bridge'),file('../scripts/studio-java-fixtures.mjs'),file('../scripts/reference-player-fixtures.mjs'),file('../scripts/world-patch-before-fixtures.mjs'),file('../scripts/world-patch-safety-fixtures.mjs'),file('../scripts/world-patch-journal-fixtures.mjs'))
+    inputs.files(fileTree('../src/generation'),fileTree('../src/design'),fileTree('../src/world'),fileTree('../tests/design'),fileTree('../tests/fixtures'),fileTree('../contracts'),fileTree('../bridge'),file('../scripts/studio-java-fixtures.mjs'),file('../scripts/reference-player-fixtures.mjs'),file('../scripts/reference-world-patch-client-fixtures.mjs'),file('../scripts/world-patch-before-fixtures.mjs'),file('../scripts/world-patch-safety-fixtures.mjs'),file('../scripts/world-patch-journal-fixtures.mjs'))
     outputs.dir layout.buildDirectory.dir('test-fixtures')
     // These FREE fixtures contain expiring SEND confirmations and fresh
     // private synthetic journals. Reusing yesterday's generated authority is

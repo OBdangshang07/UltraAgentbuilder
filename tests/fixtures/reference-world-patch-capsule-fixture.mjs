@@ -12,7 +12,7 @@ import {REFERENCE_PATCH_SEND_PINS} from '../../contracts/reference-world-patch-s
 
 export const jointRaw = value => Buffer.from(JSON.stringify(value));
 export async function jointCapsuleFixture(t, options = {}) {
-  const parent = await fs.realpath(os.tmpdir()), dir = await fs.realpath(await fs.mkdtemp(path.join(parent, 'voxel-joint-send-')));
+  const parent = await fs.realpath(options.temporaryParent ?? os.tmpdir()), dir = await fs.realpath(await fs.mkdtemp(path.join(parent, 'voxel-joint-send-')));
   const store = new WorldContextStore({dataDir: dir}), id = randomUUID(), owner = randomUUID();
   t.after(async () => {await store.close(); assert.equal(await fs.realpath(dir), dir); assert.equal(path.dirname(dir), parent);
     assert.match(path.basename(dir), /^voxel-joint-send-/); await fs.rm(dir, {recursive: true});});

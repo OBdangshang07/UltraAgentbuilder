@@ -8,17 +8,17 @@ import java.util.List;
 
 /** One explicit, read-only static audit. No SEND, world write or repair. */
 final class WorldPatchAuditScreen extends Screen {
-    private final Screen parent;private final WorldPatchCandidateReceipt.AuditableDownload candidate;
+    private final Screen parent;private final WorldPatchCheckedCandidate candidate;
     private final WorldPatchPageState page=new WorldPatchPageState();
     private SelectionController.PatchAuditRun run;private boolean attempted,completed;
     private String message="点击前不开始核验；不调用模型、不修改世界";
     private int x,w,scroll;private List<net.minecraft.text.OrderedText> lines;private StudioTheme.Button check;
-    WorldPatchAuditScreen(Screen parent,WorldPatchCandidateReceipt.AuditableDownload candidate){super(Text.literal("原服务器补丁规则 · 只读核验"));this.parent=parent;this.candidate=java.util.Objects.requireNonNull(candidate);}
+    WorldPatchAuditScreen(Screen parent,WorldPatchCheckedCandidate candidate){super(Text.literal("原服务器补丁规则 · 只读核验"));this.parent=parent;this.candidate=java.util.Objects.requireNonNull(candidate);}
     private boolean valid(){return StudioClient.PATCH_PREVIEW.candidate()==candidate&&StudioClient.SELECTION.matchesPreview(candidate.preview().binding());}
     @Override protected void init(){
         page.enter();if(run!=null){cancelRun();message="页面重新布局，原核验已停止；返回后可显式重新打开";}
         w=Math.min(600,width-24);x=(width-w)/2;
-        lines=textRenderer.wrapLines(Text.literal("使用服务器仍持有的同一份原始 Capture，独立重建原提案的写集合与六向邻接守卫，不采用客户端下载的写入指令。\n\n检查内层 W、保护范围 P、已知原状态、明确 CLEAR、KEEP/省略保持不动、完整特殊方块状态和静态邻接政策。原 responseHash、patchHash、previewHash 必须一致，不能重新采样或替换原响应。\n\n本页不读取当前世界、不调用模型、不写入方块。通过不是 fresh BEFORE、物理/通行认证或最终写入授权；世界事务尚未开放，不提供建造按钮。\n\n原响应："+candidate.reference().responseHash()+"\n原补丁："+candidate.preview().binding().patchHash()+"\n原投影："+candidate.preview().binding().previewHash()),w-28);
+        lines=textRenderer.wrapLines(Text.literal("使用服务器仍持有的同一份原始 Capture，独立重建原提案的写集合与六向邻接守卫，不采用客户端下载的写入指令。\n\n检查内层 W、保护范围 P、已知原状态、明确 CLEAR、KEEP/省略保持不动、完整特殊方块状态和静态邻接政策。原 responseHash、patchHash、previewHash 必须一致，不能重新采样或替换原响应。\n\n本页不读取当前世界、不调用模型、不写入方块。通过不是 fresh BEFORE、物理/通行认证或最终写入授权；应用仍需独立最终确认，本页不提供建造按钮。\n\n原响应："+candidate.originalResponseHash()+"\n原补丁："+candidate.preview().binding().patchHash()+"\n原投影："+candidate.preview().binding().previewHash()),w-28);
         addDrawableChild(new StudioTheme.Button(x+12,height-39,(w-30)/2,24,"返回 · 停止本次核验",StudioTheme.Kind.NORMAL,this::close));
         check=addDrawableChild(new StudioTheme.Button(x+18+(w-30)/2,height-39,(w-30)/2,24,"确认只读补丁核验",StudioTheme.Kind.PRIMARY,this::start));buttons();
     }

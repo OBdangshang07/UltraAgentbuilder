@@ -10,11 +10,11 @@ import java.util.*;
  * or relayout revokes it. After the explicit APPLY click the operation has an
  * independent lifetime; closing progress does not stop it or repeat models. */
 final class WorldPatchPlacementScreen extends Screen {
-    private final Screen parent;private final WorldPatchCandidateReceipt.AuditableDownload candidate;private final WorldPatchPageState page=new WorldPatchPageState();
+    private final Screen parent;private final WorldPatchCheckedCandidate candidate;private final WorldPatchPageState page=new WorldPatchPageState();
     private SelectionController.PlacementRun run;private WorldPatchPlacementService.Confirmation confirmation;private WorldPatchPlacementService.Operation operation;
     private boolean attempted,acknowledged,submitted;private int x,w,scroll;private List<net.minecraft.text.OrderedText> lines=List.of();
     private String message="先只读准备，成功后另行明确确认；此时不修改世界";private StudioTheme.Button prepare,ack,apply,stop;
-    WorldPatchPlacementScreen(Screen parent,WorldPatchCandidateReceipt.AuditableDownload candidate){super(Text.literal("原位改造 · 独立最终确认"));this.parent=parent;this.candidate=Objects.requireNonNull(candidate);}
+    WorldPatchPlacementScreen(Screen parent,WorldPatchCheckedCandidate candidate){super(Text.literal("原位改造 · 独立最终确认"));this.parent=parent;this.candidate=Objects.requireNonNull(candidate);}
     private boolean original(){return StudioClient.PATCH_PREVIEW.candidate()==candidate&&StudioClient.SELECTION.matchesPreview(candidate.preview().binding());}
     @Override protected void init(){
         page.enter();if(run!=null&&!submitted){cancelPreparation();message="页面重新布局，原准备/确认已作废；返回后显式重新准备";}
@@ -27,7 +27,7 @@ final class WorldPatchPlacementScreen extends Screen {
     }
     private void details(){
         var binding=candidate.preview().binding();String summary=confirmation==null?"原候选 "+candidate.preview().totalWrites()+" 处明确修改":confirmation.summary().writes()+" 处修改：新增 "+confirmation.summary().adds()+" / 替换 "+confirmation.summary().replaces()+" / 明确删除 "+confirmation.summary().clears()+"；守卫 "+confirmation.summary().guards();
-        lines=textRenderer.wrapLines(Text.literal(summary+"\n\n准备将使用服务器仍持有的同一 Capture，独立审核原响应和六向守卫，再逐 tick 对比 fresh BEFORE；准备本身不写入。成功后最终确认仅 45 秒有效，世界/选区/环境变化会拒绝，不自动重读或重绑。\n\n应用固定在原世界坐标，只修改原内层 W 减保护区 P。预览切层、显隐和差异过滤不会缩小实际补丁；最终应用的是完整原补丁。KEEP 和省略格保持不动。\n\n当前仅支持单人创造房主和允许的静态方块。原状态检查不是物理、通行或落盘证明；先确认理解未验证提示，再点最终应用。发生冲突会停止，不跳过后继续覆盖。崩溃/回执未知不会猜测恢复。\n\n明确确认后可返回游戏等待；关闭进度页不会取消已确认事务。要停止请用独立取消按钮，不调用模型、不重发原响应。\n\n原响应："+candidate.reference().responseHash()+"\n原补丁："+binding.patchHash()+"\n原投影："+binding.previewHash()),w-28);
+        lines=textRenderer.wrapLines(Text.literal(summary+"\n\n准备将使用服务器仍持有的同一 Capture，独立审核原响应和六向守卫，再逐 tick 对比 fresh BEFORE；准备本身不写入。成功后最终确认仅 45 秒有效，世界/选区/环境变化会拒绝，不自动重读或重绑。\n\n应用固定在原世界坐标，只修改原内层 W 减保护区 P。预览切层、显隐和差异过滤不会缩小实际补丁；最终应用的是完整原补丁。KEEP 和省略格保持不动。\n\n当前仅支持单人创造房主和允许的静态方块。原状态检查不是物理、通行或落盘证明；先确认理解未验证提示，再点最终应用。发生冲突会停止，不跳过后继续覆盖。崩溃/回执未知不会猜测恢复。\n\n明确确认后可返回游戏等待；关闭进度页不会取消已确认事务。要停止请用独立取消按钮，不调用模型、不重发原响应。\n\n原响应："+candidate.originalResponseHash()+"\n原补丁："+binding.patchHash()+"\n原投影："+binding.previewHash()),w-28);
     }
     private void buttons(){boolean ready=page.available()&&!submitted&&original();if(prepare!=null)prepare.active=ready&&!attempted;if(ack!=null)ack.active=ready&&confirmation!=null;if(apply!=null)apply.active=ready&&confirmation!=null&&acknowledged;if(stop!=null)stop.active=operation!=null&&!operation.result().isDone();}
     private void prepare(){

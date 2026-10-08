@@ -24,12 +24,13 @@ final class WorldPatchCandidateReceipt {
     }
     /** Constructible only after all independently retained pins are checked.
      * Never returns mutable proposal storage or grants a server capability. */
-    static final class AuditableDownload {
+    static final class AuditableDownload implements WorldPatchCheckedCandidate {
         private final Download display;private final byte[] response;
         private AuditableDownload(Download display,byte[] response){this.display=display;this.response=response.clone();}
-        Download display(){return display;}WorldPatchPreview preview(){return display.preview();}Reference reference(){return display.reference();}
-        byte[] originalResponse(){return response.clone();}
-        boolean canAuthorizePlacement(){return false;}
+        Download display(){return display;}public WorldPatchPreview preview(){return display.preview();}Reference reference(){return display.reference();}
+        public byte[] originalResponse(){return response.clone();}
+        public String originalResponseHash(){return display.reference().responseHash();}
+        public boolean canAuthorizePlacement(){return false;}
     }
     static Download parse(byte[] bytes,Reference expected,BooleanSupplier cancelled){
         var value=checkedValue(bytes,expected,cancelled,false);return display(value,expected,cancelled);

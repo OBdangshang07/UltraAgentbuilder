@@ -352,6 +352,28 @@ public final class BridgeClient implements AutoCloseable {
             return WorldPatchCandidateReceipt.parseCandidate(response.body(),reference,cancelled);
         }));
     }
+    /** Independent joint GET-only lane. Never promote a legacy text reference,
+     * send a model request, rebase the original world or fall back on error. */
+    CompletableFuture<ReferenceWorldPatchCandidateReceipt.Download> loadReferencePatchPreview(ReferenceWorldPatchCandidateReceipt.Reference reference,BooleanSupplier cancelled){
+        if(reference==null||cancelled==null)return CompletableFuture.failedFuture(new IllegalArgumentException("缺少独立联合候选引用"));
+        return connect().thenCompose(c->submit(contexts,()->{
+            current(c);if(cancelled.getAsBoolean())throw new CancellationException("联合预览加载已失效");
+            String route="/v1/reference-world-patch/jobs/"+reference.capsuleId()+"/preview?candidateHash="+reference.candidateHash();
+            var response=send(c,builder(c,route,60).build(),ReferenceWorldPatchCandidateReceipt.MAX_BYTES);current(c);
+            if(response.statusCode()!=200)throw new IllegalStateException("联合原预览不可读取，HTTP "+response.statusCode()+"；不会重发生成");
+            return ReferenceWorldPatchCandidateReceipt.parse(response.body(),reference,cancelled);
+        }));
+    }
+    CompletableFuture<ReferenceWorldPatchCandidateReceipt.AuditableDownload> loadReferencePatchCandidate(ReferenceWorldPatchCandidateReceipt.Reference reference,BooleanSupplier cancelled){
+        if(reference==null||cancelled==null)return CompletableFuture.failedFuture(new IllegalArgumentException("缺少独立联合候选引用"));
+        return connect().thenCompose(c->submit(contexts,()->{
+            current(c);if(cancelled.getAsBoolean())throw new CancellationException("联合候选加载已失效");
+            String route="/v1/reference-world-patch/jobs/"+reference.capsuleId()+"/candidate?candidateHash="+reference.candidateHash();
+            var response=send(c,builder(c,route,60).build(),ReferenceWorldPatchCandidateReceipt.MAX_CANDIDATE_BYTES);current(c);
+            if(response.statusCode()!=200)throw new IllegalStateException("联合原候选不可读取，HTTP "+response.statusCode()+"；不会重发或替换模型");
+            return ReferenceWorldPatchCandidateReceipt.parseCandidate(response.body(),reference,cancelled);
+        }));
+    }
     /** Query one stable identity, without downloading the entire generation history or resubmitting. */
     public CompletableFuture<JsonObject> lookupTask(String key){
         return lookupOriginalTask(key).thenApply(value->{if(value.pendingReferenceSubmission())throw new IllegalStateException("原参考图 SEND 已保存但未发布；只查询原任务，不重新发送");return value.job();});
