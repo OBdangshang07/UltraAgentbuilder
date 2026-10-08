@@ -58,7 +58,7 @@ final class ReferenceWorldPatchBridgeClientTest {
             };acquisition.countDown();return CompletableFuture.completedFuture(lease);
         }catch(Exception e){return CompletableFuture.failedFuture(e);}
     }
-    private CompletableFuture<ReferenceWorldPatchSubmission> send(){return client.sendReferencePatch(()->CompletableFuture.completedFuture(capture),f.getAsJsonObject("prepared"),f.getAsJsonObject("frozen"),f.getAsJsonObject("referenceManifest"),f.getAsJsonObject("capability"),f.getAsJsonObject("frozen").get("runtimeHash").getAsString(),live::get,this::retention);}
+    private CompletableFuture<ReferenceWorldPatchSubmission> send(){var plan=new ReferenceWorldPatchSendPlan(f.getAsJsonObject("prepared"),f.getAsJsonObject("frozen"),f.getAsJsonObject("referenceManifest"),f.getAsJsonObject("capability"));return client.sendReferencePatch(()->CompletableFuture.completedFuture(capture),plan.prepared(),plan.frozen(),plan.manifest(),plan.capability(),plan.runtimeFor(f.getAsJsonObject("capability")),live::get,this::retention);}
     @AfterEach void stop(){client.close();server.stop(0);handlers.shutdownNow();}
     @Test void prepareFreezeVerifyOriginalPixelsCapabilityAndIndependentConfirmationWithoutSend()throws Exception{
         ordinary();var prepares=new AtomicInteger();var freezes=new AtomicInteger();String context="/v1/reference-world-patch/contexts/"+capture.id();
@@ -73,6 +73,12 @@ final class ReferenceWorldPatchBridgeClientTest {
         assertEquals(1,images.get());assertEquals(1,sends.get());assertEquals(2,checks.get());assertEquals(1,attempted.get());assertEquals(0,abandoned.get());
         client.close();client=new BridgeClient(root);assertEquals(List.of(r),client.referencePatchHistory().get(2,TimeUnit.SECONDS));assertEquals(f.get("status"),send().get(5,TimeUnit.SECONDS).status());
         assertEquals(1,images.get());assertEquals(1,sends.get());assertEquals(1,queries.get());assertEquals(List.of(),client.patchHistory().get(2,TimeUnit.SECONDS));
+    }
+    @Test void playerPlanResultAndLocalHistoryOnlyQueryOriginalAfterSoleSend()throws Exception{
+        ordinary();imageEndpoint(v->{});jobEndpoint();var result=send().get(5,TimeUnit.SECONDS);
+        for(int i=0;i<2;i++){var original=client.referencePatchHistory().get(3,TimeUnit.SECONDS).get(0);assertEquals(result.reference(),original);
+            var status=client.readReferencePatchJob(original).get(3,TimeUnit.SECONDS);assertEquals(result.status(),status);assertTrue(ReferenceWorldPatchJobReceipt.details(original,status).contains("不是设计品质"));}
+        assertEquals(1,sends.get());assertEquals(1,images.get());assertEquals(2,queries.get());assertEquals(2,checks.get());assertEquals(1,attempted.get());
     }
     @Test void mismatchedImageHashesStopBeforeSendAndKeepOriginalClaim()throws Exception{
         ordinary();imageEndpoint(v->v.getAsJsonArray("imageHashes").set(0,new JsonPrimitive("f".repeat(64))));jobEndpoint();

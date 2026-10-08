@@ -42,10 +42,12 @@ of the complete original model input. Confirmation freezes that joint content
 with zero model calls; it neither sends a model nor changes a world.
 
 The current process-owned joint protocol remains default-disabled in normal
-startup. The new page has **no joint SEND button**. Its development contract is
-still at most one call, not Lite/Pro/Max/Ultra. Player budget/SEND/history/result
-integration, the complete shared design pipeline and exact-package game/real
-multimodal acceptance remain required. This source milestone is not a release
+startup. The content page itself never sends. A separate player SEND review and
+original-only history/result flow are described in
+`reference-world-patch-player-flow.md`. The development contract is still at
+most one call, not Lite/Pro/Max/Ultra. The complete shared budgeted design
+pipeline and exact-package game/real multimodal acceptance remain required.
+This source milestone is not a release
 certification or a claim that the overall roadmap is complete.
 
 Free synthetic tests exercise the production HTTP and Java preparation lanes,

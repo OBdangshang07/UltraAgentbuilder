@@ -24,6 +24,7 @@ final class SelectionController {
     private SelectionReadService.Handle read;
     private String contextId;private JsonObject savedContext;private volatile long contextEpoch;private boolean contextBusy;
     private JsonObject preparedTask,confirmedTask,preparedPatch,frozenPatch;
+    private ReferenceWorldPatchSendPlan referencePatchPlan;private java.util.function.BooleanSupplier referencePatchApprovalCurrent;
     private Matrix4f inverse;private Vec3d camera;private Drag drag;
     private record Drag(SelectionRegion region,SelectionGizmo.Face face,double start,SelectionGizmo.Vector anchor,SelectionDraft.Target target,int protectionIndex){}
     private final VertexConsumerProvider.Immediate lines=VertexConsumerProvider.immediate(new BufferBuilder(16384));
@@ -54,7 +55,7 @@ final class SelectionController {
     }
     void cancel(){clearContext();if(read!=null&&server!=null)SelectionReadService.cancel(server,read.id());read=null;}
     private void discardContext(String id){if(id!=null)StudioClient.BRIDGE.request("POST","/v1/world-contexts/"+id+"/discard",null).exceptionally(e->null);}
-    private void clearContext(){String old=contextId;contextEpoch++;contextId=null;savedContext=null;preparedTask=null;confirmedTask=null;preparedPatch=null;frozenPatch=null;contextBusy=false;discardContext(old);}
+    private void clearContext(){String old=contextId;contextEpoch++;contextId=null;savedContext=null;preparedTask=null;confirmedTask=null;preparedPatch=null;frozenPatch=null;referencePatchPlan=null;referencePatchApprovalCurrent=null;contextBusy=false;discardContext(old);}
     boolean contextBusy(){return contextBusy;}
     /** Captured on the client thread. The volatile epoch invalidates before
      * release on any world/selection/context change; no replacement baseline. */
@@ -146,7 +147,7 @@ final class SelectionController {
         var source=referencePatchSourceGate();if(!source.getAsBoolean()||!imagesCurrent.getAsBoolean()){message="先保存准确环境和图片编辑；未调用模型";return;}
         var exact=intent.deepCopy();var pictures=manifest.deepCopy();var selected=new JsonObject();for(var k:List.of("agent","model","effort"))selected.add(k,exact.get(k));
         if(!referencePatchChoice(selected)){message="模型选择改变，请重新打开任务；未调用模型";return;}
-        contextBusy=true;message="独立发现图像能力并核验联合逐格披露；模型调用 0";var capability=new java.util.concurrent.atomic.AtomicReference<JsonObject>();
+        referencePatchPlan=null;referencePatchApprovalCurrent=null;contextBusy=true;message="独立发现图像能力并核验联合逐格披露；模型调用 0";var capability=new java.util.concurrent.atomic.AtomicReference<JsonObject>();
         java.util.function.BooleanSupplier live=()->source.getAsBoolean()&&imagesCurrent.getAsBoolean();
         StudioClient.BRIDGE.referencePatchModel(selected).thenCompose(model->{
             WorldPatchSend.allowed(live);capability.set(model.deepCopy());return ContextPublication.checked(this::checkedCapture,cap->StudioClient.BRIDGE.prepareReferencePatchTask(cap,exact,pictures,model,live));
@@ -166,9 +167,17 @@ final class SelectionController {
         ContextPublication.checked(this::checkedCapture,cap->StudioClient.BRIDGE.freezeReferencePatchTask(cap,prepared,manifest,capability,source)).whenComplete((frozen,error)->c.execute(()->{
             if(ticket!=contextEpoch)return;contextBusy=false;if(error!=null){message=root(error);return;}
             if(!source.getAsBoolean()||!referencePatchChoice(prepared.getAsJsonObject("task").getAsJsonObject("disclosure").getAsJsonObject("recipient"))){message="原图片、提示词或模型已变化；冻结记录保留，不发送";return;}
-            message="准确原选区＋原图已冻结，尚未发送；完整档位与玩家发送后续接入";
-            if(c.currentScreen==page)c.setScreen(new StudioInfoScreen(parent,"联合内容冻结完成 · 模型调用 0",message+"\n\n原内容身份："+frozen.get("capsuleId").getAsString()+"\n\n此页不提供 SEND 或世界写入权限，也不会自动转换成普通文字改造任务。"));
+            try{referencePatchPlan=new ReferenceWorldPatchSendPlan(prepared,frozen,manifest,capability);referencePatchApprovalCurrent=source;}catch(Exception invalid){message=root(invalid);return;}
+            message="准确原选区＋原图已冻结，尚未发送；独立发送仍需明确确认";
+            if(c.currentScreen==page)c.setScreen(new StudioInfoScreen(parent,"联合内容冻结完成 · 模型调用 0",message+"\n\n原内容身份："+frozen.get("capsuleId").getAsString()+"\n\n当前最多 1 次的开发协议不是完整四档任务；普通启动仍关闭。审核发送会先查询准确能力，不会自动转换成文字改造或取得世界写入权限。","独立审核联合发送",false,()->openReferencePatchSend(parent)));
         }));
+    }
+    void openReferencePatchSend(Screen parent){
+        try{if(contextBusy||referencePatchPlan==null||referencePatchApprovalCurrent==null||!referencePatchApprovalCurrent.getAsBoolean())throw new IllegalStateException("先完成当前准确图片＋选区内容冻结；旧内容或附件已改变");
+            var plan=referencePatchPlan;if(!referencePatchChoice(plan.recipient()))throw new IllegalStateException("原模型选择已改变，旧联合确认不可发送");
+            var exact=referencePatchApprovalCurrent;long ticket=contextEpoch;
+            MinecraftClient.getInstance().setScreen(new ReferenceWorldPatchSendScreen(parent,plan,this::checkedCapture,()->ticket==contextEpoch&&exact.getAsBoolean()));
+        }catch(Exception invalid){message=root(invalid);}
     }
     CompletableFuture<SelectionReadService.PatchRetention> retainPatchSend(SelectionReadService.Capture original,JsonObject reference,java.util.function.BooleanSupplier live){
         return retainPatchSend(original,reference,live,WorldPatchJobReceipt::retentionBinding);

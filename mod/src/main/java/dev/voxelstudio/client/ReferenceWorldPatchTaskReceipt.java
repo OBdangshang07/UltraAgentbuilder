@@ -131,7 +131,7 @@ final class ReferenceWorldPatchTaskReceipt {
         var outer=pick(p,RECORD_PINS);outer.addProperty("format","SavedReferenceWorldPatchDesignReview");outer.addProperty("version",1);outer.addProperty("purpose",PURPOSE);outer.add("requestHash",c.get("requestHash"));outer.add("taskReview",inner);outer.addProperty("state","reviewed-not-sent");
         for(var k:List.of("summaryConsentTransferable","referenceConsentTransferable","modelSent","sendingImplemented","serverBaselineVerified","canAuthorizePlacement"))outer.addProperty(k,false);rehash(outer,"reviewHash");return outer;
     }
-    private static void verifyManifest(JsonObject intent,JsonObject m){
+    static void verifyManifest(JsonObject intent,JsonObject m){
         keys(m,"format","version","ownerId","mode","references","pixels","bytes","metadataRemoved","untrustedData","worldCaptured","canAuthorizePlacement","setHash");
         if(!text(m,"format").equals("UserReferenceSet")||number(m,"version")!=1||!text(m,"ownerId").equals(text(intent,"referenceOwnerId"))||!text(m,"setHash").equals(text(intent,"referenceSetHash"))||!Set.of("reconstruct","inspire","multi-view").contains(text(m,"mode"))||!flag(m,"metadataRemoved")||!flag(m,"untrustedData"))throw new IllegalStateException("联合图片不是原批准图片组");
         no(m,"worldCaptured","canAuthorizePlacement");hash(m,"setHash");var records=m.getAsJsonArray("references");if(records.size()<1||records.size()>4)throw new IllegalStateException("联合图片数量超额");long pixels=0,bytes=0;
@@ -141,7 +141,7 @@ final class ReferenceWorldPatchTaskReceipt {
             if(a.has("scale")){var scale=a.getAsJsonObject("scale");keys(scale,"dimension","meters");var n=scale.get("meters");if(!Set.of("height","width","bay").contains(text(scale,"dimension"))||!n.isJsonPrimitive()||!n.getAsJsonPrimitive().isNumber()||n.getAsBigDecimal().signum()<=0||n.getAsBigDecimal().compareTo(java.math.BigDecimal.valueOf(4096))>0)throw new IllegalStateException("联合尺度锚点无效");}
         }if(pixels>12582912||bytes>25165824||pixels!=number(m,"pixels")||bytes!=number(m,"bytes"))throw new IllegalStateException("联合图片组总量改变");
     }
-    private static void verifyCapability(JsonObject i,JsonObject c){
+    static void verifyCapability(JsonObject i,JsonObject c){
         keys(c,"agent","model","effort","supportsImages","advertisedEfforts","runtimeHash");for(var k:List.of("agent","model","effort"))same(c.get(k),i.get(k));if(!flag(c,"supportsImages"))throw new IllegalStateException("所选联合模型未声明识图");digest(c,"runtimeHash");
         var efforts=c.getAsJsonArray("advertisedEfforts");var unique=new HashSet<String>();if(efforts.size()<1||efforts.size()>16)throw new IllegalStateException("联合能力配额无效");
         for(var e:efforts){if(!e.isJsonPrimitive()||!e.getAsJsonPrimitive().isString()||!Set.of("default","none","minimal","low","medium","high","xhigh","max","ultra").contains(e.getAsString())||!unique.add(e.getAsString()))throw new IllegalStateException("联合能力声明无效");}

@@ -102,6 +102,30 @@ final class ReferenceWorldPatchJobReceipt {
         digest(v,"runtimeHash");return enabled?text(v,"runtimeHash"):null;
     }
     static boolean polling(JsonObject status){return Set.of("running","checking").contains(text(status,"state"));}
+    static String details(JsonObject reference,JsonObject status){
+        verify(reference,status);String state=text(status,"state");
+        String meaning=switch(state){
+            case "reserved-not-dispatched"->"原引用已保留，尚未取得派发证据；不能据此重新提交";
+            case "running"->"原联合任务运行中；本页自动 GET，不调用新模型";
+            case "checking"->"原回答正在工程校验；未取得世界写入权限";
+            case "unknown"->"原调用结果未知，费用不能称零；仅可独立确认观察原回合";
+            case "response-retained"->"原响应已保留，尚无已校验候选；不重新生成或替换原回答";
+            case "completed-checked"->"原候选已通过工程校验；不是设计品质、当前世界或放置验收";
+            case "completed-rejected"->"原候选未通过工程校验；原回答与拒绝原因保留，不自动重试";
+            default->"原任务失败或本地停止；完整原证据保留，不重发";
+        };
+        var out=new StringBuilder("参考图＋选区的原任务结果。当前是一调用开发合同，不是完整四档任务。\n\n")
+            .append("模型：").append(reference.get("recipient")).append("\n状态：").append(state).append("\n").append(meaning)
+            .append("\n调用预留：").append(number(status,"callsReserved")).append(" / 1；自动重试：0")
+            .append("\n发送证据：").append(status.get("modelSent")).append("\n世界写入：0；本页没有放置授权。")
+            .append("\n\n原任务：").append(text(reference,"capsuleId")).append("\n原图片组：").append(text(reference,"referenceSetHash"))
+            .append("\n原图像能力：").append(text(reference,"imageCapabilityHash"))
+            .append("\n原快照：").append(text(reference,"snapshotHash")).append("\n原选区：").append(reference.get("selection"));
+        if(!status.get("localStop").isJsonNull())out.append("\n\n本地停止证据（不是提供方终态）：").append(status.get("localStop"));
+        if(state.equals("completed-checked"))out.append("\n\n原候选：").append(text(status,"candidateHash"))
+            .append("\n加载时重新校验原文件、原图片身份和同一服务器快照；不可拖移或绑定另一世界。确认应用前仍需独立 BEFORE/物理核验，实际写入需最终明确确认。未验证的通行与设计质量不标为通过。");
+        return out.toString();
+    }
     private static void allowed(BooleanSupplier cancelled){if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("联合状态核验已取消");}
     private ReferenceWorldPatchJobReceipt(){}
 }
