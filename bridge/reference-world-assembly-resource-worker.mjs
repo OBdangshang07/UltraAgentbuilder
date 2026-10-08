@@ -6,6 +6,7 @@ import {REFERENCE_OWNER} from '../contracts/reference-attachments.mjs';
 import {prepareReferenceWorldAssemblyDraft,bindReferenceWorldAssemblyDraft,validateJointAssemblyReferenceInput} from './reference-world-assembly-input.mjs';
 import {readReferenceWorldAssemblyCandidate,readReferenceWorldAssemblyCandidatePart} from './reference-world-assembly.mjs';
 import {JOINT_ASSEMBLY_RESOURCE_LIMITS} from './reference-world-assembly-resources.mjs';
+import {readReferenceWorldAssemblyJobRecord} from './reference-world-assembly-job-data.mjs';
 
 const digest=/^[a-f0-9]{64}$/;
 async function physical(root) {
@@ -22,13 +23,16 @@ async function physical(root) {
 try {
   exactKeys(workerData,['dataDir','operation','id','payload'],'private joint resource worker');
   const {operation,id,payload}=workerData;
-  if(!['prepare','bind','metadata','part'].includes(operation)||typeof id!=='string'||!REFERENCE_OWNER.test(id))throw Error('Original joint operation/UUID required');
+  if(!['prepare','bind','metadata','part','job-record'].includes(operation)||typeof id!=='string'||!REFERENCE_OWNER.test(id))throw Error('Original joint operation/UUID required');
   if(!(payload instanceof Uint8Array)||payload.byteLength<1||payload.byteLength>JOINT_ASSEMBLY_RESOURCE_LIMITS.inputBytes)
     throw Object.assign(Error('Joint input byte quota'),{statusCode:413});
   const input=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(payload));
   const dataDir=await physical(workerData.dataDir),directory=path.join(dataDir,'reference-world-assembly-jobs',id);
   let result;
-  if(operation==='prepare'||operation==='bind') {
+  if(operation==='job-record') {
+    exactKeys(input,['expectedRequestHash'],'original full joint reservation read');
+    result=await readReferenceWorldAssemblyJobRecord({dataDir,id,expectedRequestHash:input.expectedRequestHash});
+  }else if(operation==='prepare'||operation==='bind') {
     exactKeys(input,['contextId','referenceSetHash','generation','selectedCapability',...(operation==='bind'?['send']:[])],'independent joint resource preparation');
     if(input.generation?.key!==id)throw Error('Joint generation key differs from original image owner');
     const options={...input,dataDir,referenceOwnerId:id};

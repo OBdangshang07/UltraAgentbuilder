@@ -44,6 +44,43 @@ readable after draft removal or expiry, but fresh preparation/dispatch still
 checks the original capture expiration. This input path remains internal until
 normal versioned joint job HTTP/UI and installed-game gates are integrated.
 
+### Independent original job ownership and one-use runner handoff
+
+`ReferenceWorldAssemblyJobRequest`, version 2, binds that original pixel UUID,
+complete generation request, context/set identities and distinct full-budget
+SEND. The private registry has no adapter or world API. It checks the original
+preparation and selected image/effort advertisement, obtains an exclusive
+cross-process reservation claim, creates a NEW empty job directory and captures
+the actual original Windows process identity. Exact image/context copying
+finishes before `request.json` commits last. Partial files or an unknown claim
+are preserved, not repaired, evicted, regenerated or adopted.
+
+Only the live registry that created this original record holds its one-use
+runner capability in memory. Concurrent duplicates reuse the record but cannot
+change prompt, budget, model, effort or image advertisement. Another registry
+instance or a restart can read history but cannot acquire execution ownership
+from JSON, an absent PID, elapsed time or a previous SEND. The original handoff
+consumes its in-memory capability before awaiting anything, then persists one
+`ReferenceWorldAssemblyOriginalDispatchClaim` with original request/preparation,
+runtime, owner and full-budget pins. An uncertain or failed handoff remains
+consumed. This ticket itself reserves NO provider call: the future runner must
+still use the SAME shared durable ledger to reserve every call before dispatch.
+
+Reservation inspection exposes only sanitized identifiers, original policy and
+reservation facts. `providerOutcome: not-assessed-by-reservation-reader` prevents
+history from misrepresenting a later pending/completed ledger as zero model
+work. Original pixels/context are reread through the bounded private worker;
+record reads use bounded allocation and reject links, concurrent growth, changed
+pins and self-rehashed substitutions. Expiration prevents a new handoff, not
+archival inspection. Local cancel/close retires outstanding operations and
+ownership without retrying, refreshing a capture or asserting a provider result.
+
+The real registry limit is eight retained original tasks, with no eviction.
+Free tests include separate real Windows processes, stopped partial publication,
+concurrent one-use handoffs, all four actual shared synthetic pipeline tiers,
+complete native candidates, quotas, expiry and tampering. Those are engineering
+tests, not paid-image understanding, normal player SEND/UI or world acceptance.
+
 ## Shared pipeline, not four separate generators
 
 `runReferenceWorldAssembly` calls the existing `runDurableAssembly` and
@@ -145,8 +182,9 @@ owning process can opt in; HTTP/config/normal CLI cannot enable it. In-flight
 preparation fences changes to model configuration, reference attachments,
 contexts and other job lanes. Health and read-only capability queries remain
 responsive. Closing the service cancels its original preparation/discovery and
-workers without dispatching or adopting a task. Full job ownership, SEND,
-native-render transport, persistent history/original-turn observation and the
+workers without dispatching or adopting a task. Job ownership and reservation
+inspection now exist internally only. Normal complete SEND/runner integration,
+native-render transport, public history/original-turn observation and the
 complete-set world transaction remain subsequent integration gates.
 
 ## Verification and limitations
