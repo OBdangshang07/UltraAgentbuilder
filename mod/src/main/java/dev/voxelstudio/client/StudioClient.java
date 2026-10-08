@@ -20,6 +20,8 @@ public final class StudioClient implements ClientModInitializer {
     public static final ProjectionController PROJECTION = new ProjectionController();
     static final SelectionController SELECTION = new SelectionController();
     static final WorldPatchPreviewController PATCH_PREVIEW = new WorldPatchPreviewController();
+    static final ReferenceWorldAssemblyObserver ASSEMBLY = new ReferenceWorldAssemblyObserver(BRIDGE::referenceAssemblyHistory,BRIDGE::readReferenceAssemblyJob,
+        operation->MinecraftClient.getInstance().execute(operation),(reference,status)->StudioNativeEvidence.observeAssembly(reference.get("id").getAsString(),reference.get("requestHash").getAsString(),status));
     private static final java.util.Map<String,KeyBinding> KEYS = new java.util.HashMap<>();
     private static Matrix4f worldView,worldProjection;
     private static Vec3d worldCamera;
@@ -43,6 +45,7 @@ public final class StudioClient implements ClientModInitializer {
             StudioOnboardingSelfTest.tick(c);
             ProjectionRenderSelfTest.tick(c);
             StudioScreen.backgroundTick();
+            ASSEMBLY.tick();
             StudioNativeEvidence.tick(c);
             SELECTION.tick(c);
             PATCH_PREVIEW.tick(c);
@@ -71,7 +74,7 @@ public final class StudioClient implements ClientModInitializer {
             @Override public Identifier getFabricId() { return new Identifier("voxel_studio", "projection_models"); }
             @Override public void reload(ResourceManager manager) { MinecraftClient.getInstance().execute(() -> { if (PROJECTION.asset != null) PROJECTION.renderer.rebuild(PROJECTION.placement()); PATCH_PREVIEW.reload(); }); }
         });
-        ClientLifecycleEvents.CLIENT_STOPPING.register(c -> { StudioEvidenceShutdown.observe(c,true);PATCH_PREVIEW.close();SELECTION.close();StudioNativeEvidence.clear(); BRIDGE.close(); PROJECTION.close(); });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(c -> { StudioEvidenceShutdown.observe(c,true);ASSEMBLY.close();PATCH_PREVIEW.close();SELECTION.close();StudioNativeEvidence.clear(); BRIDGE.close(); PROJECTION.close(); });
         ClientChunkEvents.CHUNK_LOAD.register((w,c)->dev.voxelstudio.WorldChangeTracker.chunk(w,c.getPos().x,c.getPos().z));
         ClientChunkEvents.CHUNK_UNLOAD.register((w,c)->dev.voxelstudio.WorldChangeTracker.chunk(w,c.getPos().x,c.getPos().z));
     }

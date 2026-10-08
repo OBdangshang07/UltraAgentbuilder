@@ -46,8 +46,10 @@ final class SelectionScreen extends Screen {
             button("准备 AI 原位改造 · 新逐格披露，不调用",()->client.setScreen(new WorldPatchTaskScreen(this)));
             button("原位改造的一次独立发送审核",()->tool.openPatchSend(this));
             button("原位改造历史 / 候选 · 只查询",()->client.setScreen(new WorldPatchHistoryScreen(this)));
-            button("参考图＋选区的独立发送审核 · 开发协议",()->tool.openReferencePatchSend(this));
-            button("参考图＋选区历史 / 原候选 · 只查询",()->client.setScreen(new ReferenceWorldPatchHistoryScreen(this)));
+            button("参考图＋场地 · 完整四档建筑任务",()->client.setScreen(new ReferenceWorldAssemblyTaskScreen(this)));
+            button("完整联合历史 / 后台任务 · 不重发",()->client.setScreen(new ReferenceWorldAssemblyHistoryScreen(this)));
+            button("旧参考图局部改造 · 一调用审核（独立协议）",()->tool.openReferencePatchSend(this));
+            button("旧参考图局部改造历史 · 不升级确认",()->client.setScreen(new ReferenceWorldPatchHistoryScreen(this)));
             if(StudioClient.PATCH_PREVIEW.preview()!=null)button("原位差异预览 · 应用需独立最终确认",()->client.setScreen(new WorldPatchPreviewScreen(this)));
             button("原位事务进度 / 显式取消 · 不恢复写入",()->client.setScreen(new WorldPatchOperationScreen(this)));
             button("取消读取 / 丢弃快照",tool::cancel);

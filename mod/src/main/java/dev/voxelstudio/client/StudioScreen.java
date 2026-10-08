@@ -95,15 +95,36 @@ public final class StudioScreen extends Screen {
     /** Exact selected settings. Opening reference UI never changes generation
      * mode/model/tier or quietly turns on image/repair permissions. */
     static JsonObject referenceGenerationRequest(String owner){
-        if(!idle()||!agentReady||!supportsVisualReview()||description.isBlank()||!generationMode.equals("components"))
+        return referenceGenerationRequest(owner,description);
+    }
+    private static JsonObject referenceGenerationRequest(String owner,String prompt){
+        if(!idle()||!agentReady||!supportsVisualReview()||prompt.isBlank()||!generationMode.equals("components"))
             throw new IllegalStateException("先选择已连接、明确支持图片的 Codex 模型、组件化生成与建筑提示词；不会自动替换设置");
         if(!owner.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"))throw new IllegalArgumentException("无效图片草稿身份");
-        var req=new JsonObject();req.addProperty("key",owner);req.addProperty("agent",selectedAgent);req.addProperty("model",modelLabel());req.addProperty("prompt",description);
+        var req=new JsonObject();req.addProperty("key",owner);req.addProperty("agent",selectedAgent);req.addProperty("model",modelLabel());req.addProperty("prompt",prompt);
         if(!selectedEffort.equals("default"))req.addProperty("effort",selectedEffort);
         var world=MinecraftClient.getInstance().world;if(world!=null)req.addProperty("worldHeight",world.getHeight());configureAssembly(req);return req;
     }
     static boolean referenceGenerationCurrent(JsonObject exact,String world){
         try{return StudioGenerationConsent.matches(exact,referenceGenerationRequest(exact.get("key").getAsString()),world,projection().key(),idle());}catch(Exception e){return false;}
+    }
+    /** The independent full SEND screen is the only invocation confirmation.
+     * This request declaration does not reuse ordinary image/budget consent. */
+    static JsonObject referenceAssemblyGenerationRequest(String owner,String prompt){
+        var request=referenceGenerationRequest(owner,prompt);request.addProperty("assemblyConfirmed",true);
+        ReferenceWorldAssemblyReceipt.generation(request);return request;
+    }
+    static boolean referenceAssemblyGenerationCurrent(JsonObject exact,String world){
+        try{return StudioGenerationConsent.matches(exact,referenceAssemblyGenerationRequest(exact.get("key").getAsString(),exact.get("prompt").getAsString()),world,projection().key(),idle());}catch(Exception error){return false;}
+    }
+    static String referenceAssemblyTierSummary(){return qualityTier+" · 完整共享预算 ≤"+StudioAssembly.tier(qualityTier).maximumCalls()+" 次（当前选择 "+assemblyCalls+"）";}
+    static void chooseReferenceAssemblyTier(Screen parent,Runnable changed){
+        if(!idle())throw new IllegalStateException("先等待原任务或事务结束；不改变运行任务");
+        MinecraftClient.getInstance().setScreen(new StudioChoiceScreen(parent,"完整联合 · 明确选择四档与预算",StudioAssembly.tiers().stream().map(t->new StudioChoiceScreen.Choice(t.id(),t.id()+" · ≤"+t.maximumCalls()+" 次共享调用",t.description()+"；识图、候选、制作、纠错与复核同预算。非 Ultra 关闭已选择的 Ultra 专属分阶段原型，不沿用旧确认。")).toList(),qualityTier,v->{selectAssemblyTier(v);changed.run();}));
+    }
+    private static void selectAssemblyTier(String value){
+        qualityTier=value;assemblyCalls=StudioAssembly.tier(value).maximumCalls();if(!value.equals("ultra"))assemblyCompletionReserve=false;
+        if(!value.equals("ultra")&&assemblyPrototypeMode.equals("staged")){assemblyPrototypeMode="off";tell("已关闭 Ultra 分阶段原型","其他档位不会自动改用旧原型协议；如需旧版请重新明确选择。没有调用模型。",StudioTheme.MUTED);}
     }
     private static void configureAssembly(JsonObject req){
         StudioAssembly.configure(req,qualityTier,assemblyCalls);
@@ -516,7 +537,7 @@ public final class StudioScreen extends Screen {
         }
         client.setScreen(new StudioChoiceScreen(this,"v4 · 原型流程（明确选择）",choices,assemblyPrototypeMode,v->{assemblyPrototypeMode=v;if(v.equals("staged"))assemblyCalls=Math.max(22,assemblyCalls);else assemblyCompletionReserve=false;}));
     }
-    private void chooseQualityTier(){client.setScreen(new StudioChoiceScreen(this,"组件化 · 制作精度",StudioAssembly.tiers().stream().map(t->new StudioChoiceScreen.Choice(t.id(),t.id()+" · "+t.maxPackages()+" 任务 / "+t.reviewRounds()+" 轮 / ≤"+t.maximumCalls()+" 次",t.description())).toList(),qualityTier,v->{qualityTier=v;assemblyCalls=StudioAssembly.tier(v).maximumCalls();if(!v.equals("ultra"))assemblyCompletionReserve=false;if(!v.equals("ultra")&&assemblyPrototypeMode.equals("staged")){assemblyPrototypeMode="off";tell("已关闭 Ultra 分阶段原型","其他档位不会自动改用旧原型协议；如需旧版请重新明确选择。没有调用模型。",StudioTheme.MUTED);}}));}
+    private void chooseQualityTier(){client.setScreen(new StudioChoiceScreen(this,"组件化 · 制作精度",StudioAssembly.tiers().stream().map(t->new StudioChoiceScreen.Choice(t.id(),t.id()+" · "+t.maxPackages()+" 任务 / "+t.reviewRounds()+" 轮 / ≤"+t.maximumCalls()+" 次",t.description())).toList(),qualityTier,StudioScreen::selectAssemblyTier));}
     private void chooseAssemblyCalls(){List<StudioChoiceScreen.Choice> choices=new ArrayList<>();var t=StudioAssembly.tier(qualityTier);int overhead=assemblyQualityVersion>=3?5:3;boolean staged=assemblyPrototypeMode.equals("staged");for(int n=staged?22:overhead+2;n<=t.maximumCalls();n++)choices.add(new StudioChoiceScreen.Choice(Integer.toString(n),"最多 "+n+" 次底层调用"+(n==t.maximumCalls()?" · 档位默认":""),staged?StudioAssembly.stagedBudgetSummary(n):"最多 "+Math.min(t.maxPackages(),n-overhead)+" 个制作任务；所有阶段均在总预算内"));client.setScreen(new StudioChoiceScreen(this,qualityTier+" · 调用总上限",choices,Integer.toString(assemblyCalls),v->assemblyCalls=Integer.parseInt(v)));}
     private void chooseCheckpointCalls(){client.setScreen(new StudioChoiceScreen(this,"检查点 · 底层调用总上限",List.of(new StudioChoiceScreen.Choice("2","最多 2 次 · 布局 + 细化","不留纠错次数；布局失败立即停止"),new StudioChoiceScreen.Choice("3","最多 3 次 · 含 1 次纠错","纠错消耗同一总预算，仍须完成细化"),new StudioChoiceScreen.Choice("4","最多 4 次 · 含 2 次纠错","最多 4 次底层模型调用，每次可能计费；不是成功次数")),Integer.toString(checkpointCalls),v->checkpointCalls=Integer.parseInt(v)));}
     private static void refreshAgent(){

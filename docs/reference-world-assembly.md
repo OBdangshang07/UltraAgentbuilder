@@ -328,10 +328,32 @@ Node-produced synthetic four-tier receipts and real paired client HTTP tests
 cover these paths. They do not certify game pixels, real visual understanding,
 architectural quality or a same-asset world transaction.
 
-This is the player transport/retention foundation, not the complete player
-screen or background observer. Those callers, the whole-set difference view,
-fresh BEFORE/one final confirmation/journal/undo and installed-game gates remain
-required. Normal process opt-in remains disabled; no release is certified here.
+The selection panel now has a distinct full-tier player preparation entry,
+accurate picture editor, explicit Lite/Pro/Max/Ultra choice, one shared-budget
+and privacy SEND screen, separate retained history and original-task status.
+It reuses current explicit model/effort/native-quality settings rather than
+silently enabling image permissions or transferring one-call consent. The
+task's own 16000-character description is independent of the creation panel's
+description; changing images, content, settings, world or selection invalidates
+an unsent preparation. A reduced old budget is not silently raised to the full
+selected-tier maximum. Default focus on SEND is the return button.
+
+The full observer is attached to real client ticks, not result-screen polling.
+It restores only validated complete-task references, serializes bounded original
+GETs, forwards exact current original native requests to the existing asset-only
+renderer and keeps working after a screen closes. Unknown/lost GETs use bounded
+read backoff, never model replay; retained history cannot regain execution.
+Late status cannot replace a completed candidate. Shutdown retires observation
+and rejects late callbacks; no original file is repaired or evicted. Reading
+status or servicing native evidence does not grant world-write authority.
+
+Free deterministic tick tests and actual paired GET tests use synthetic status
+and native-request hashes. They do not prove installed-game pixels, real model
+image understanding, architectural quality or whole-set transactions. The
+whole-set difference view, fresh BEFORE/one final confirmation/journal/undo
+and installed-game gates remain required. The result page explicitly disables
+placement rather than treating a single part as an apply scope. Normal process
+opt-in remains disabled; no release is certified here.
 
 Free developer regression requires the repository's existing locked dependencies
 (`npm ci --ignore-scripts`). The test entry now checks its independent NBT fixture

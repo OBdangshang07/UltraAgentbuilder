@@ -85,4 +85,14 @@ class ReferenceWorldAssemblyBridgeClientTest {
         server.createContext("/v1/reference-world-assembly/capabilities",e->{record(e);e.getResponseHeaders().set("Content-Type","text/html");var bytes=bytes(caps.toString());e.sendResponseHeaders(200,bytes.length);try(var out=e.getResponseBody()){out.write(bytes);}});
         assertThrows(ExecutionException.class,()->client.prepareReferenceAssembly(capture,f.getAsJsonObject("generation"),f.getAsJsonObject("manifest"),live::get).get(5,TimeUnit.SECONDS));assertEquals(1,routes.size());assertEquals(List.of(),client.referenceAssemblyHistory().get(2,TimeUnit.SECONDS));
     }
+    @Test void restoredBackgroundObserverUsesActualPairedOriginalGetWithoutScreensOrModelDiscovery()throws Exception{
+        new ReferenceWorldAssemblyReferences(root.resolve("data")).claim(r);var status=ReferenceWorldAssemblyObserverTest.waiting(f);var callbacks=new LinkedBlockingQueue<Runnable>();var nativeHook=new CompletableFuture<NativeEvidenceTarget>();
+        read("/v1/reference-world-assembly/jobs/"+r.get("id").getAsString(),()->status);
+        var observer=new ReferenceWorldAssemblyObserver(client::referenceAssemblyHistory,client::readReferenceAssemblyJob,callbacks::add,
+            (original,value)->nativeHook.complete(NativeEvidenceTarget.assembly(original.get("id").getAsString(),original.get("requestHash").getAsString(),value)));
+        try{observer.tick();var restored=callbacks.poll(5,TimeUnit.SECONDS);assertNotNull(restored);restored.run();observer.tick();var observed=callbacks.poll(5,TimeUnit.SECONDS);assertNotNull(observed);observed.run();
+            var target=nativeHook.get(1,TimeUnit.SECONDS);assertEquals(NativeEvidenceTarget.Namespace.FULL_ASSEMBLY,target.namespace());assertEquals(r.get("requestHash").getAsString(),target.originalRequestHash());
+            assertEquals(status,observer.view(r).status());assertEquals(List.of("GET /v1/reference-world-assembly/jobs/"+r.get("id").getAsString()),routes);assertEquals(0,sends.get());assertEquals(0,attempts.get());
+        }finally{observer.close();}
+    }
 }

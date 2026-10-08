@@ -160,6 +160,21 @@ final class SelectionController {
         }));
     }
     private boolean referencePatchChoice(JsonObject selected){try{return selected.equals(StudioScreen.contextRecipient());}catch(Exception unavailable){return false;}}
+    void prepareReferenceAssembly(Screen parent,JsonObject generation,JsonObject manifest,java.util.function.BooleanSupplier contentCurrent){
+        var source=referencePatchSourceGate();var exact=generation.deepCopy();var pixels=manifest.deepCopy();String world=StudioScreen.referenceWorldScope();
+        if(!source.getAsBoolean()||!contentCurrent.getAsBoolean()||!StudioScreen.referenceAssemblyGenerationCurrent(exact,world)){message="先保存原环境、准确图片及完整制作设置；未发送模型";return;}
+        contextBusy=true;message="核验完整四档预算、原图和 W 逐格披露；模型调用 0";
+        java.util.function.BooleanSupplier live=()->source.getAsBoolean()&&contentCurrent.getAsBoolean();
+        ContextPublication.checkedValue(this::checkedCapture,cap->StudioClient.BRIDGE.prepareReferenceAssembly(cap,exact,pixels,live))
+            .whenComplete((plan,error)->MinecraftClient.getInstance().execute(()->{
+                if(!source.getAsBoolean())return;contextBusy=false;
+                if(error!=null){message=root(error);return;}
+                var c=MinecraftClient.getInstance();if(c.currentScreen!=parent||!live.getAsBoolean()||!StudioScreen.referenceAssemblyGenerationCurrent(exact,world)){
+                    message="原页面、图片、要求或完整制作设置已改变；旧准备保留，不发送";return;}
+                message="完整联合内容与预算已核验；只在独立 SEND 页明确确认后才调用";
+                c.setScreen(new ReferenceWorldAssemblySendScreen(parent,plan,this::checkedCapture,live));
+            }));
+    }
     private void freezeReferencePatch(Screen parent,JsonObject prepared,JsonObject manifest,JsonObject capability,java.util.function.BooleanSupplier source){
         if(contextBusy||!source.getAsBoolean()){message="原图片或环境已失效，未冻结";return;}
         if(!referencePatchChoice(prepared.getAsJsonObject("task").getAsJsonObject("disclosure").getAsJsonObject("recipient"))){message="模型已改变，旧联合披露不可确认";return;}

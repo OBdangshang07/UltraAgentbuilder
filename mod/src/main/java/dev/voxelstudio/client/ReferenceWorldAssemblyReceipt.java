@@ -121,5 +121,16 @@ final class ReferenceWorldAssemblyReceipt {
         if(number(c,"automaticRetries")!=0||flag(c,"sendingEnabled")&&!flag(c,"preparationEnabled"))throw new IllegalStateException("完整联合权限改变");
         if(c.get("runtimeHash").isJsonNull()){if(flag(c,"preparationEnabled")||flag(c,"sendingEnabled"))throw new IllegalStateException("完整协议缺少原 runtime");}else digest(c,"runtimeHash");return c;
     }
+    static String observationDetails(JsonObject input,JsonObject state){
+        var r=verifyReference(input);var p=r.getAsJsonObject("prepared");var g=r.getAsJsonObject("request").getAsJsonObject("generation");
+        String base="原完整任务："+text(r,"id")+"\n模型 / 推理："+p.get("selected")+"\n档位："+text(p,"tier")+"；完整共享上限 "+number(p,"maximumCalls")+" 次，包含识图、候选、制作、纠错、恢复和复核。\n\n要求：\n"+text(g,"prompt")+"\n\n原图片组："+text(p,"referenceSetHash")+"\n原快照："+text(p,"snapshotHash")+"\n原 C/W/保护区："+r.get("selection");
+        if(state==null)return base+"\n\n尚无已核验原回执；不证明模型未调用。仅 GET 此原任务，不能补发、换模型或借用旧确认。";
+        status(r,state);String reserved=state.get("reservedCalls").isJsonNull()?"尚未发布（不等于 0）":Long.toString(number(state,"reservedCalls"));
+        String details=base+"\n\n原状态："+text(state,"state")+"\n已记录预留："+reserved+" / "+number(p,"maximumCalls")+"。预留和本地回执不是独立提供方审计或成功次数。";
+        if(state.has("stageEventsObserved"))details+="\n观察到阶段事件："+number(state,"stageEventsObserved")+"（不是调用或成功次数）。";
+        if(state.has("pendingCalls"))details+="\n历史待核实预留："+number(state,"pendingCalls")+"；本地响应："+number(state,"responseCalls")+"；本地失败："+number(state,"failedCalls")+"。重启只读取原记录，不接管或恢复派发。";
+        if(text(state,"state").equals("preview-ready"))details+="\n\n原完成候选："+state.get("candidate")+"\n全部 parts 是一个整体，不可单片建造。整组下载重验、原坐标差异、fresh BEFORE、一次最终确认、事务日志及保护撤销尚待集成；本页不授予写入权限。";
+        return details+"\n\n关页后仍由客户端 tick 查询和服务当前原资产的原生渲染，不截图世界、HUD 或桌面。客户端关闭会退出观察；下次启动只读取原任务。不重新识图、不重复计费、不刷新世界基线。";
+    }
     private ReferenceWorldAssemblyReceipt(){}
 }
