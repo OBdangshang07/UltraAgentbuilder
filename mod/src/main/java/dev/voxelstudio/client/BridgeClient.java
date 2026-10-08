@@ -400,6 +400,31 @@ public final class BridgeClient implements AutoCloseable {
         return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/reference-world-assembly/jobs/"+WorldPatchTaskReceipt.text(r,"id"),null,
             ReferenceWorldAssemblyReceipt.STATUS_BYTES,v->ReferenceWorldAssemblyReceipt.status(r,v),()->{}));
     }
+    /** GET-only complete original set, serialized on the bounded context lane.
+     * No partial result is returned and no part enters single-patch placement.
+     * Failure/cancellation never retries, refreshes a baseline or calls a model. */
+    CompletableFuture<ReferenceWorldAssemblyCandidateReceipt.Whole> readReferenceAssemblyCandidate(JsonObject input,JsonObject finalStatus,BooleanSupplier live){
+        final JsonObject r,s;try{WorldPatchSend.allowed(live);r=ReferenceWorldAssemblyReceipt.verifyReference(input.deepCopy());s=ReferenceWorldAssemblyReceipt.status(r,finalStatus.deepCopy());
+            if(!WorldPatchTaskReceipt.text(s,"state").equals("preview-ready"))throw new IllegalStateException("没有原完整成品，不能读取部分候选");
+        }catch(Exception error){return CompletableFuture.failedFuture(error);}
+        String base="/v1/reference-world-assembly/jobs/"+WorldPatchTaskReceipt.text(r,"id"),pin=WorldPatchTaskReceipt.text(s.getAsJsonObject("candidate"),"candidateHash");
+        var cancelled=(BooleanSupplier)()->!live.getAsBoolean();
+        return connect().thenCompose(c->referencePatchExchange(c,"GET",base+"/candidate?candidateHash="+pin,null,
+            ReferenceWorldAssemblyCandidateReceipt.METADATA_BYTES,v->{ReferenceWorldAssemblyCandidateReceipt.metadata(r,s,v,cancelled);return v;},()->WorldPatchSend.allowed(live))
+            .thenCompose(envelope->{
+                var metadata=ReferenceWorldAssemblyCandidateReceipt.metadata(r,s,envelope,cancelled);long[] bytes={ReferenceWorldAssemblyCandidateReceipt.transmittedBytes(envelope)};
+                CompletableFuture<List<ReferenceWorldAssemblyCandidateReceipt.Part>> chain=CompletableFuture.completedFuture(new ArrayList<>());
+                for(int index=0;index<metadata.partCount();index++){final int part=index;
+                    chain=chain.thenCompose(parts->referencePatchExchange(c,"GET",base+"/parts/"+part+"?candidateHash="+pin,null,ReferenceWorldAssemblyCandidateReceipt.PART_BYTES,
+                        value->{WorldPatchSend.allowed(live);bytes[0]+=ReferenceWorldAssemblyCandidateReceipt.transmittedBytes(value);
+                            if(bytes[0]>ReferenceWorldAssemblyCandidateReceipt.DOWNLOAD_BYTES)throw new IllegalStateException("原整组传输字节超额；不采用部分成果");return value;},()->WorldPatchSend.allowed(live))
+                        .thenApply(value->{parts.add(ReferenceWorldAssemblyCandidateReceipt.part(metadata,part,value,cancelled));return parts;}));
+                }
+                return chain.thenCompose(parts->referencePatchExchange(c,"GET",base,null,ReferenceWorldAssemblyReceipt.STATUS_BYTES,
+                    value->{ReferenceWorldAssemblyReceipt.status(r,value);if(!WorldPatchTaskReceipt.text(value,"state").equals("preview-ready")||!s.get("candidate").equals(value.get("candidate")))throw new IllegalStateException("下载期间原整组最终身份改变；不采用替代稿");return value;},()->WorldPatchSend.allowed(live))
+                    .thenApply(ignored->ReferenceWorldAssemblyCandidateReceipt.whole(metadata,parts,cancelled)));
+            }));
+    }
     CompletableFuture<ReferenceWorldAssemblyPlan> prepareReferenceAssembly(SelectionReadService.Capture capture,JsonObject generation,JsonObject manifest,BooleanSupplier live){
         final JsonObject g,m;try{WorldPatchSend.allowed(live);g=generation.deepCopy();m=manifest.deepCopy();ReferenceWorldAssemblyReceipt.generation(g);}catch(Exception e){return CompletableFuture.failedFuture(e);}
         return referenceAssemblyCapabilities().thenCompose(caps->{

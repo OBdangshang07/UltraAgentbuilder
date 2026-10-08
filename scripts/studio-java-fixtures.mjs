@@ -28,6 +28,7 @@ import {makeJournalFixture} from './world-patch-journal-fixtures.mjs';
 import {makeReferencePlayerFixtures} from './reference-player-fixtures.mjs';
 import {makeReferenceWorldPatchClientFixtures} from './reference-world-patch-client-fixtures.mjs';
 import {makeReferenceWorldAssemblyClientFixtures} from './reference-world-assembly-client-fixtures.mjs';
+import {makeReferenceWorldAssemblyCandidateFixtures} from './reference-world-assembly-candidate-fixtures.mjs';
 const compiled=compileSpec(sampleSpec());
 for(const fixture of [courtyard,teahouse,commercial,highrise,instanceStudy,panelCourtyard,panelTeahouse,panelHighrise]){const c=compileScene(fixture()),dir='mod/build/test-fixtures/'+c.manifest.id;await fs.mkdir(dir,{recursive:true});await fs.writeFile(dir+'/manifest.json',JSON.stringify(c.manifest));await fs.writeFile(dir+'/cells.bin',c.binary);await fs.writeFile(dir+'/scene.json',JSON.stringify(c.scene));await fs.writeFile(dir+'/design-sources.json',JSON.stringify(c.designSources));}
 const floorDoors=()=>{const s=floorStudy();s.id='floor-doors';s.components=[s.components[0],storeyOpening('doors','main','east',{door:'oak_door'})];return s;};
@@ -47,6 +48,7 @@ await fs.mkdir('mod/build/test-fixtures',{recursive:true});
 await makeReferencePlayerFixtures();
 await makeReferenceWorldPatchClientFixtures();
 await makeReferenceWorldAssemblyClientFixtures();
+await makeReferenceWorldAssemblyCandidateFixtures();
 await makeReferencePlayerFixtures({providerRecovery:true});
 await fs.writeFile('mod/build/test-fixtures/world-patch-before.json',JSON.stringify(makeBeforeCheckFixtures()));
 await fs.writeFile('mod/build/test-fixtures/world-patch-safety.json',JSON.stringify(makePatchSafetyFixtures()));

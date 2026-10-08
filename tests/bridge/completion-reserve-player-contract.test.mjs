@@ -15,10 +15,16 @@ test('normal player reserve is default off and both request lanes use the same e
  assert.match(source,/if\(assemblyQualityVersion==4&&assemblyPrototypeMode\.equals\("staged"\)\)sideButton\([^\n]+StudioScreen::idle[^\n]+this::toggleCompletionReserve\);/);
  const builder=source.match(/private static void configureAssembly\(JsonObject req\)\{([\s\S]*?)\n    \}/)?.[1];
  assert.ok(builder);assert.match(builder,/StudioCompletionReserve\.configure\(req,assemblyCompletionReserve\);/);
- for(const name of ['referenceGenerationRequest','generationRequest']){
-  const fn=source.match(new RegExp('(?:static JsonObject|private static JsonObject) '+name+'\\([^\\n]+\\)\\{([\\s\\S]*?)\\n    \\}'))?.[1];
-  assert.ok(fn,name);assert.match(fn,/configureAssembly\(req\)/);
- }
+ // The public reference overload forwards to the prompt-bound builder. Check
+ // that exact delegation AND both builders, not only the first overload name.
+ const forwarded=source.match(/static JsonObject referenceGenerationRequest\(String owner\)\{([\s\S]*?)\n    \}/)?.[1];
+ assert.ok(forwarded);assert.match(forwarded,/return referenceGenerationRequest\(owner,description\);/);
+ const reference=source.match(/private static JsonObject referenceGenerationRequest\(String owner,String prompt\)\{([\s\S]*?)\n    \}/)?.[1];
+ const ordinary=source.match(/private static JsonObject generationRequest\(String key,boolean revise\)\{([\s\S]*?)\n    \}/)?.[1];
+ assert.ok(reference);assert.ok(ordinary);assert.match(reference,/configureAssembly\(req\)/);assert.match(ordinary,/configureAssembly\(req\)/);
+ assert.match(reference,/req\.addProperty\("prompt",prompt\)/);
+ assert.match(reference,/!generationMode\.equals\("components"\)/);
+ assert.match(ordinary,/if\(generationMode\.equals\("components"\)\)configureAssembly\(req\)/);
  const toggle=source.match(/private void toggleCompletionReserve\(\)\{([\s\S]*?)\n    \}/)?.[1];
  assert.ok(toggle);assert.match(toggle,/if\(!idle\(\)\|\|!generationMode\.equals\("components"\)\|\|!qualityTier\.equals\("ultra"\)\|\|assemblyQualityVersion!=4\|\|!assemblyPrototypeMode\.equals\("staged"\)\)return;/);
  assert.doesNotMatch(toggle,/BRIDGE|submitRequest|generate\(|assemblyConfirmed|assemblyCalls\s*=|projection\(/);
@@ -27,7 +33,11 @@ test('leaving any required workflow clears the choice rather than silently retai
  assert.match(source,/if\(assemblyQualityVersion!=4\)assemblyCompletionReserve=false;/);
  assert.match(source,/if\(!v\.equals\("components"\)\)\{assemblyProviderRecovery=false;assemblyCompletionReserve=false;\}/);
  assert.match(source,/if\(v\.equals\("staged"\)\)assemblyCalls=Math\.max\(22,assemblyCalls\);else assemblyCompletionReserve=false;/);
- assert.match(source,/if\(!v\.equals\("ultra"\)\)assemblyCompletionReserve=false;/);
+ const tier=source.match(/private static void selectAssemblyTier\(String value\)\{([\s\S]*?)\n    \}/)?.[1];
+ assert.ok(tier);assert.match(tier,/if\(!value\.equals\("ultra"\)\)assemblyCompletionReserve=false;/);
+ assert.match(source,/qualityTier,StudioScreen::selectAssemblyTier\)/);
+ assert.match(source,/qualityTier,v->\{selectAssemblyTier\(v\);changed\.run\(\);\}/);
+ assert.doesNotMatch(tier,/assemblyCompletionReserve=true|submitRequest|BRIDGE|assemblyConfirmed/);
 });
 test('explicit reference v2 keeps the reserve and same scope/budget; v1 cannot acquire it',()=>{
  const owner=randomUUID(),generation={...stagedRequest,key:owner,agent:'codex',model:'offline-vision',assemblyConfirmed:true,assemblyCompletionReserve:'design-correction-v1'};

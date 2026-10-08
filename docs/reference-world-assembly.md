@@ -355,6 +355,40 @@ and installed-game gates remain required. The result page explicitly disables
 placement rather than treating a single part as an apply scope. Normal process
 opt-in remains disabled; no release is certified here.
 
+### Whole-set client download integrity (not yet world placement)
+
+The independent full candidate reader pins metadata to the retained original
+FINAL status and task. It downloads every indexed part with exact original
+GETs, checks the complete candidate/patch-set/file/preview identities, actual
+proposal and changed rows, original absolute scope, total counts and cross-part
+coordinate uniqueness, then GETs the original FINAL again. Missing, swapped,
+cancelled or reordered parts produce no accepted whole. Reads never discover
+models, SEND another task, refresh a baseline or retry a failed part.
+
+Byte quotas use streaming UTF-8 accounting. Checked parts retain immutable
+original patch/proposal bytes rather than copying large JSON object trees;
+no whole-set quota, full Ultra geometry or test heap limit is raised for this.
+Canonical integrity hashes also stream the same original sorted-key/Unicode
+bytes; the existing hash protocol and original task identities are unchanged.
+File-inventory digests are computed without allocating another complete file;
+retained UTF-8 bytes use a single exact-sized buffer rather than a growing
+buffer and final duplicate. Free Java fixtures keep the full original aggregate
+and hash-pinned original parts, consuming every part sequentially like the
+production HTTP transport. They do not shrink geometry or raise the test heap.
+
+The checked object is deliberately not the historical single-patch candidate
+type. Neither it nor an individual transport part can enter legacy placement.
+It exposes an immutable complete set, not a server signature, physics pass,
+real image-understanding claim or world-write authorization. Full difference
+display, original-server reconstruction/fresh BEFORE, one final confirmation,
+whole-identity journal/protected undo and installed-game acceptance still need
+integration before normal full joint SEND can be enabled.
+
+Java receipt and paired HTTP tests use production Node-built Lite and 224-metre
+Ultra orchestration fixtures with authored synthetic model responses, block
+facts and native upload evidence. These are free integrity tests, not actual
+Minecraft render, architectural quality or provider-understanding evidence.
+
 Free developer regression requires the repository's existing locked dependencies
 (`npm ci --ignore-scripts`). The test entry now checks its independent NBT fixture
 reader before starting a long suite. It does not install packages, change the

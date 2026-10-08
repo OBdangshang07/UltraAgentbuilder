@@ -10,7 +10,18 @@ import java.nio.charset.StandardCharsets;
 /** Integrity binding only. A hash from the Bridge is NOT server authority. */
 final class ContextReceipt {
     static String sha256(byte[] bytes){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}catch(Exception e){throw new IllegalStateException(e);}}
-    static String jsonHash(JsonElement value){return sha256(canonicalJson(value).getBytes(StandardCharsets.UTF_8));}
+    /** Identical canonical bytes, streamed so large world facts do not create
+     * a second complete UTF-16 tree of joined Strings before hashing. */
+    static String jsonHash(JsonElement value){try{
+        var digest=MessageDigest.getInstance("SHA-256");
+        try(var out=new java.io.OutputStreamWriter(new java.security.DigestOutputStream(java.io.OutputStream.nullOutputStream(),digest),StandardCharsets.UTF_8)){writeCanonical(value,out);}
+        return HexFormat.of().formatHex(digest.digest());
+    }catch(java.io.IOException|java.security.NoSuchAlgorithmException error){throw new IllegalStateException("Cannot hash original canonical JSON",error);}}
+    private static void writeCanonical(JsonElement value,java.io.Writer out)throws java.io.IOException{
+        if(value.isJsonObject()){out.write('{');boolean first=true;var o=value.getAsJsonObject();for(var key:new TreeSet<>(o.keySet())){if(!first)out.write(',');first=false;out.write(quote(key));out.write(':');writeCanonical(o.get(key),out);}out.write('}');}
+        else if(value.isJsonArray()){out.write('[');boolean first=true;for(var item:value.getAsJsonArray()){if(!first)out.write(',');first=false;writeCanonical(item,out);}out.write(']');}
+        else out.write(value.isJsonPrimitive()&&value.getAsJsonPrimitive().isString()?quote(value.getAsString()):value.toString());
+    }
     static String canonicalJson(JsonElement value){if(value.isJsonObject()){var o=value.getAsJsonObject();return "{"+new TreeSet<>(o.keySet()).stream().map(k->quote(k)+":"+canonicalJson(o.get(k))).collect(java.util.stream.Collectors.joining(","))+"}";}if(value.isJsonArray())return "["+java.util.stream.StreamSupport.stream(value.getAsJsonArray().spliterator(),false).map(ContextReceipt::canonicalJson).collect(java.util.stream.Collectors.joining(","))+"]";if(value.isJsonPrimitive()&&value.getAsJsonPrimitive().isString())return quote(value.getAsString());return value.toString();}
     /** JSON.stringify string semantics: Gson escapes U+2028/2029 differently,
      * and raw lone UTF-16 surrogates would otherwise be lost in UTF-8 HTTP. */
