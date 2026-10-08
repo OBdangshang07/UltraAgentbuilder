@@ -60,7 +60,7 @@ test {
 tasks.register('prepareJavaFixtures', Exec) {
     workingDir projectDir.parentFile
     commandLine 'node', 'scripts/studio-java-fixtures.mjs'
-    inputs.files(fileTree('../src/generation'),fileTree('../src/design'),fileTree('../src/world'),fileTree('../tests/design'),fileTree('../tests/fixtures'),fileTree('../contracts'),fileTree('../bridge'),file('../scripts/studio-java-fixtures.mjs'),file('../scripts/reference-player-fixtures.mjs'),file('../scripts/reference-world-patch-client-fixtures.mjs'),file('../scripts/world-patch-before-fixtures.mjs'),file('../scripts/world-patch-safety-fixtures.mjs'),file('../scripts/world-patch-journal-fixtures.mjs'))
+    inputs.files(fileTree('../src/generation'),fileTree('../src/design'),fileTree('../src/world'),fileTree('../tests/design'),fileTree('../tests/fixtures'),fileTree('../tests/bridge'),fileTree('../contracts'),fileTree('../bridge'),file('../scripts/studio-java-fixtures.mjs'),file('../scripts/reference-player-fixtures.mjs'),file('../scripts/reference-world-patch-client-fixtures.mjs'),file('../scripts/reference-world-assembly-client-fixtures.mjs'),file('../scripts/world-patch-before-fixtures.mjs'),file('../scripts/world-patch-safety-fixtures.mjs'),file('../scripts/world-patch-journal-fixtures.mjs'))
     outputs.dir layout.buildDirectory.dir('test-fixtures')
     // These FREE fixtures contain expiring SEND confirmations and fresh
     // private synthetic journals. Reusing yesterday's generated authority is

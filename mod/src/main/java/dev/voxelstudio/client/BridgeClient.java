@@ -368,6 +368,7 @@ public final class BridgeClient implements AutoCloseable {
             if(method.equals("POST"))b.header("Content-Type","application/json; charset=utf-8").POST(HttpRequest.BodyPublishers.ofString(body));
             else if(!method.equals("GET")||body!=null)throw new IllegalArgumentException("联合查询只能无正文 GET");
             var response=send(c,b.build(),maximum);
+            if(route.startsWith("/v1/reference-world-assembly/")&&!response.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT).matches("application/json(?:\\s*;.*)?"))throw new IllegalStateException("完整联合原回执类型不一致；不降级或补发");
             String json=java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
                 .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(response.body())).toString();
             var value=WorldPatchCandidateReceipt.strictJson(json,()->Thread.currentThread().isInterrupted()).getAsJsonObject();
@@ -378,6 +379,58 @@ public final class BridgeClient implements AutoCloseable {
     CompletableFuture<String> referencePatchRuntime(){
         return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/reference-world-patch/capabilities",null,16384,
             v->{ReferenceWorldPatchJobReceipt.capabilitiesRuntime(v);return v;},()->{})).thenApply(ReferenceWorldPatchJobReceipt::capabilitiesRuntime);
+    }
+    /** Independent FULL v2 transport. Neither preparation nor observation
+     * can borrow the one-call lane's consent, history or model dispatch. */
+    CompletableFuture<JsonObject> referenceAssemblyCapabilities(){
+        return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/reference-world-assembly/capabilities",null,16384,ReferenceWorldAssemblyReceipt::capabilities,()->{}));
+    }
+    private CompletableFuture<JsonObject> referenceAssemblyModel(JsonObject generation,String runtime){
+        var selected=new JsonObject();for(var k:List.of("agent","model","effort"))selected.add(k,generation.get(k));
+        return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/agents/codex/models",null,131072,models->{
+            // Shared pure advertisement validation transfers no v1 consent.
+            var advertised=ReferenceWorldPatchTaskReceipt.advertisedCapability(selected,models,runtime);
+            var value=new JsonObject();value.add("id",advertised.get("model"));value.add("supportsImages",advertised.get("supportsImages"));value.add("efforts",advertised.get("advertisedEfforts"));
+            ReferenceWorldAssemblyReceipt.capability(value,generation);return value;
+        },()->{}));
+    }
+    CompletableFuture<List<JsonObject>> referenceAssemblyHistory(){return submit(contexts,()->new ReferenceWorldAssemblyReferences(data).list());}
+    CompletableFuture<JsonObject> readReferenceAssemblyJob(JsonObject input){
+        final JsonObject r;try{r=ReferenceWorldAssemblyReceipt.verifyReference(input.deepCopy());}catch(Exception e){return CompletableFuture.failedFuture(e);}
+        return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/reference-world-assembly/jobs/"+WorldPatchTaskReceipt.text(r,"id"),null,
+            ReferenceWorldAssemblyReceipt.STATUS_BYTES,v->ReferenceWorldAssemblyReceipt.status(r,v),()->{}));
+    }
+    CompletableFuture<ReferenceWorldAssemblyPlan> prepareReferenceAssembly(SelectionReadService.Capture capture,JsonObject generation,JsonObject manifest,BooleanSupplier live){
+        final JsonObject g,m;try{WorldPatchSend.allowed(live);g=generation.deepCopy();m=manifest.deepCopy();ReferenceWorldAssemblyReceipt.generation(g);}catch(Exception e){return CompletableFuture.failedFuture(e);}
+        return referenceAssemblyCapabilities().thenCompose(caps->{
+            WorldPatchSend.allowed(live);if(!WorldPatchTaskReceipt.flag(caps,"preparationEnabled"))throw new IllegalStateException("配套尚未开启完整联合准备；没有发送模型");
+            String runtime=WorldPatchTaskReceipt.text(caps,"runtimeHash");return referenceAssemblyModel(g,runtime).thenCompose(advertised->readContext(capture).thenCompose(saved->{
+                var input=new JsonObject();input.add("referenceOwnerId",g.get("key"));input.add("referenceSetHash",m.get("setHash"));input.add("generation",g);
+                return connect().thenCompose(c->referencePatchExchange(c,"POST","/v1/reference-world-assembly/contexts/"+capture.id()+"/prepare",input,ReferenceWorldAssemblyReceipt.PREPARATION_BYTES,p->{
+                    if(!WorldPatchTaskReceipt.text(p,"runtimeHash").equals(runtime))throw new IllegalStateException("完整联合原 runtime 改变");
+                    ReferenceWorldAssemblyReceipt.verifyPreparation(capture,saved,g,m,advertised,p);return p;
+                },()->WorldPatchSend.allowed(live))).thenApply(p->new ReferenceWorldAssemblyPlan(ReferenceWorldAssemblyReceipt.reference(capture,saved,g,m,advertised,p),m,advertised));
+            }));
+        });
+    }
+    /** Claim is durable BEFORE dispatch. Existing/ambiguous references take
+     * only original GET, even after restart or a changed/disabled runtime. */
+    CompletableFuture<JsonObject> sendReferenceAssembly(Supplier<CompletableFuture<SelectionReadService.Capture>> capture,ReferenceWorldAssemblyPlan plan,BooleanSupplier live,
+            BiFunction<SelectionReadService.Capture,JsonObject,CompletableFuture<SelectionReadService.PatchRetention>> retain){
+        final JsonObject r,p,g,m,a;try{WorldPatchSend.allowed(live);r=plan.reference();p=plan.prepared();g=plan.generation();m=plan.manifest();a=plan.capability();}catch(Exception e){return CompletableFuture.failedFuture(e);}
+        Supplier<CompletableFuture<Void>> recheck=()->referenceAssemblyCapabilities().thenCompose(caps->{
+            if(!WorldPatchTaskReceipt.flag(caps,"sendingEnabled")||!WorldPatchTaskReceipt.flag(caps,"nativeRendererReady")||!WorldPatchTaskReceipt.text(caps,"runtimeHash").equals(WorldPatchTaskReceipt.text(p,"runtimeHash")))throw new IllegalStateException("完整联合发送/原 renderer/runtime 不可用；保留原引用，不补发");
+            return referenceAssemblyModel(g,WorldPatchTaskReceipt.text(p,"runtimeHash")).thenCompose(current->{WorldPatchTaskReceipt.same(current,a);
+                return ContextPublication.checked(capture,cap->readContext(cap).thenApply(saved->{ReferenceWorldAssemblyReceipt.verifyPreparation(cap,saved,g,m,a,p);ReferenceWorldAssemblyReceipt.retentionBinding(cap,r);return saved;}));
+            }).thenApply(ignored->null);
+        });
+        return connect().thenCompose(c->WorldPatchSend.once(live,()->submit(contexts,()->{current(c);WorldPatchSend.allowed(live);return new ReferenceWorldAssemblyReferences(data).claim(r);}),recheck,
+            ()->capture.get().thenCompose(cap->{WorldPatchSend.allowed(live);ReferenceWorldAssemblyReceipt.retentionBinding(cap,r);return retain.apply(cap,r.deepCopy());}).thenCompose(retention->{
+                if(retention==null||retention.canAuthorizePlacement())throw new IllegalStateException("缺少原完整只读服务器保留");
+                return retention.checkedBeforeDispatch().thenCompose(ignored->referencePatchExchange(c,"POST","/v1/reference-world-assembly/jobs",r.getAsJsonObject("request"),ReferenceWorldAssemblyReceipt.STATUS_BYTES,
+                    status->ReferenceWorldAssemblyReceipt.status(r,status),()->{WorldPatchSend.allowed(live);if(System.currentTimeMillis()>=WorldPatchTaskReceipt.number(p,"recordExpiresAt"))throw new IllegalStateException("原完整快照过期；不发送");retention.markDispatchAttempted();}))
+                    .whenComplete((result,error)->retention.releaseIfNotDispatched());
+            }),()->readReferenceAssemblyJob(r)));
     }
     CompletableFuture<JsonObject> referencePatchModel(JsonObject selected){
         var exact=selected.deepCopy();return referencePatchRuntime().thenCompose(runtime->{

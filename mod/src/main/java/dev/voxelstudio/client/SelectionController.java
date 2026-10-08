@@ -185,6 +185,9 @@ final class SelectionController {
     CompletableFuture<SelectionReadService.PatchRetention> retainReferencePatchSend(SelectionReadService.Capture original,JsonObject reference,java.util.function.BooleanSupplier live){
         return retainPatchSend(original,reference,live,ReferenceWorldPatchJobReceipt::retentionBinding);
     }
+    CompletableFuture<SelectionReadService.PatchRetention> retainReferenceAssemblySend(SelectionReadService.Capture original,JsonObject reference,java.util.function.BooleanSupplier live){
+        return retainPatchSend(original,reference,live,ReferenceWorldAssemblyReceipt::retentionBinding);
+    }
     private CompletableFuture<SelectionReadService.PatchRetention> retainPatchSend(SelectionReadService.Capture original,JsonObject reference,java.util.function.BooleanSupplier live,
             java.util.function.BiFunction<SelectionReadService.Capture,JsonObject,SelectionReadService.PatchSendBinding> verify){
         var result=new CompletableFuture<SelectionReadService.PatchRetention>();var c=MinecraftClient.getInstance();var exact=reference.deepCopy();

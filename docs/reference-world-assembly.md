@@ -310,6 +310,29 @@ placement. The normally disabled process opt-in is not enabled by this change.
 
 ## Verification and limitations
 
+### Full-budget client preparation and original SEND references
+
+The client now has a separate full v2 preparation/SEND service and immutable
+four-tier plan. It binds the original pixel draft, annotations, selected image
+advertisement, generation, complete tier budget and C/W/protected selection.
+Preparation reserves no call and constructs no ordinary-image or v1 consent.
+Full references live in their own bounded durable disk lane; they are never
+read as legacy one-call history. Before the sole POST, the exact original
+server capture is retained and checked, with no refreshed baseline.
+
+A consumed local claim only GETs the original task, including after a lost ACK,
+restart, expired context or disabled/changed runtime. Incomplete/corrupt/pending
+records remain preserved, not repaired or interpreted as permission to resend.
+History/native/candidate status confers no world-write or per-part authority.
+Node-produced synthetic four-tier receipts and real paired client HTTP tests
+cover these paths. They do not certify game pixels, real visual understanding,
+architectural quality or a same-asset world transaction.
+
+This is the player transport/retention foundation, not the complete player
+screen or background observer. Those callers, the whole-set difference view,
+fresh BEFORE/one final confirmation/journal/undo and installed-game gates remain
+required. Normal process opt-in remains disabled; no release is certified here.
+
 Free developer regression requires the repository's existing locked dependencies
 (`npm ci --ignore-scripts`). The test entry now checks its independent NBT fixture
 reader before starting a long suite. It does not install packages, change the

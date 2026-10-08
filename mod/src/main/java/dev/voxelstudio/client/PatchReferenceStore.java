@@ -17,12 +17,17 @@ final class PatchReferenceStore {
         },
         REFERENCE("reference-world-patch-references","SavedReferenceWorldPatchReference") {
             JsonObject verify(JsonObject value){return ReferenceWorldPatchJobReceipt.verifyReference(value);}
+        },
+        ASSEMBLY("reference-world-assembly-references","SavedReferenceWorldAssemblyReference","preparationHash",65536) {
+            JsonObject verify(JsonObject value){return ReferenceWorldAssemblyReceipt.verifyReference(value);}
         };
-        final String directory,format;
-        Lane(String directory,String format){this.directory=directory;this.format=format;}
+        final String directory,format,identityKey;
+        final int maximumBytes;
+        Lane(String directory,String format){this(directory,format,"capsuleId",16384);}
+        Lane(String directory,String format,String identityKey,int maximumBytes){this.directory=directory;this.format=format;this.identityKey=identityKey;this.maximumBytes=maximumBytes;}
         abstract JsonObject verify(JsonObject value);
     }
-    private static final int MAX_BYTES=16384,MAX_RECORDS=8;
+    private static final int MAX_RECORDS=8;
     private final Path data,root;
     private final Lane lane;
     PatchReferenceStore(Path data,Lane lane){this.data=data.toAbsolutePath().normalize();this.lane=Objects.requireNonNull(lane);root=this.data.resolve(lane.directory);}
@@ -38,12 +43,12 @@ final class PatchReferenceStore {
         }
     }
     private Path file(String id){if(id==null||!id.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("Invalid exact patch reference hash");return root.resolve(id+".json");}
-    private static byte[] bytes(Path path)throws IOException{
+    private byte[] bytes(Path path)throws IOException{
         var facts=Files.readAttributes(path,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);
-        if(!facts.isRegularFile()||facts.isSymbolicLink()||facts.isOther()||facts.size()>MAX_BYTES)throw new IOException("Patch reference file link/type/quota rejected");
+        if(!facts.isRegularFile()||facts.isSymbolicLink()||facts.isOther()||facts.size()>lane.maximumBytes)throw new IOException("Patch reference file link/type/quota rejected");
         try(var channel=FileChannel.open(path,StandardOpenOption.READ,LinkOption.NOFOLLOW_LINKS)){
-            var buffer=ByteBuffer.allocate(MAX_BYTES+1);while(buffer.hasRemaining()&&channel.read(buffer)>=0){}
-            if(buffer.position()>MAX_BYTES)throw new IOException("Patch reference grew beyond quota");return Arrays.copyOf(buffer.array(),buffer.position());
+            var buffer=ByteBuffer.allocate(lane.maximumBytes+1);while(buffer.hasRemaining()&&channel.read(buffer)>=0){}
+            if(buffer.position()>lane.maximumBytes)throw new IOException("Patch reference grew beyond quota");return Arrays.copyOf(buffer.array(),buffer.position());
         }
     }
     private JsonObject readAt(String id)throws IOException{
@@ -55,7 +60,7 @@ final class PatchReferenceStore {
             long created=WorldPatchTaskReceipt.number(envelope,"createdAt");if(created<=0||created>System.currentTimeMillis()+10000)throw new IllegalStateException("Invalid saved patch reference time");
             WorldPatchTaskReceipt.digest(envelope,"sha256");var content=envelope.deepCopy();content.remove("sha256");
             if(!ContextReceipt.jsonHash(content).equals(WorldPatchTaskReceipt.text(envelope,"sha256")))throw new IllegalStateException("Saved patch reference hash changed");
-            var reference=lane.verify(envelope.getAsJsonObject("reference"));if(!id.equals(WorldPatchTaskReceipt.text(reference,"capsuleId")))throw new IllegalStateException("Saved patch reference identity changed");return reference;
+            var reference=lane.verify(envelope.getAsJsonObject("reference"));if(!id.equals(WorldPatchTaskReceipt.text(reference,lane.identityKey)))throw new IllegalStateException("Saved patch reference identity changed");return reference;
         }catch(RuntimeException error){throw new IOException("Saved patch reference rejected; preserved, never resubmitted",error);}
     }
     private List<String> names()throws IOException{
@@ -66,7 +71,7 @@ final class PatchReferenceStore {
         }
     }
     synchronized JsonObject remember(JsonObject input)throws IOException{
-        var reference=lane.verify(input.deepCopy());String id=WorldPatchTaskReceipt.text(reference,"capsuleId");directories(true);
+        var reference=lane.verify(input.deepCopy());String id=WorldPatchTaskReceipt.text(reference,lane.identityKey);directories(true);
         try{var previous=readAt(id);if(!previous.equals(reference))throw new IOException("Original patch reference cannot be rebound");return previous;}catch(NoSuchFileException absent){}
         var names=names();
         // Complete pending bytes are not successful local publication. Keep
@@ -75,7 +80,7 @@ final class PatchReferenceStore {
         if(names.size()>=MAX_RECORDS)throw new IOException("Patch reference history quota reached; no record evicted");
         var content=new JsonObject();content.addProperty("format",lane.format);content.addProperty("version",1);content.addProperty("createdAt",System.currentTimeMillis());content.add("reference",reference);
         var envelope=content.deepCopy();envelope.addProperty("sha256",ContextReceipt.jsonHash(content));byte[] payload=ContextReceipt.canonicalJson(envelope).getBytes(StandardCharsets.UTF_8);
-        if(payload.length>MAX_BYTES)throw new IOException("Patch reference quota exceeded before write");
+        if(payload.length>lane.maximumBytes)throw new IOException("Patch reference quota exceeded before write");
         // CREATE_NEW on an ID-keyed pending path arbitrates separate store
         // instances/processes before the move, including on POSIX filesystems.
         Path pending=root.resolve(".pending-"+id+".json"),target=file(id);
@@ -88,7 +93,7 @@ final class PatchReferenceStore {
         Files.move(pending,target);return readAt(id);
     }
     synchronized boolean claim(JsonObject input)throws IOException{
-        var reference=lane.verify(input.deepCopy());String id=WorldPatchTaskReceipt.text(reference,"capsuleId");directories(true);
+        var reference=lane.verify(input.deepCopy());String id=WorldPatchTaskReceipt.text(reference,lane.identityKey);directories(true);
         try{if(!readAt(id).equals(reference))throw new IOException("Original patch reference cannot be rebound");return false;}catch(NoSuchFileException absent){}
         remember(reference);return true;
     }
