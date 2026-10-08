@@ -33,7 +33,11 @@ export async function referenceWorldPatchClientFixture(t, options={}) {
     const response=await fetch(`http://127.0.0.1:${app.connection.port}/v1/reference-world-patch${route}`,{
       method:value?'POST':'GET',headers:{Authorization:`Bearer ${app.connection.token}`,...(value?{'Content-Type':'application/json; charset=utf-8'}:{})},
       ...(value?{body:JSON.stringify(value)}:{})});
-    assert.ok([200,202].includes(response.status),'Production synthetic joint HTTP must succeed');return Buffer.from(await response.arrayBuffer());
+    const bytes=Buffer.from(await response.arrayBuffer());
+    // Production returns redacted errors. Preserve the actual failure reason
+    // rather than turning an unavailable owner query into an opaque assertion.
+    let reason='';if(![200,202].includes(response.status))try{reason=JSON.parse(bytes).error??'';}catch{reason='invalid response';}
+    assert.ok([200,202].includes(response.status),`Production synthetic joint HTTP must succeed (${response.status}; ${reason})`);return bytes;
   };
   const imageFreeze=JSON.parse(await request(`/tasks/${f.receipt.capsuleId}/images`,f.send));
   await request(`/jobs/${f.receipt.capsuleId}/send`,f.send);

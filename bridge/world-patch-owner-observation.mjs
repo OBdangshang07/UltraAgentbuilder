@@ -90,7 +90,7 @@ function Write-VoxelStage([string] $phase) { [Console]::Error.WriteLine('VOXEL_O
 $voxelOwnerPid = ${processId}
 function Get-VoxelDigest([string] $value) {
   $voxelDigest = [Security.Cryptography.SHA256]::Create()
-  try { return -join ($voxelDigest.ComputeHash([Text.Encoding]::UTF8.GetBytes($value)) | ForEach-Object { $_.ToString('x2') }) }
+  try { return [BitConverter]::ToString($voxelDigest.ComputeHash([Text.Encoding]::UTF8.GetBytes($value))).Replace('-', '').ToLowerInvariant() }
   finally { $voxelDigest.Dispose() }
 }
 Write-VoxelStage 'machine'
@@ -101,17 +101,24 @@ $voxelBoot = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootU
 Write-VoxelStage 'process'
 $voxelProcesses = @(Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $voxelOwnerPid) -ErrorAction Stop)
 if ($voxelProcesses.Count -gt 1) { throw 'Ambiguous process query' }
-$voxelFound = $null
+$voxelFoundJson = 'null'
 if ($voxelProcesses.Count -eq 1) {
   $voxelProcess = $voxelProcesses[0]
   if ([string]::IsNullOrWhiteSpace($voxelProcess.ExecutablePath) -or $null -eq $voxelProcess.CreationDate) { throw 'Incomplete process identity' }
-  $voxelFound = @{ pid = [long]$voxelProcess.ProcessId; startedUtc = $voxelProcess.CreationDate.ToUniversalTime().ToString('o'); executablePathHash = (Get-VoxelDigest ([IO.Path]::GetFullPath($voxelProcess.ExecutablePath).ToLowerInvariant())) }
+  $voxelStarted = $voxelProcess.CreationDate.ToUniversalTime().ToString('o')
+  $voxelPathHash = Get-VoxelDigest ([IO.Path]::GetFullPath($voxelProcess.ExecutablePath).ToLowerInvariant())
+  $voxelFoundJson = '{"pid":' + ([long]$voxelProcess.ProcessId).ToString([Globalization.CultureInfo]::InvariantCulture) + ',"startedUtc":"' + $voxelStarted + '","executablePathHash":"' + $voxelPathHash + '"}'
 }
 Write-VoxelStage 'boot-after'
 $voxelBootAfter = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
 if ($voxelBoot -cne $voxelBootAfter) { throw 'Boot changed during observation' }
 Write-VoxelStage 'serialize'
-@{ format = 'WindowsOwnerObservation'; version = 1; machineHash = (Get-VoxelDigest $voxelMachine.Trim().ToLowerInvariant()); bootUtc = $voxelBoot; observedUtc = [DateTime]::UtcNow.ToString('o'); queriedPid = $voxelOwnerPid; process = $voxelFound } | ConvertTo-Json -Compress -Depth 4
+# All interpolated strings are OUR SHA256 hex or UTC DateTime round-trip
+# digits, never raw registry/path/provider data. Avoid loading the PowerShell
+# object JSON serializer merely to emit this small fixed identity contract.
+$voxelMachineHash = Get-VoxelDigest $voxelMachine.Trim().ToLowerInvariant()
+$voxelObserved = [DateTime]::UtcNow.ToString('o')
+[Console]::Out.WriteLine('{"format":"WindowsOwnerObservation","version":1,"machineHash":"' + $voxelMachineHash + '","bootUtc":"' + $voxelBoot + '","observedUtc":"' + $voxelObserved + '","queriedPid":' + $voxelOwnerPid.ToString([Globalization.CultureInfo]::InvariantCulture) + ',"process":' + $voxelFoundJson + '}')
 `;
   const executable = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
