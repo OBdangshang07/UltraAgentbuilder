@@ -40,7 +40,7 @@ export async function jointResourceFixture(t,{tier='lite',images=2}={}) {
     await fs.rename(f.jobDirectory,jobDirectory);f.jobDirectory=jobDirectory;
     return operation('bind',{...input,send});
   }
-  async function run(bound) {
+  async function executionOptions(bound) {
     const reference=await readJobReferenceInput({directory:f.jobDirectory,input:bound.referenceInput,model:f.generation.model});
     const adapter={models:async()=>[selectedCapability],generate:async request=>{
       const index=calls.length+1;calls.push(request);
@@ -56,9 +56,10 @@ export async function jointResourceFixture(t,{tier='lite',images=2}={}) {
       if(request.outputSchema.properties.format.enum[0]==='ArchitectureReferenceBrief')return {spec:referenceBrief(reference)};
       return {spec:(staged?stagedResponse:v4Response)(data,{outputSchema:request.outputSchema})};
     }};
-    return runReferenceWorldAssembly({directory:f.jobDirectory,referenceInput:bound.referenceInput,preparationHash:prepared.preparationHash,adapter,
+    return {directory:f.jobDirectory,referenceInput:bound.referenceInput,preparationHash:prepared.preparationHash,adapter,
       signal:new AbortController().signal,onStage:async()=>{},nativeEvidence:options=>requestNativeEvidence({...options,jobDirectory:f.jobDirectory,
-        timeoutMs:10000,onWaiting:async status=>{if(status.state==='waiting')await acceptNativeEvidence(f.jobDirectory,status.id,fixtureUpload(status.request));}})});
+        timeoutMs:10000,onWaiting:async status=>{if(status.state==='waiting')await acceptNativeEvidence(f.jobDirectory,status.id,fixtureUpload(status.request));}})};
   }
-  return {f,resources,contexts,contextId,selection,capture,saved,input,prepared,send,operation,bind,run,calls};
+  async function run(bound){return runReferenceWorldAssembly(await executionOptions(bound));}
+  return {f,resources,contexts,contextId,selection,capture,saved,input,prepared,send,operation,bind,run,executionOptions,calls};
 }

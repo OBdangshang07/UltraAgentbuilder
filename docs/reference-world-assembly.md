@@ -8,6 +8,10 @@ player SEND/UI integration and installed-game acceptance are still pending.
 Complete original candidate persistence and bounded read-only result workers
 are available internally; they do not enable that player SEND path.
 
+An internal original-owner full runner is now implemented. Normal paired SEND,
+native-render HTTP, persistent public history and player controls remain pending;
+the normally disabled player route is NOT enabled by this source milestone.
+
 ## Independent preparation and SEND
 
 An explicitly confirmed, safe, native-quality shared policy is required.
@@ -80,6 +84,38 @@ Free tests include separate real Windows processes, stopped partial publication,
 concurrent one-use handoffs, all four actual shared synthetic pipeline tiers,
 complete native candidates, quotas, expiry and tampering. Those are engineering
 tests, not paid-image understanding, normal player SEND/UI or world acceptance.
+
+### Full original execution lifetime, not a global expiry removal
+
+The internal runner accepts only the actual in-process original registry, not a
+serialized or replaced controller. Its single active task receives one original
+handoff and an opaque process-local execution capability. Concurrent and later
+duplicate starts observe that task; they do not acquire another handoff or call.
+Every stage still uses the SAME bounded durable ledger, native renderer, original
+references/context, runtime and exact selected-model/effort advertisement.
+
+The first original call must be reserved in that ledger while capture START
+authorization is valid. A synced immutable task-start record binds its original
+request, owner, full preparation, dispatch claim, first fingerprint and tier
+budget. Once this original task has started, its remaining already-authorized
+budget is not silently cut off by the capture's 24-hour start expiry. The live
+original controller and opaque capability are still required. Expired new
+starts, copied tokens, restarted readers, altered evidence, new models/scopes
+and replacement calls remain forbidden. The old internal path retains its
+per-fresh-call expiry behavior; old consent is not upgraded.
+
+Complete candidate proofs now include original ownership/task-start bytes when
+present. Read-only candidate/part verification reconstructs the original start,
+first ledger fingerprint, confirmed preparation, owner and full budget. It cannot
+create an execution capability, renew consent or authorize a part for placement.
+Cancel/close retires local execution; pending outcomes require original inspection
+without replay. Sanitized runner status separates running/preview-ready from
+unknown or cancelled work, and never claims an independent provider-receipt
+audit, a fresh server baseline or permission to write the world.
+
+This is an internal controller, not completed normal HTTP/history/UI integration.
+Final fresh BEFORE conflict checks and one explicit whole-set world confirmation
+are still mandatory and are not implemented by this generation-lifetime change.
 
 ## Shared pipeline, not four separate generators
 
@@ -188,6 +224,11 @@ native-render transport, public history/original-turn observation and the
 complete-set world transaction remain subsequent integration gates.
 
 ## Verification and limitations
+
+Free developer regression requires the repository's existing locked dependencies
+(`npm ci --ignore-scripts`). The test entry now checks its independent NBT fixture
+reader before starting a long suite. It does not install packages, change the
+lockfile, alter generation limits or add a player installation requirement.
 
 Free fixtures exercise actual shared compilation, durable reservation, native
 evidence protocol and final cell conversion; provider answers and image pixels

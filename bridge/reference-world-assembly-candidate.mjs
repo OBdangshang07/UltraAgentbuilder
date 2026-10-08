@@ -9,6 +9,7 @@ import {prepareWorldPatchPreview} from '../src/world/world-patch-preview-data.mj
 import {readNativeEvidence,readNativeRevisionComparison} from './native-evidence.mjs';
 import {assemblyCorrectionInput} from '../src/design/correction-feedback.mjs';
 import {readJobReferenceInput} from './reference-generation-binding.mjs';
+import {readReferenceWorldAssemblyExecutionStart} from './reference-world-assembly-execution.mjs';
 
 // Original local evidence and complete native differences only. No adapter,
 // compiler worker, render request, journal invoke or world writer is used here.
@@ -81,6 +82,12 @@ async function evidencePins(directory,branch,signal) {
     }
   }
   for (const root of roots) await visit(root);
+  for(const name of ['_owner.json','request.json','original-dispatch.json','original-execution-start.json'])if(names.includes(name)) {
+    if(pins.length>=REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofFiles)fail('Joint original ownership evidence quota');
+    const bytes=await member(directory,name,131072);total+=bytes.length;
+    if(total>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofBytes)fail('Joint original ownership byte quota');
+    pins.push({path:name,bytes:bytes.length,sha256:hash(bytes)});
+  }
   return pins;
 }
 
@@ -101,6 +108,7 @@ async function terminalEvidence(directory,original,branch,records,signal) {
   const identity=await checkedEnvelope('identity.json');
   if (hash(identity)!==hash({version:1,requestHash:p.preparationHash,policyHash:hash(original.reference.preparation.policy),
     runtimeHash:p.runtimeHash,maximumCalls:p.maximumCalls}) || hash(await checkedEnvelope('dispatched.json'))!==hash({count:records.length})) fail('Original joint ledger request/count differs');
+  await readReferenceWorldAssemblyExecutionStart({directory,prepared:p});
   const journalNames=(await fs.readdir(path.join(directory,'assembly-journal'))).filter(n=>/^call-\d+\.json$/.test(n)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]));
   if (hash(journalNames)!==hash(records.map((_,i)=>`call-${i+1}.json`))) fail('Original joint call history missing/truncated');
   let currentReview=null;

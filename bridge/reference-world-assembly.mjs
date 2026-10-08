@@ -13,6 +13,7 @@ import {safeEvidenceFile} from './native-evidence.mjs';
 import {codexRequestFingerprint} from './codex-persistent-receipt.mjs';
 import {REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY,REFERENCE_ASSEMBLY_CANDIDATE_CLAIM,saveReferenceWorldAssemblyCandidate,
   readReferenceWorldAssemblyCandidateData,referenceWorldAssemblyCandidatePart} from './reference-world-assembly-candidate.mjs';
+import {beginReferenceWorldAssemblyExecution,checkReferenceWorldAssemblyExecution,finishReferenceWorldAssemblyExecution} from './reference-world-assembly-execution.mjs';
 
 // A NEW independent full-task contract. Never reinterpret the existing v1
 // single-call world-patch capsule, its SEND, budget or journal. This internal
@@ -197,7 +198,7 @@ async function compileFinal(directory, scene, policy, signal) {
  * sees references ONLY in the existing prelude and exact native pictures in
  * review. Every stage receives the SAME original environment and scope.
  * This function is internal until normal HTTP/UI and game gates are complete. */
-export async function runReferenceWorldAssembly({directory,referenceInput,preparationHash,adapter,nativeEvidence,signal,onStage,onRecovery}) {
+export async function runReferenceWorldAssembly({directory,referenceInput,preparationHash,adapter,nativeEvidence,signal,onStage,onRecovery,execution=null}) {
   directory = await fs.realpath(path.resolve(directory));
   if (active.has(directory)) throw Error('Original full joint task already running; no concurrent dispatch');
   active.add(directory);
@@ -205,21 +206,26 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     if (!(signal instanceof AbortSignal) || typeof onStage !== 'function' || typeof nativeEvidence !== 'function') throw Error('Original task signal/stage observer/native renderer required');
     const original = await readFrozenReferenceWorldAssembly({directory,referenceInput}), p = original.prepared;
     if (p.preparationHash !== preparationHash) throw Error('Exact confirmed full-task preparation required');
+    if (execution!==null)await beginReferenceWorldAssemblyExecution({execution,directory,prepared:p,signal});
     for (const name of [REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY,REFERENCE_ASSEMBLY_CANDIDATE_CLAIM]) {
       try {await fs.lstat(path.join(directory,name));
         throw Error('Original candidate publication already exists; use the read-only result, never restart or replace it');}
       catch (error) {if (error.code !== 'ENOENT') throw error;}
     }
     if (await assemblyRuntimeIdentity() !== p.runtimeHash) throw Error('Original full-task runtime changed');
-    const recheck = async freshCall => {
+    const recheck = async (freshCall,index) => {
       signal.throwIfAborted();const current = await readFrozenReferenceWorldAssembly({directory,referenceInput});
       if (hash(current.prepared) !== hash(p)) throw Error('Original full-task source changed before dispatch');
       if (await assemblyRuntimeIdentity() !== p.runtimeHash) throw Error('Original full-task runtime changed before dispatch');
-      if (freshCall) {if (p.recordExpiresAt <= Date.now()) throw Error('Original world capture expired; no new call or refresh');await selectedAdapter(adapter,p);}
+      if (execution!==null)await checkReferenceWorldAssemblyExecution({execution,directory,prepared:p,freshCall,index});
+      if (freshCall) {
+        if(execution===null&&p.recordExpiresAt<=Date.now())throw Error('Original world capture expired; no new call or refresh');
+        await selectedAdapter(adapter,p);
+      }
       signal.throwIfAborted();return current;
     };
     const invoke = async (prompt,index,options,binding) => {
-      const checked = await recheck(!binding);
+      const checked = await recheck(!binding,index);
       const images = options.referenceInput ? checked.reference.manifest.references.map(r => r.sha256)
         : await Promise.all((options.images ?? []).map(async file => hash(await fs.readFile(file))));
       const expected = codexRequestFingerprint({prompt,model:p.selected.model,effort:p.selected.effort,
@@ -237,7 +243,7 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
       const output = await adapter.generate({...request,onProviderBinding:async value => {
         if (value.model !== p.selected.model || value.effort !== p.selected.effort || value.requestHash !== expected)
           throw Error('Actual full-task provider input differs from original model/schema/pixels');
-        if (value.turnId === null) await recheck(true);
+        if (value.turnId === null) await recheck(true,index);
         await options.onProviderBinding(value);
       }});
       return output.spec;
@@ -268,7 +274,7 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
       joint:{version:2,preparationHash:p.preparationHash,maximumCalls:p.maximumCalls,reservedCalls:result.records.length,
         sharedPipeline:true,originalScopeAndNativeCellsVerified:true,realImageUnderstandingVerified:false,
         worldWrites:0,canAuthorizePlacement:false}};
-  } finally {active.delete(directory);}
+  } finally {if(execution!==null)finishReferenceWorldAssemblyExecution(execution);active.delete(directory);}
 }
 
 /** Completed original data only. This cannot run/replay a pipeline, reserve a

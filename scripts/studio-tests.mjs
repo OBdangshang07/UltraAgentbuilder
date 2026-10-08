@@ -3,6 +3,12 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 
+// Developer fixtures use the locked independent NBT reader. Fail BEFORE a
+// long regression when a fresh checkout has not installed dependencies. This
+// neither installs packages nor changes the self-contained player companion.
+try {await import('prismarine-nbt');}
+catch(error) {throw new Error('Studio test dependencies unavailable: run npm ci --ignore-scripts before regression. No tests or model calls started.',{cause:error});}
+
 // Hundreds of native-bundle tests must not accumulate on the system drive.
 // Each run owns a new workspace-local temp root; failed evidence is retained.
 const project=await fs.realpath(fileURLToPath(new URL('../',import.meta.url)));

@@ -15,6 +15,17 @@ import {jointAssemblyJobRoot,readJointAssemblyJobEnvelope,REFERENCE_ASSEMBLY_DIS
 const raw=value=>Buffer.from(JSON.stringify(value));
 const failure=(message,statusCode=409)=>Object.assign(Error(message+'; original complete joint evidence retained'),{statusCode});
 const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};
+const originalControllers=new WeakMap();
+export function referenceWorldAssemblyOriginalController(registry,id=null) {
+  const original=originalControllers.get(registry);
+  if(!original)throw failure('Actual original full-task controller required; serialized or replaced controller rejected');
+  original.assertLive(id);return {root:original.root,runtimeHash:original.runtimeHash};
+}
+export async function takeReferenceWorldAssemblyOriginalDispatch(registry,id) {
+  const original=originalControllers.get(registry);
+  if(!original)throw failure('Actual original full-task controller required; no ownership adoption');
+  original.assertLive(id);return original.takeOriginalDispatch(id);
+}
 
 /** Independent consume-once FULL task ownership. No adapter or world API.
  * Durable request commits last. Reopened/duplicate readers never obtain the
@@ -96,7 +107,7 @@ export async function createReferenceWorldAssemblyJobRegistry(options) {
         state:'send-consumed-not-dispatched',modelSentAtReservation:false,callsReservedAtReservation:0,canAuthorizePlacement:false};
       if(raw({value,sha256:hash(value)}).length>REFERENCE_WORLD_ASSEMBLY_JOB_LIMITS.recordBytes)throw failure('Full joint record byte quota',413);
       await writeJointInvocationEnvelope(path.join(directory,'request.json'),value); // commit LAST
-      known.set(id,value.requestHash);owned.set(id,{ownerReferenceHash:value.ownerReferenceHash,consumed:false});
+      known.set(id,value.requestHash);owned.set(id,{ownerReferenceHash:value.ownerReferenceHash,consumed:false,cancelled:false});
       const saved=await metadata(id,signal);checkpoint(signal);return publicReservation(saved);
     }finally{await verifyClaim();await fs.unlink(file);}
   }
@@ -145,16 +156,20 @@ export async function createReferenceWorldAssemblyJobRegistry(options) {
     checkpoint();if(typeof id!=='string'||!REFERENCE_OWNER.test(id))throw failure('Exact original full-task UUID required',400);
     const work=[pending.get(id),readers.get(id),handoffs.get(id)].filter(Boolean);
     for(const item of work)item.controller.abort();
-    if(owned.has(id))owned.get(id).consumed=true;
+    if(owned.has(id)){owned.get(id).consumed=true;owned.get(id).cancelled=true;}
     await Promise.allSettled(work.map(item=>item.promise));
     // Cancellation retires ONLY local ownership. A later runner's provider
     // outcome is neither inferred nor reset by this reservation-only reader.
-    if(owned.has(id))owned.get(id).consumed=true;
+    if(owned.has(id)){owned.get(id).consumed=true;owned.get(id).cancelled=true;}
     return freeze({id,localOperationsStopped:work.length,originalRunnerTicketMayExist:true,
       providerOutcome:'not-assessed-by-reservation-reader',allowsNewModelCall:false,canAuthorizePlacement:false});
   }
-  return {root,runtimeHash,reserve,get,list,takeOriginalDispatch,cancel,busy:()=>pending.size>0||readers.size>0||handoffs.size>0,
+  const registry={root,runtimeHash,reserve,get,list,takeOriginalDispatch,cancel,busy:()=>pending.size>0||readers.size>0||handoffs.size>0,
     async close(){closed=true;for(const item of pending.values())item.controller.abort();for(const item of readers.values())item.controller.abort();
       for(const item of handoffs.values())item.controller.abort();
       await Promise.allSettled([...pending.values(),...readers.values(),...handoffs.values()].map(i=>i.promise));owned.clear();known.clear();}};
+  originalControllers.set(registry,{root,runtimeHash,takeOriginalDispatch,assertLive(id){
+    checkpoint();if(id!==null&&(!owned.has(id)||owned.get(id).cancelled))throw failure('Original full-task owner absent/cancelled; no execution adoption');
+  }});
+  return Object.freeze(registry);
 }
