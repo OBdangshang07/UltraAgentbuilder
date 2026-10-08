@@ -592,13 +592,43 @@ public final class BridgeClient implements AutoCloseable {
     }
     /** Separate render-only download: never cancels or replaces a player's projection. */
     public CompletableFuture<Asset> loadEvidence(String job,NativeEvidenceRequest request){
-        if(!job.matches("[0-9a-f-]{36}"))return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid evidence job"));
-        String route="/v1/jobs/"+job+"/native-evidence/"+request.hash()+"/";
-        return connect().thenCompose(c->json(c,"GET",route+"manifest","{}").thenCompose(manifest->submit(downloads,()->{
-            current(c);if(!request.assetHash().equals(manifest.get("assetHash").getAsString())||!request.sourceHash().equals(manifest.getAsJsonObject("scene").get("sourceHash").getAsString())||!request.cellsHash().equals(manifest.get("cellsHash").getAsString()))throw new IllegalStateException("Render subject changed");
-            var response=send(c,builder(c,route+"cells",60).build(),16777216);if(response.statusCode()!=200)throw new IllegalStateException("Evidence cells unavailable");
-            Asset asset=new Asset(job,manifest,response.body());if(!asset.diagnosticOnly||asset.width!=request.width()||asset.height!=request.height()||asset.length!=request.length())throw new IllegalStateException("Invalid render-only asset");return asset;
-        })));
+        try{return loadEvidence(NativeEvidenceTarget.legacy(job,request.hash()),request);}catch(Exception e){return CompletableFuture.failedFuture(e);}
+    }
+    /** Typed full-task transport, never a legacy job alias, SEND or world read. */
+    CompletableFuture<NativeEvidenceRequest> readEvidenceRequest(NativeEvidenceTarget target){
+        return connect().thenCompose(c->submit(downloads,()->target.parseRequest(nativeJson(c,"GET",target.memberRoute("request"),null,1048576))));
+    }
+    CompletableFuture<Asset> loadEvidence(NativeEvidenceTarget target,NativeEvidenceRequest request){
+        try{target.requireRequest(request);}catch(Exception e){return CompletableFuture.failedFuture(e);}
+        return connect().thenCompose(c->submit(downloads,()->{
+            var manifest=nativeJson(c,"GET",target.memberRoute("manifest"),null,1048576);
+            if(!request.assetHash().equals(manifest.get("assetHash").getAsString())||!request.sourceHash().equals(manifest.getAsJsonObject("scene").get("sourceHash").getAsString())||!request.cellsHash().equals(manifest.get("cellsHash").getAsString()))throw new IllegalStateException("Render subject changed");
+            var response=send(c,builder(c,target.memberRoute("cells"),60).build(),16777216);
+            if(response.statusCode()!=200||!response.headers().firstValue("Content-Type").orElse("").equalsIgnoreCase("application/octet-stream"))throw new IllegalStateException("Evidence cells unavailable or wrong media type");
+            Asset asset=new Asset(target.jobId(),manifest,response.body());
+            if(!asset.diagnosticOnly||asset.width!=request.width()||asset.height!=request.height()||asset.length!=request.length())throw new IllegalStateException("Invalid render-only asset");current(c);return asset;
+        }));
+    }
+    CompletableFuture<Boolean> nativeEvidenceWaiting(NativeEvidenceTarget target){
+        return connect().thenCompose(c->submit(downloads,()->target.stillWaiting(nativeJson(c,"GET",target.jobRoute(),null,target.statusBytes()))));
+    }
+    CompletableFuture<JsonObject> uploadEvidence(NativeEvidenceTarget target,JsonObject upload){
+        var exact=upload.deepCopy();
+        if(!WorldPatchTaskReceipt.text(exact,"requestHash").equals(target.evidenceId())
+            ||!WorldPatchTaskReceipt.text(exact,"renderer").equals(NativeEvidenceRequest.RENDERER))return CompletableFuture.failedFuture(new IllegalArgumentException("Wrong original native upload"));
+        String body=exact.toString();if(body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>12000000)return CompletableFuture.failedFuture(new IllegalArgumentException("Native upload quota exceeded"));
+        return connect().thenCompose(c->submit(downloads,()->{
+            if(!target.stillWaiting(nativeJson(c,"GET",target.jobRoute(),null,target.statusBytes())))return null;
+            return target.verifyUploadReceipt(nativeJson(c,"POST",target.memberRoute("upload"),body,4096));
+        }));
+    }
+    private JsonObject nativeJson(Connection c,String method,String route,String body,int maximum)throws Exception{
+        current(c);var request=builder(c,route,60);if(method.equals("POST"))request.header("Content-Type","application/json; charset=utf-8").POST(HttpRequest.BodyPublishers.ofString(body));
+        var response=send(c,request.build(),maximum);
+        if(response.statusCode()!=200||!response.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT).matches("application/json(?:\\s*;.*)?"))throw new IllegalStateException("Original native transport unavailable, HTTP "+response.statusCode()+"; no fallback or model resend");
+        String text=java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(response.body())).toString();
+        var value=WorldPatchCandidateReceipt.strictJson(text,()->Thread.currentThread().isInterrupted()).getAsJsonObject();current(c);return value;
     }
     private synchronized CompletableFuture<Asset> load(String job,boolean diagnostic){
         if(!job.matches("[0-9a-f-]{36}"))return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid job id"));cancelLoad();long ticket=loadEpoch.get();

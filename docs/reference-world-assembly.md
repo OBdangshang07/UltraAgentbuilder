@@ -264,8 +264,9 @@ entire set, not a single independently placeable part. They do not discover a
 model, replay the pipeline, render or compile a substitute, refresh a capture,
 reserve a call, or write a world.
 
-The separate `/v1/reference-world-assembly` protocol advertises version 2 and
-honestly reports that SEND, player UI and placement are not yet implemented.
+The separate `/v1/reference-world-assembly` protocol advertises version 2.
+Full SEND and native transport exist behind the owning process's opt-in;
+player UI and whole-set placement remain unimplemented.
 `POST /contexts/{contextId}/prepare` accepts only `referenceOwnerId`,
 `referenceSetHash` and the complete `generation` request. Exact paired loopback
 Host/no-Origin/Bearer checks run first. The server obtains the selected model's
@@ -279,9 +280,33 @@ preparation fences changes to model configuration, reference attachments,
 contexts and other job lanes. Health and read-only capability queries remain
 responsive. Closing the service cancels its original preparation/discovery and
 workers without dispatching or adopting a task. Job ownership and reservation
-inspection now exist internally only. Normal complete SEND/runner integration,
-native-render transport, public history/original-turn observation and the
-complete-set world transaction remain subsequent integration gates.
+inspection and full opt-in SEND/native/history are implemented. Normal companion
+enablement, full player controls and the complete-set world transaction remain
+subsequent integration gates.
+
+### Typed client native transport
+
+The client now distinguishes legacy `/v1/jobs` evidence from full
+`/v1/reference-world-assembly/jobs` evidence with a typed namespace. Full
+observation requires independently retained original job/request pins; an
+ID-only runner status is not reinterpreted as a legacy inline render request.
+It downloads the original request, manifest and binary cells, validates their
+identity and imports only a render-only diagnostic Asset. Strict bounded JSON,
+fatal UTF-8, exact request/view keys and expected media types apply. Transport
+errors do not fall back to another job, compile a replacement or invoke a model.
+
+The existing client asset renderer has a separate full-task observation hook.
+Before each image upload (including a same-image retry after a lost ACK), the
+client GETs the original task. A completed, changed or retired native request is
+not uploaded again. Unknown retained tasks are inspected, never resumed or
+adopted. The legacy three-field upload receipt retains its original contract;
+full receipts additionally declare no world capture or placement authority.
+
+Free client HTTP tests use synthetic status/geometry and image strings. They
+verify typed routes, exact original identities, import, errors and lost-ACK
+observation, not actual game pixels, architectural quality or image understanding.
+This hook does not yet supply full player SEND/history controls or whole-set
+placement. The normally disabled process opt-in is not enabled by this change.
 
 ## Verification and limitations
 
