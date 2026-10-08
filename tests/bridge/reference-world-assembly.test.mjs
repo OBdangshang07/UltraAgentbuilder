@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {Worker} from 'node:worker_threads';
 import {hash} from '../../src/generation/compiler.mjs';
 import {readNativeBundle} from '../../src/generation/bundle.mjs';
 import {selectionChunks,regionCells} from '../../contracts/world-selection.mjs';
 import {WorldContextStore} from '../../bridge/world-context-store.mjs';
 import {readJobReferenceInput} from '../../bridge/reference-generation-binding.mjs';
 import {prepareReferenceWorldAssembly,freezeReferenceWorldAssembly,readFrozenReferenceWorldAssembly,
-  runReferenceWorldAssembly} from '../../bridge/reference-world-assembly.mjs';
+  runReferenceWorldAssembly,readReferenceWorldAssemblyCandidate,readReferenceWorldAssemblyCandidatePart} from '../../bridge/reference-world-assembly.mjs';
+import {REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY,REFERENCE_ASSEMBLY_CANDIDATE_CLAIM,
+  saveReferenceWorldAssemblyCandidate} from '../../bridge/reference-world-assembly-candidate.mjs';
 import {codexRequestFingerprint} from '../../bridge/codex-persistent-receipt.mjs';
 import {requestNativeEvidence,acceptNativeEvidence,validateModelImageFiles} from '../../bridge/native-evidence.mjs';
 import {fixtureUpload} from './native-evidence-fixtures.mjs';
@@ -83,8 +86,96 @@ for(const tier of ['lite','pro','max','ultra'])test(tier+' joint task runs the R
     assert.equal(result.patchSet.partialPublicationAllowed,false);assert.equal(result.patch,null);}
   const native=await readNativeBundle(result.finalDirectory);assert.equal(result.binding.cellsHash,native.manifest.cellsHash);
   assert.equal(native.manifest.diagnosticOnly,undefined);
+  const readOptions={directory:h.f.jobDirectory,referenceInput:h.referenceInput,preparationHash:h.prepared.preparationHash,
+    candidateHash:result.candidate.candidateHash};
+  const saved=await readReferenceWorldAssemblyCandidate(readOptions);
+  assert.equal(saved.candidate.partCount,result.patches.length);assert.equal(saved.candidate.completeSetVerified,true);
+  assert.equal(saved.candidate.partialPublicationAllowed,false);assert.equal(saved.candidate.canAuthorizePlacement,false);
+  assert.equal(saved.candidate.reservedCalls,h.calls.length);assert.deepEqual(saved.patchSet,result.patchSet);
+  assert.deepEqual(saved.patches,result.patches);assert.equal(saved.candidate.cellsHash,native.manifest.cellsHash);
+  const last=await readReferenceWorldAssemblyCandidatePart({...readOptions,partIndex:result.patches.length-1});
+  assert.equal(last.patch.patchHash,result.patches.at(-1).patchHash);assert.equal(last.partIsApplyScope,false);
+  assert.equal(last.completeSetVerified,true);assert.equal(last.canAuthorizePlacement,false);assert.equal(h.calls.length,result.records.length);
+  if(tier==='ultra') {
+    const partFile=path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY,`part-${String(result.patches.length-1).padStart(3,'0')}.json`);
+    const retained=path.join(h.f.jobDirectory,'retained-ultra-part.json');await fs.rename(partFile,retained);
+    try {await assert.rejects(readReferenceWorldAssemblyCandidatePart({...readOptions,partIndex:0}),'Part zero cannot download as complete when another part is absent');}
+    finally {await fs.rename(retained,partFile);}
+    assert.equal(h.calls.length,result.records.length);
+  }
   const meta=JSON.parse(await fs.readFile(path.join(h.f.jobDirectory,'assembly-journal/identity.json')));
   assert.equal(meta.value.requestHash,h.prepared.preparationHash);assert.equal(meta.value.maximumCalls,h.prepared.maximumCalls);
+});
+
+test('completed joint candidate rereads original files/ledger/render evidence, never invokes or republishes a task',async t=>{
+  const h=await setup(t);await freezeReferenceWorldAssembly({...h.prepareOptions,send:h.send});
+  const result=await runReferenceWorldAssembly(h.runOptions),root=path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY);
+  const options={directory:h.f.jobDirectory,referenceInput:h.referenceInput,preparationHash:h.prepared.preparationHash,candidateHash:result.candidate.candidateHash};
+  const calls=h.calls.length;
+  h.adapter.models=async()=>{throw Error('A completed result read must not discover/switch a model');};
+  h.adapter.generate=async()=>{throw Error('A completed result read must not invoke a model');};
+  const original=await readFrozenReferenceWorldAssembly({directory:h.f.jobDirectory,referenceInput:h.referenceInput});
+  const repeated=await saveReferenceWorldAssemblyCandidate({directory:h.f.jobDirectory,original,result});
+  assert.equal(repeated.candidate.candidateHash,result.candidate.candidateHash);assert.equal(h.calls.length,calls);
+  await assert.rejects(runReferenceWorldAssembly(h.runOptions),/read-only result/);assert.equal(h.calls.length,calls);
+  const workerRead=async input=>new Promise((resolve,reject)=>{
+    const worker=new Worker(new URL('../../bridge/reference-world-assembly-result-worker.mjs',import.meta.url),{workerData:input});
+    let message;worker.on('message',m=>{message=m;});worker.on('error',reject);
+    worker.on('exit',code=>code?reject(Error('Original result worker exit '+code)):resolve(message));
+  });
+  const metadata=await workerRead({operation:'metadata',...options});assert.equal(metadata.ok,true);
+  assert.equal(metadata.result.candidate.candidateHash,result.candidate.candidateHash);assert.equal(metadata.result.originalCompleteSetReverified,true);
+  const part=await workerRead({operation:'part',...options,partIndex:0});assert.equal(part.ok,true);assert.equal(part.result.partIsApplyScope,false);
+  assert.equal((await workerRead({operation:'invoke',...options})).ok,false);
+  assert.equal((await workerRead({operation:'metadata',...options,model:'alternate'})).ok,false);
+  await assert.rejects(readReferenceWorldAssemblyCandidate({...options,preparationHash:'a'.repeat(64)}),/preparation/);
+  await assert.rejects(readReferenceWorldAssemblyCandidate({...options,candidateHash:'b'.repeat(64)}),/identity/);
+  for (const partIndex of [-1,1,0.1,'0']) await assert.rejects(readReferenceWorldAssemblyCandidatePart({...options,partIndex}));
+  assert.equal(h.calls.length,calls);
+  const mutate=async(relative,change)=>{
+    const file=path.join(h.f.jobDirectory,relative),bytes=await fs.readFile(file);
+    try {await fs.writeFile(file,change(bytes));await assert.rejects(readReferenceWorldAssemblyCandidate(options));}
+    finally {await fs.writeFile(file,bytes);}
+  };
+  await mutate(REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY+'/part-000.json',bytes=>{const value=JSON.parse(bytes);value.writes[0].after='minecraft:diamond_block';
+    const {patchHash,...content}=value;return JSON.stringify({...content,patchHash:hash(content)});});
+  const candidateFile=path.join(root,'candidate.json'),partFile=path.join(root,'part-000.json');
+  const candidateBytes=await fs.readFile(candidateFile),partBytes=await fs.readFile(partFile);
+  try {
+    const part=JSON.parse(partBytes);part.writes[0].after='minecraft:diamond_block';const changedPart=Buffer.from(JSON.stringify(part));
+    const candidate=JSON.parse(candidateBytes),pin=candidate.files.find(f=>f.path==='part-000.json');pin.bytes=changedPart.length;pin.sha256=hash(changedPart);
+    const {candidateHash,...content}=candidate,changedCandidate={...content,candidateHash:hash(content)};
+    await fs.writeFile(partFile,changedPart);await fs.writeFile(candidateFile,JSON.stringify(changedCandidate));
+    await assert.rejects(readReferenceWorldAssemblyCandidate({...options,candidateHash:changedCandidate.candidateHash}),/original task/);
+  } finally {await fs.writeFile(partFile,partBytes);await fs.writeFile(candidateFile,candidateBytes);}
+  await mutate(REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY+'/preview-000.json',bytes=>{const value=JSON.parse(bytes);value.movable=true;return JSON.stringify(value);});
+  await mutate('assembly-journal/call-1.json',bytes=>{const value=JSON.parse(bytes);value.value.state='pending';return JSON.stringify({value:value.value,sha256:hash(value.value)});});
+  await mutate('reference-world-assembly-final/cells.bin',bytes=>{const changed=Buffer.from(bytes);changed[0]^=1;return changed;});
+  await mutate(result.candidate.branch+'/assembly/summary.json',bytes=>{const value=JSON.parse(bytes);value.completedPackages=[];return JSON.stringify(value);});
+  const proof=result.candidate.proofFiles.find(f=>f.path.startsWith('native-evidence/')&&f.path.endsWith('.png'));
+  await mutate(proof.path,bytes=>{const changed=Buffer.from(bytes);changed[changed.length-1]^=1;return changed;});
+  const missing=path.join(root,'part-000.json'),retained=path.join(h.f.jobDirectory,'retained-part.json');
+  await fs.rename(missing,retained);
+  try {await assert.rejects(readReferenceWorldAssemblyCandidate(options));} finally {await fs.rename(retained,missing);}
+  const unexpected=path.join(root,'unexpected.json');await fs.writeFile(unexpected,'{}');
+  try {await assert.rejects(readReferenceWorldAssemblyCandidate(options),/unknown members/);} finally {await fs.unlink(unexpected);}
+  await fs.rename(missing,retained);await fs.link(retained,missing);
+  try {await assert.rejects(readReferenceWorldAssemblyCandidate(options),/link/);} finally {await fs.unlink(missing);await fs.rename(retained,missing);}
+  const saved=await readReferenceWorldAssemblyCandidate(options);assert.equal(saved.candidate.candidateHash,result.candidate.candidateHash);
+  assert.equal(h.calls.length,calls);assert.equal(saved.candidate.worldWrites,0);
+  const realNow=Date.now;
+  try {Date.now=()=>h.prepared.recordExpiresAt+1;
+    assert.equal((await readReferenceWorldAssemblyCandidate(options)).candidate.candidateHash,result.candidate.candidateHash);
+  } finally {Date.now=realNow;}
+});
+
+for (const existing of ['partial-directory','unknown-claim'])test(existing+' stops joint dispatch before any model call; no adoption or cleanup',async t=>{
+  const h=await setup(t);await freezeReferenceWorldAssembly({...h.prepareOptions,send:h.send});
+  const target=path.join(h.f.jobDirectory,existing==='partial-directory'?REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY:REFERENCE_ASSEMBLY_CANDIDATE_CLAIM);
+  if(existing==='partial-directory')await fs.mkdir(target);else await fs.writeFile(target,'unknown original publication');
+  await assert.rejects(runReferenceWorldAssembly(h.runOptions),/read-only result/);assert.equal(h.calls.length,0);
+  assert.equal((await fs.lstat(target)).isDirectory(),existing==='partial-directory');
+  await assert.rejects(fs.stat(path.join(h.f.jobDirectory,'assembly-journal')),e=>e.code==='ENOENT');
 });
 
 test('free preparation and freeze do not reserve calls; old one-call/image SEND cannot grant new joint authority',async t=>{

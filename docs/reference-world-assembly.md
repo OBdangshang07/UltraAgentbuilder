@@ -4,6 +4,8 @@ This engineering path uses the existing reference-analysis, concept,
 representative-prototype, component and native-review orchestration. It does
 not enlarge the normally disabled, one-call reference-world-patch v1 contract.
 Normal player HTTP/UI integration and installed-game acceptance are still pending.
+Complete original candidate persistence and bounded read-only result workers
+are available internally; they do not enable that player SEND path.
 
 ## Independent preparation and SEND
 
@@ -56,6 +58,37 @@ snapshot/selection. Partial publication is forbidden. This is a serialization
 and memory limit, not a token limit or permission to build individual parts.
 The player transaction must eventually verify the entire set and obtain one
 explicit final world confirmation; that integration is not implemented here.
+
+## Persistent complete candidates
+
+The original accepted task now saves a separately versioned full candidate.
+It retains every difference part and its original-coordinate preview, the
+ordered complete patch-set identity, original stage records and exact source
+file hashes. The original frozen context, confirmed pixels, selected branch,
+call ledger, native render receipts/images and final native bundle remain in
+their original directories; they are not copied, re-rendered or replaced.
+
+Candidate metadata commits last. A partial directory or unknown publication
+claim is preserved and stops dispatch before a new model call; neither a PID
+nor a timeout permits takeover. An existing completed candidate is read through
+the original result path instead of restarting the assembly. This is synchronized
+file durability, not a claim of crash-atomic multi-file publication.
+
+Result reads require the retained original preparation and candidate hashes.
+They reconstruct every difference and preview from the original final native
+cells and captured baseline, check complete mandatory packages and closed
+original stage/ledger relationships, and validate the exact enriched native
+review against its separate original renderer receipt. They verify all parts
+and original file hashes before returning any part. Rehashed, missing, swapped,
+hardlinked or changed files cannot choose a new baseline, branch or subset.
+
+The internal metadata/part worker performs no provider invocation, pipeline
+replay, compile, render request, snapshot refresh or world write. Part downloads
+are transport units, never separate apply scopes or placement permissions.
+An internal job owner must retain the original candidate identity and enforce
+worker concurrency/resource/time quotas before exposing it to normal HTTP/UI.
+An original turn reference is not an independent closed-provider-receipt audit;
+that distinction and real-image understanding remain explicitly unverified.
 
 ## Verification and limitations
 

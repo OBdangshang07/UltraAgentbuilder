@@ -4,13 +4,15 @@ import {Worker} from 'node:worker_threads';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {hash} from '../src/generation/compiler.mjs';
 import {readNativeBundle} from '../src/generation/bundle.mjs';
-import {prepareAssemblyWorldContext,compileAssemblyWorldPatch} from '../src/world/assembly-context.mjs';
+import {prepareAssemblyWorldContext} from '../src/world/assembly-context.mjs';
 import {readJobReferenceInput} from './reference-generation-binding.mjs';
 import {readReferenceWorldPatchPreparationSource,rebuildReferenceWorldPatchContextSource,
   REFERENCE_PATCH_CONTEXT_FILE_LIMITS} from './reference-world-patch-source.mjs';
 import {assemblyRuntimeIdentity,runDurableAssembly} from './assembly-durability.mjs';
 import {safeEvidenceFile} from './native-evidence.mjs';
 import {codexRequestFingerprint} from './codex-persistent-receipt.mjs';
+import {REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY,REFERENCE_ASSEMBLY_CANDIDATE_CLAIM,saveReferenceWorldAssemblyCandidate,
+  readReferenceWorldAssemblyCandidateData,referenceWorldAssemblyCandidatePart} from './reference-world-assembly-candidate.mjs';
 
 // A NEW independent full-task contract. Never reinterpret the existing v1
 // single-call world-patch capsule, its SEND, budget or journal. This internal
@@ -203,6 +205,11 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     if (!(signal instanceof AbortSignal) || typeof onStage !== 'function' || typeof nativeEvidence !== 'function') throw Error('Original task signal/stage observer/native renderer required');
     const original = await readFrozenReferenceWorldAssembly({directory,referenceInput}), p = original.prepared;
     if (p.preparationHash !== preparationHash) throw Error('Exact confirmed full-task preparation required');
+    for (const name of [REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY,REFERENCE_ASSEMBLY_CANDIDATE_CLAIM]) {
+      try {await fs.lstat(path.join(directory,name));
+        throw Error('Original candidate publication already exists; use the read-only result, never restart or replace it');}
+      catch (error) {if (error.code !== 'ENOENT') throw error;}
+    }
     if (await assemblyRuntimeIdentity() !== p.runtimeHash) throw Error('Original full-task runtime changed');
     const recheck = async freshCall => {
       signal.throwIfAborted();const current = await readFrozenReferenceWorldAssembly({directory,referenceInput});
@@ -254,10 +261,26 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     if (diagnostic.scene?.sourceHash !== result.summary.sourceHash || hash(diagnosticCells) !== diagnostic.cellsHash
       || diagnostic.cellsHash !== final.compiled.manifest.cellsHash || !diagnosticCells.equals(final.compiled.binary))
       throw Error('Final native cells differ from original reviewed geometry; no substitute/rebase');
-    const lowered = compileAssemblyWorldPatch(original.worldContext,final.compiled,{signal});
+    const saved = await saveReferenceWorldAssemblyCandidate({directory,original,result,signal});
+    const lowered = {patch:saved.patch,patches:saved.patches,patchSet:saved.patchSet,binding:saved.binding};
     return {...result,...lowered,finalDirectory:final.directory,
+      candidate:saved.candidate,
       joint:{version:2,preparationHash:p.preparationHash,maximumCalls:p.maximumCalls,reservedCalls:result.records.length,
         sharedPipeline:true,originalScopeAndNativeCellsVerified:true,realImageUnderstandingVerified:false,
         worldWrites:0,canAuthorizePlacement:false}};
   } finally {active.delete(directory);}
+}
+
+/** Completed original data only. This cannot run/replay a pipeline, reserve a
+ * call, contact an adapter, refresh a snapshot, compile or render a replacement. */
+export async function readReferenceWorldAssemblyCandidate({directory,referenceInput,preparationHash,candidateHash,signal}) {
+  directory=path.resolve(directory);
+  const original=await readFrozenReferenceWorldAssembly({directory,referenceInput});
+  if (original.prepared.preparationHash!==preparationHash) throw Error('Original complete joint preparation required for result read');
+  return readReferenceWorldAssemblyCandidateData({directory,original,expectedCandidateHash:candidateHash,signal});
+}
+
+export async function readReferenceWorldAssemblyCandidatePart({partIndex,...options}) {
+  const result=await readReferenceWorldAssemblyCandidate(options);
+  return referenceWorldAssemblyCandidatePart(result,partIndex);
 }
