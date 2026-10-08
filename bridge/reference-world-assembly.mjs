@@ -43,7 +43,7 @@ function capability(value, generation) {
     throw Error('Exact selected model must explicitly advertise images and selected effort');
   return structuredClone(value);
 }
-function preparation(reference, saved, selectedCapability) {
+export function referenceWorldAssemblyPreparation(reference, saved, selectedCapability) {
   const p = reference.preparation, generation = p.generation, tier = p.policy.assembly;
   if (p.version !== 2 || generation.agent !== 'codex' || generation.assemblyConfirmed !== true
     || tier.recovery?.mode !== 'safe' || tier.designReview?.mode !== 'native' || ![2,3,4].includes(tier.quality?.version))
@@ -70,7 +70,7 @@ function preparation(reference, saved, selectedCapability) {
     modelSent:false,callsReserved:0,serverBaselineVerified:false,canAuthorizePlacement:false};
   return frozen({...content,preparationHash:hash(content)});
 }
-function verifySend(send, prepared) {
+export function verifyReferenceWorldAssemblySend(send, prepared) {
   exactKeys(send,['format','version','purpose','confirmed','preparationHash','maximumCalls'],'independent complete world/reference SEND');
   if (send.format !== 'ReferenceWorldAssemblySend' || send.version !== 2 || send.purpose !== 'reference-world-assembly'
     || send.confirmed !== true || send.preparationHash !== prepared.preparationHash || send.maximumCalls !== prepared.maximumCalls)
@@ -88,14 +88,14 @@ export async function prepareReferenceWorldAssembly({dataDir,directory,contextId
   if (hash(source.reference.manifest) !== hash(reference.manifest)) throw Error('Original world/reference preparation picture annotations differ');
   for (const [i, image] of source.reference.images.entries())
     if (hash(image) !== hash(await fs.readFile(reference.images[i]))) throw Error('Original world/reference preparation pixels differ');
-  return preparation(reference,source.saved,selectedCapability);
+  return referenceWorldAssemblyPreparation(reference,source.saved,selectedCapability);
 }
 
 /** Freeze original context bytes after an INDEPENDENT new full-budget SEND.
  * Partial archives remain incomplete, never adopted or repaired. No models. */
 export async function freezeReferenceWorldAssembly({dataDir,directory,contextId,referenceInput,selectedCapability,send}) {
   const prepared = await prepareReferenceWorldAssembly({dataDir,directory,contextId,referenceInput,selectedCapability});
-  verifySend(send,prepared);
+  verifyReferenceWorldAssemblySend(send,prepared);
   const root = path.join(path.resolve(directory),archiveName);
   try {
     await fs.mkdir(root,{mode:0o700});
@@ -108,7 +108,7 @@ export async function freezeReferenceWorldAssembly({dataDir,directory,contextId,
   const source = await readReferenceWorldPatchPreparationSource({dataDir,contextId,intent:{
     referenceOwnerId:referenceInput.ownerId,referenceSetHash:prepared.referenceSetHash}});
   const reference = await readJobReferenceInput({directory,input:referenceInput,model:prepared.selected.model,runtimeHash:prepared.runtimeHash});
-  if (hash(preparation(reference,source.saved,selectedCapability)) !== hash(prepared)) throw Error('Joint source changed while freezing; partial archive retained');
+  if (hash(referenceWorldAssemblyPreparation(reference,source.saved,selectedCapability)) !== hash(prepared)) throw Error('Joint source changed while freezing; partial archive retained');
   const values = {...source.contextFiles,'preparation.json':raw(prepared),'send.json':raw(send)};
   const files = [];
   for (const [name, maximum] of Object.entries(archiveFiles)) {
@@ -145,9 +145,9 @@ export async function readFrozenReferenceWorldAssembly({directory,referenceInput
   const prepared = JSON.parse(sources['preparation.json']), send = JSON.parse(sources['send.json']);
   const reference = await readJobReferenceInput({directory,input:referenceInput,model:prepared.selected?.model,runtimeHash:prepared.runtimeHash});
   const saved = rebuildReferenceWorldPatchContextSource(Object.fromEntries(Object.keys(REFERENCE_PATCH_CONTEXT_FILE_LIMITS).map(n => [n,sources[n]])),prepared.contextId,manifest.frozenAt);
-  const expected = preparation(reference,saved,prepared.selected?.capability);
+  const expected = referenceWorldAssemblyPreparation(reference,saved,prepared.selected?.capability);
   if (hash(expected) !== hash(prepared) || manifest.preparationHash !== expected.preparationHash) throw Error('Original full-task policy/reference/scope/consent pins changed');
-  verifySend(send,expected);
+  verifyReferenceWorldAssemblySend(send,expected);
   return {prepared:expected,send,reference,saved,worldContext:prepareAssemblyWorldContext(saved.snapshot),manifest};
 }
 

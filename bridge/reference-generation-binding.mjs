@@ -79,6 +79,10 @@ export async function bindReferencePreparationToJob({dataDir,jobDirectory,ownerI
 }
 
 export async function readJobReferenceInput({directory,input,model,runtimeHash}){
+  // A separately versioned full joint SEND may use the SAME reference-analysis
+  // pipeline. It is never an ordinary ReferenceGenerationSend or v1 input.
+  if(input?.format==='JointAssemblyReferenceInput')
+    return (await import('./reference-world-assembly-input.mjs')).readJointAssemblyReferenceInput({directory,input,model,runtimeHash});
   validateJobReferenceInput(input);directory=path.resolve(directory);await physical(directory);
   const jobId=path.basename(directory);assert.match(jobId,REFERENCE_OWNER);
   const parent=await physical(path.join(directory,'reference-input'));

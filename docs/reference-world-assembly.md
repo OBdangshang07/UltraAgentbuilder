@@ -9,9 +9,8 @@ are available internally; they do not enable that player SEND path.
 
 ## Independent preparation and SEND
 
-An explicitly confirmed, safe, native-quality reference preparation v2 is
-required. The job-owned original images retain their separate image confirmation.
-The new `ReferenceWorldAssemblyPreparation` additionally binds the original
+An explicitly confirmed, safe, native-quality shared policy is required.
+The new `ReferenceWorldAssemblyPreparation` binds the original
 captured environment, selection/protection, context record and expiration,
 reference binding/pixels/annotations, exact advertised model/effort, runtime,
 generation policy and full selected-tier budget.
@@ -20,6 +19,29 @@ Only a distinct `ReferenceWorldAssemblySend`, version 2, can freeze this new
 joint task. Ordinary image consent, summary analysis consent and the old
 one-call joint SEND cannot grant this authority. Preparation and freezing make
 zero model calls and never verify a live Minecraft server baseline.
+
+### Pure pixel drafts, not a manufactured ordinary generation SEND
+
+The independent draft path reads the existing canonical pixel set and saved
+world context directly. Free preparation creates no job, call ledger, ordinary
+reference preparation, image confirmation or SEND. The original draft UUID is
+also the new joint task's stable key; current internal job ownership requires
+its directory basename to match that key, never a caller-selected file path.
+
+One distinct complete joint SEND authorizes copying those exact image bytes
+and freezing the original environment. `JointAssemblyReferenceInput` and
+`JointAssemblyReferenceBinding`, version 2, retain the full joint preparation
+hash and explicitly transfer no ordinary generation authority. The ordinary
+v1 input validator rejects this new input. The existing reference-analysis
+prelude and Codex image reader can verify it without inventing an ordinary
+`ReferenceGenerationSend` or re-encoding the pixels.
+
+An existing complete binding is reread, never replaced. Unknown or partial
+input directories stop copying; neither concurrent requests nor expiration
+permits takeover. Job-owned original images and archived context remain
+readable after draft removal or expiry, but fresh preparation/dispatch still
+checks the original capture expiration. This input path remains internal until
+normal versioned joint job HTTP/UI and installed-game gates are integrated.
 
 ## Shared pipeline, not four separate generators
 

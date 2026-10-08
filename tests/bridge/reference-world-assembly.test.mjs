@@ -17,16 +17,17 @@ import {codexRequestFingerprint} from '../../bridge/codex-persistent-receipt.mjs
 import {requestNativeEvidence,acceptNativeEvidence,validateModelImageFiles} from '../../bridge/native-evidence.mjs';
 import {fixtureUpload} from './native-evidence-fixtures.mjs';
 import {referenceFixture,referenceBrief,sendConsent} from './reference-generation-fixture.mjs';
+import {jointPixelFixture} from './joint-assembly-input-fixture.mjs';
+import {prepareReferenceWorldAssemblyDraft,bindReferenceWorldAssemblyDraft} from '../../bridge/reference-world-assembly-input.mjs';
 import {v4Request,v4Response} from './quality-v4-fixtures.mjs';
 import {stagedRequest,stagedResponse} from './decomposed-assembly-fixtures.mjs';
 
 const sendFor=p=>({format:'ReferenceWorldAssemblySend',version:2,purpose:'reference-world-assembly',confirmed:true,
   preparationHash:p.preparationHash,maximumCalls:p.maximumCalls});
-async function setup(t,{tier='lite',staged=false,images=2,protect=false}={}) {
+async function setup(t,{tier='lite',staged=false,images=2,protect=false,independent=false}={}) {
   const {model:unused,...generationOverrides}=staged?stagedRequest:v4Request;
   generationOverrides.qualityTier=tier;
-  const f=await referenceFixture(t,{version:2,images,generationOverrides});await f.confirm();const referenceInput=await f.bind();
-  const reference=await readJobReferenceInput({directory:f.jobDirectory,input:referenceInput,model:f.generation.model,runtimeHash:f.runtimeHash});
+  const f=await (independent?jointPixelFixture:referenceFixture)(t,{version:2,images,generationOverrides});
   const size=staged?[32,224,32]:[16,10,16],origin=[-16,-40,-16],contextId=randomUUID();
   const selection={format:'WorldSelection',version:1,world:{worldId:'world_joint_synthetic',dimension:'minecraft:overworld',minY:-64,maxY:320},revision:7,
     edit:{min:origin,max:origin.map((v,i)=>v+size[i])},context:{min:origin.map(v=>v-1),max:origin.map((v,i)=>v+size[i]+1)},
@@ -36,6 +37,14 @@ async function setup(t,{tier='lite',staged=false,images=2,protect=false}={}) {
     palette:[{state:'minecraft:air',blockEntity:false}],runs:[[0,regionCells(c.region)]]}))};
   const saved=await store.operation('capture',contextId,Buffer.from(JSON.stringify({selection,capture})));
   const selectedCapability={id:f.generation.model,supportsImages:true,efforts:['high','max']};
+  let referenceInput;
+  if(independent) {
+    const options={dataDir:f.dataDir,contextId,referenceOwnerId:f.ownerId,referenceSetHash:f.manifest.setHash,generation:f.generation,selectedCapability};
+    const draft=await prepareReferenceWorldAssemblyDraft(options);
+    referenceInput=(await bindReferenceWorldAssemblyDraft({...options,directory:f.jobDirectory,send:sendFor(draft)})).referenceInput;
+    await assert.rejects(fs.lstat(path.join(f.dataDir,'reference-drafts',f.ownerId,'preparations')),e=>e.code==='ENOENT');
+  } else {await f.confirm();referenceInput=await f.bind();}
+  const reference=await readJobReferenceInput({directory:f.jobDirectory,input:referenceInput,model:f.generation.model,runtimeHash:f.runtimeHash});
   const prepareOptions={dataDir:f.dataDir,directory:f.jobDirectory,contextId,referenceInput,selectedCapability};
   const prepared=await prepareReferenceWorldAssembly(prepareOptions),send=sendFor(prepared),calls=[],observations=[];
   const adapter={models:async()=>[structuredClone(selectedCapability)],generate:async request=>{
@@ -65,8 +74,8 @@ async function setup(t,{tier='lite',staged=false,images=2,protect=false}={}) {
   return {f,referenceInput,reference,store,saved,contextId,selectedCapability,prepareOptions,prepared,send,calls,observations,adapter,runOptions};
 }
 
-for(const tier of ['lite','pro','max','ultra'])test(tier+' joint task runs the REAL shared component/native orchestration with one budget and original environment',async t=>{
-  const h=await setup(t,{tier,staged:tier==='ultra',images:tier==='lite'?1:4});
+for(const independent of [false,true])for(const tier of ['lite','pro','max','ultra'])test((independent?'independent pixel-only ':'legacy separately bound ')+tier+' joint task runs the REAL shared component/native orchestration with one budget and original environment',async t=>{
+  const h=await setup(t,{tier,staged:tier==='ultra',images:tier==='lite'?1:4,independent});
   await freezeReferenceWorldAssembly({...h.prepareOptions,send:h.send});
   const result=await runReferenceWorldAssembly(h.runOptions);
   assert.equal(result.joint.sharedPipeline,true);assert.equal(result.records.length,h.calls.length);
