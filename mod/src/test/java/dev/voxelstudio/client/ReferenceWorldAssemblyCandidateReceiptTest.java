@@ -68,4 +68,12 @@ class ReferenceWorldAssemblyCandidateReceiptTest {
         m.reference().addProperty("canAuthorizePlacement",true);m.candidate().addProperty("candidateHash","f".repeat(64));m.patchSet().addProperty("canAuthorizePlacement",true);m.status().addProperty("state","running");p.get(0).patch().addProperty("canAuthorizePlacement",true);var bytes=p.get(0).originalProposal();bytes[0]=0;
         assertEquals(hash,whole.metadata().candidateHash());assertFalse(whole.metadata().patchSet().get("canAuthorizePlacement").getAsBoolean());assertFalse(whole.parts().get(0).patch().get("canAuthorizePlacement").getAsBoolean());assertEquals((byte)'{',whole.parts().get(0).originalProposal()[0]);assertThrows(UnsupportedOperationException.class,()->whole.parts().clear());
     }
+    @Test void verifiedWholeAdapterRetainsExactOriginalProposalPatchAndNativeSourceIdentity()throws Exception{
+        var f=fixtures().get(0);var m=metadata(f);var p=parts(f,m);var whole=ReferenceWorldAssemblyCandidateReceipt.whole(m,p,()->false);var input=whole.worldInput(()->false);var c=m.candidate();
+        assertEquals(whole.totalWrites(),input.binding().totalWrites());assertEquals(m.reference().get("requestHash").getAsString(),input.binding().requestHash());
+        assertEquals(c.get("sourceHash").getAsString(),input.binding().sourceHash());assertEquals(c.get("currentNativeEvidenceHash").getAsString(),input.binding().currentNativeEvidenceHash());assertEquals(c.get("referenceBindingHash").getAsString(),input.binding().referenceBindingHash());
+        assertEquals(m.patchSet(),input.binding().patchSet());assertFalse(input.canAuthorizePlacement());
+        for(int index=0;index<p.size();index++){assertArrayEquals(p.get(index).originalPatch(),input.parts().get(index).patch());assertArrayEquals(p.get(index).originalProposal(),input.parts().get(index).proposal());assertSame(p.get(index).preview(),input.parts().get(index).preview());}
+        assertThrows(java.util.concurrent.CancellationException.class,()->whole.worldInput(()->true));
+    }
 }

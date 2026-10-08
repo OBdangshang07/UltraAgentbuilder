@@ -28,6 +28,7 @@ final class ReferenceWorldAssemblyCandidateReceipt {
         private Part(Metadata m,int i,JsonObject p,WorldPatchPreview v){metadata=m;index=i;patch=wire(p,16*1024*1024);proposal=wire(p.get("proposal"),16*1024*1024);preview=v;}
         int index(){return index;}JsonObject patch(){return WorldPatchCandidateReceipt.strictJson(new String(patch,StandardCharsets.UTF_8),()->false).getAsJsonObject();}WorldPatchPreview preview(){return preview;}
         byte[] originalProposal(){return proposal.clone();}
+        byte[] originalPatch(){return patch.clone();}
         boolean partIsApplyScope(){return false;}boolean canAuthorizePlacement(){return false;}
     }
     static final class Whole {
@@ -37,6 +38,24 @@ final class ReferenceWorldAssemblyCandidateReceipt {
         int totalWrites(){return rows.size();}WorldPatchPreview.Row at(SelectionRegion.Point p){return rows.get(p);}
         boolean movable(){return false;}boolean completeSetVerified(){return true;}
         boolean currentWorldVerified(){return false;}boolean canAuthorizePlacement(){return false;}
+        /** Read-only server transport from this exact verified complete owner.
+         * No per-part legacy candidate or placement confirmation is created. */
+        AssemblyPatchInput worldInput(BooleanSupplier cancelled){
+            allowed(cancelled);var r=metadata.reference;var c=metadata.candidate;
+            var p=r.getAsJsonObject("prepared");var set=metadata.patchSet;
+            var selection=WorldPatchJobReceipt.selection(r.getAsJsonObject("selection"));
+            var hashes=new ArrayList<String>();set.getAsJsonArray("partHashes").forEach(v->hashes.add(v.getAsString()));
+            var previews=new ArrayList<String>();c.getAsJsonArray("previewHashes").forEach(v->previews.add(v.getAsString()));
+            var binding=new AssemblyPatchBinding(text(p,"contextId"),selection,number(r,"contextRevision"),
+                    text(c,"snapshotHash"),text(c,"selectionHash"),text(c,"worldContextHash"),text(c,"jobId"),
+                    text(c,"preparationHash"),text(r,"requestHash"),text(c,"runtimeHash"),text(c,"referenceSetHash"),
+                    text(p,"recordHash"),text(c,"referenceBindingHash"),text(c,"sourceHash"),text(c,"currentNativeEvidenceHash"),
+                    text(c,"assetHash"),text(c,"cellsHash"),text(c,"candidateHash"),text(c,"patchSetHash"),
+                    selection.edit().min(),hashes,previews,totalWrites());
+            var transported=new ArrayList<AssemblyPatchInput.Part>();
+            for(var part:parts){allowed(cancelled);transported.add(new AssemblyPatchInput.Part(part.index,part.proposal,part.patch,part.preview));}
+            allowed(cancelled);return new AssemblyPatchInput(binding,transported);
+        }
     }
     private static void allowed(BooleanSupplier cancelled){Objects.requireNonNull(cancelled);if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("原整组候选读取取消；不采用部分成果");}
     /** Stream UTF-8 without materializing an extra giant UTF-16 String. Parts

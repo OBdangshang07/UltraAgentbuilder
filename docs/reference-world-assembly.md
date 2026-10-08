@@ -408,3 +408,28 @@ full-set projection/confirmation/undo, special-state world transactions,
 installed-game/Iris/IME/performance and independent release gates remain open.
 No formal player world, account data, private image or model session belongs in
 public Git. This source milestone is not a certified binary release.
+### Independent whole-set server audit (read-only)
+
+The complete verified download can now be adapted into `AssemblyPatchInput`,
+with original proposal and patch bytes, original preview rows, ordered part
+hashes and explicit source/native/reference identity. Its immutable v2 binding
+is not a legacy single-patch candidate or a placement capability.
+
+`SelectionReadService.startAssemblyAudit` requires the exact server-owned
+Capture, baseline and player, and the one original dispatch retention. It
+rebuilds every proposal against that same baseline, compares complete patches
+and previews, rejects repeated/reordered coordinates, and merges neighbor
+guards. Legacy preparation and whole audit exclude each other in both
+directions. A completed audit still has no fresh-world, physics or placement
+authority.
+
+The independent whole difference merges shared 16-block sections across
+transport boundaries and keeps original absolute coordinates, floor filters
+and cancellation. Offline tests use the complete production-generated
+synthetic Lite and 224-metre, seven-part Ultra data, not player worlds or real
+image-understanding evidence.
+
+Whole native rendering, fresh BEFORE, a single final confirmation, whole
+journal/execution/protected undo and actual game acceptance remain pending.
+Normal full-generation SEND and whole placement remain disabled. Do not apply
+parts individually or treat this source milestone as a certified release.

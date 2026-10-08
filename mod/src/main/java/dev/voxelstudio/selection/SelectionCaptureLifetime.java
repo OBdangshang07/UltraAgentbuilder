@@ -39,6 +39,20 @@ final class SelectionCaptureLifetime<O> {
         return age<0||age>=(phase==Phase.PREPARING?DISPATCH_PREPARATION_NANOS:IDLE_NANOS);
     }
     synchronized void revoke(){phase=Phase.REVOKED;}
+    /** Observation of the one original full SEND, never a new reservation,
+     * response certificate, final confirmation or write capability. */
+    synchronized void checkedAssembly(O original,UUID player,AssemblyPatchBinding candidate){
+        owner(original,player);Objects.requireNonNull(candidate);
+        if(phase!=Phase.POSSIBLY_SENT||binding==null
+                ||!binding.contextId().equals(candidate.captureId())
+                ||binding.contextRevision()!=candidate.contextRevision()
+                ||!binding.snapshotHash().equals(candidate.snapshotHash())
+                ||!binding.selectionHash().equals(candidate.selectionHash())
+                ||!binding.capsuleId().equals(candidate.preparationHash())
+                ||!binding.manifestHash().equals(candidate.contextRecordHash())
+                ||!binding.submissionHash().equals(candidate.requestHash())
+                ||!binding.runtimeHash().equals(candidate.runtimeHash()))throw new IllegalStateException("整组候选不是此玩家仍持有的原完整 SEND；不能重绑或续发");
+    }
     synchronized Phase phase(){return phase;}
     boolean canAuthorizePlacement(){return false;}
 }

@@ -49,6 +49,7 @@ public final class WorldPatchPlacementService {
     }
     private static void thread(MinecraftServer server){if(!server.isOnThread())throw new IllegalStateException("Native placement gateway requires server thread");}
     private static boolean terminal(State state){return Set.of(State.COMPLETED,State.CANCELLED,State.CONFLICT,State.REVIEW_REQUIRED,State.FAILED).contains(state);}
+    static boolean busy(MinecraftServer server){thread(server);var task=TASKS.get(server);return PREPARATIONS.containsKey(server)||task!=null&&!terminal(task.handle.status.state)||WorldPatchUndoService.busy(server);}
     private static void idle(MinecraftServer server){var task=TASKS.get(server);if(task!=null&&!terminal(task.handle.status.state)||WorldPatchUndoService.busy(server))throw new IllegalStateException("已有原位改造/撤销事务或撤销准备；先等待或显式取消");}
     /** Private same-live-task witness. Neither a public operation ID nor a
      * disk archive can create this object. Only the latest retained apply is
@@ -64,7 +65,7 @@ public final class WorldPatchPlacementService {
     public static PrepareHandle prepare(MinecraftServer server,UUID player,SelectionReadService.Capture original,WorldPatchPreview preview,byte[] response,String responseHash){
         Objects.requireNonNull(server);Objects.requireNonNull(player);Objects.requireNonNull(original);Objects.requireNonNull(preview);Objects.requireNonNull(response);
         var handle=new PrepareHandle();var bytes=response.clone();handle.result.whenComplete((v,e)->{if(handle.result.isCancelled())cancelPreparation(server,player,handle.id);});
-        server.execute(()->{try{thread(server);idle(server);if(PREPARATIONS.containsKey(server))throw new IllegalStateException("已有原候选的最终确认准备；先显式取消，不隐式替换");
+        server.execute(()->{try{thread(server);idle(server);if(PREPARATIONS.containsKey(server)||SelectionReadService.assemblyAuditActive(server))throw new IllegalStateException("已有原候选的最终确认准备或整组核验；先显式取消，不隐式替换");
             var p=new Preparation();p.player=player;p.handle=handle;p.original=original;p.preview=preview;p.audit=SelectionReadService.startPatchAudit(server,player,original,preview,bytes,responseHash);PREPARATIONS.put(server,p);
         }catch(Exception e){handle.status=new PrepareStatus(PrepareState.FAILED,root(e));handle.result.completeExceptionally(e);}});return handle;
     }
