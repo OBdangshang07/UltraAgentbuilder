@@ -5,6 +5,7 @@ import {contextHash} from '../src/world/context-snapshot.mjs';
 import {prepareWorldPatchDesignInput, compileWorldPatchDesignResponse} from '../src/world/world-patch-design-input.mjs';
 import {prepareWorldPatchPreview} from '../src/world/world-patch-preview-data.mjs';
 import {bindFrozenWorldPatchSend} from '../contracts/world-patch-send.mjs';
+import {bindFrozenReferenceWorldPatchSend} from '../contracts/reference-world-patch-send.mjs';
 
 // Private, worker-owned proposal artifact. Never a building bundle, schematic,
 // fresh-server BEFORE certificate, placement token or world transaction.
@@ -40,7 +41,8 @@ async function write(file, bytes) {
  * saved response. Rebuild every compiled/preview byte; local hashes alone
  * cannot adopt an alternate proposal, baseline, SEND or runtime. */
 export function prepareResponseCandidate({source, send, runtimeHash, spec}) {
-  bindFrozenWorldPatchSend(source.receipt, send);
+  if (source.receipt?.format === 'FrozenReferenceWorldPatchTaskReceipt') bindFrozenReferenceWorldPatchSend(source.receipt, send);
+  else bindFrozenWorldPatchSend(source.receipt, send);
   if (!/^[a-f0-9]{64}$/.test(runtimeHash ?? '')) fail('Original response runtime hash required');
   const proposal = structuredClone(spec), input = prepareWorldPatchDesignInput(source.snapshot);
   const patch = compileWorldPatchDesignResponse(source.snapshot, input, proposal);

@@ -133,7 +133,7 @@ export class CodexAdapter extends EventEmitter {
     return this.receiptReader.request('thread/read',{threadId:identity.threadId,includeTurns:true},10000);
   }
   async recoverOriginal({binding,prompt,model,effort,cwd,signal,onEvent,images=[],referenceInput,outputSchema=specSchema}){
-    const imageInput=await codexImageInput({images,referenceInput,cwd,model});signal?.throwIfAborted();
+    const imageInput=await codexImageInput({images,referenceInput,cwd,model,originalReceiptOnly:true});signal?.throwIfAborted();
     const requestHash=await codexRequestHash({prompt,model,effort:effort??binding?.effort,outputSchema,...imageInput});
     if(binding?.model!==model||binding?.effort!==(effort??binding?.effort))throw Error('Original Codex model/effort binding mismatch; no generation submitted');
     const identity=checkCodexBinding(binding,requestHash),evidence=responseEvidence(cwd,'codex',{model,effort:effort??binding.effort,requestHash,recoveredOriginal:true});
