@@ -132,6 +132,24 @@ test('joint disabled startup cannot be upgraded by HTTP, config, legacy confirma
   await assert.rejects(fs.stat(path.join(f.dir,'reference-world-patch-invocations')),{code:'ENOENT'});
 });
 
+test('default-disabled joint lane rejects every exact action and read, while method boundaries remain strict and all provider work stays zero', async t => {
+  const f = await fixture(t,{enabled:false}), id=f.receipt.capsuleId, task=`${prefix}/tasks/${id}`, job=`${prefix}/jobs/${id}`;
+  for (const [route,method,value] of [
+    ...['disclosure','review','freeze'].map(action => [`${prefix}/contexts/${f.id}/${action}`,'POST',{intent:f.input.intent,confirmation:f.confirmation}]),
+    [task,'GET'],[task+'/images','POST',{}],[job,'GET'],[job+'/send','POST',{}],
+    [job+'/observe-original','POST',{confirmed:true}],
+    ...['preview','candidate'].map(kind => [`${job}/${kind}?candidateHash=${'a'.repeat(64)}`,'GET']),
+  ]) assert.equal((await f.request(route,{method,value})).status,409,method+' '+route);
+  for (const [route,method] of [[task,'POST'],[task+'/images','GET'],[job,'POST'],[job+'/send','GET'],[job+'/observe-original','GET']])
+    assert.equal((await f.request(route,{method})).status,405,method+' '+route);
+  const caps=(await f.request(prefix+'/capabilities')).value;
+  for (const key of ['preparationEnabled','sendingEnabled','playerUiImplemented','placementImplemented','serverBaselineVerified','canAuthorizePlacement'])
+    assert.equal(caps[key],false,key);
+  assert.equal(caps.legacyConsentTransferable,false);assert.equal(caps.runtimeHash,null);
+  assert.equal(f.modelQueries(),0);assert.deepEqual(f.requests,[]);assert.equal(turns(f).length,0);
+  await assert.rejects(fs.stat(path.join(f.dir,'reference-world-patch-invocations')),{code:'ENOENT'});
+});
+
 test('paired loopback authorization, exact route/method/query and fatal UTF-8/byte quota reject before discovery or SEND', async t => {
   const f = await fixture(t), route = `${prefix}/contexts/${f.id}/disclosure`;
   assert.equal((await f.request(prefix+'/capabilities',{headers:{Authorization:'Bearer synthetic-wrong'}})).status,401);
