@@ -237,3 +237,27 @@ test('an extra persisted invocation is rejected instead of silently reporting a 
   assert.deepEqual(await inventory(jobDir(f)), before);
   assert.equal(transport.requests.filter(r => r.method === 'turn/start').length, 1);
 });
+
+test('concurrent identical original downloads share the bounded reader, while changed kind/hash and close never return fallback bytes', async t => {
+  const f=await fixture(t),transport=fake(f),runner=await open(t,f,transport);
+  await runner.submit(request(f));await settle(runner);
+  const status=await runner.get(f.receipt.capsuleId),id=f.receipt.capsuleId;
+  const first=runner.downloadPreview(id,status.candidateHash),same=runner.downloadPreview(id,status.candidateHash);
+  await assert.rejects(runner.downloadCandidate(id,status.candidateHash),/differs/);
+  await assert.rejects(runner.downloadPreview(id,'b'.repeat(64)),/differs/);
+  const [a,b]=await Promise.all([first,same]);assert.deepEqual(a,b);
+  assert.equal(JSON.parse(a).candidateFilesReverified,true);
+  const reading=runner.downloadCandidate(id,status.candidateHash),rejected=assert.rejects(reading,/closed|cancelled/);
+  await runner.close();await rejected;
+  assert.equal(transport.requests.filter(r=>r.method==='turn/start').length,1);
+});
+
+test('private worker metadata input is bounded, rejects caller paths and UUIDs, and a missing original invocation creates nothing', async t => {
+  const f=await fixture(t),transport=fake(f);await open(t,f,transport);
+  const operation=(id,value)=>f.store.operation('reference-patch-invocation-metadata',id,Buffer.from(JSON.stringify(value)));
+  assert.equal(await operation(f.receipt.capsuleId,{runtimeHash}),null);
+  await assert.rejects(operation(f.id,{runtimeHash}),/identity/);
+  await assert.rejects(operation(f.receipt.capsuleId,{runtimeHash,path:'../caller-source'}),/unknown|unexpected|keys|field/i);
+  await assert.rejects(f.store.operation('reference-patch-invocation-metadata',f.receipt.capsuleId,Buffer.alloc(129)),{statusCode:413});
+  await assert.rejects(fs.stat(jobDir(f)),{code:'ENOENT'});assert.deepEqual(transport.requests,[]);
+});

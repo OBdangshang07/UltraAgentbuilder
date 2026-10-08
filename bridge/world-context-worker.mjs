@@ -50,7 +50,7 @@ for (const part of path.relative(ancestor, requestedParent).split(path.sep).filt
 const canonicalParent = await fs.realpath(requestedParent), root = path.join(canonicalParent, path.basename(requestedRoot));
 await directory(canonicalParent);
 let owner;
-if (!['reference-patch-frozen-task','reference-patch-send-input','reference-patch-original-input','reference-patch-freeze-images','reference-patch-original-images','reference-patch-provider-input','reference-patch-provider-recheck'].includes(operation)) {
+if (!['reference-patch-frozen-task','reference-patch-send-input','reference-patch-original-input','reference-patch-freeze-images','reference-patch-original-images','reference-patch-provider-input','reference-patch-provider-recheck','reference-patch-invocation-metadata'].includes(operation)) {
   await directory(root, !jointPreparation);
   try { owner = await json(path.join(root, '_store.json'), 1024); }
   catch (e) { if (e.code !== 'ENOENT' || jointPreparation) throw e; owner = {format: 'WorldContextStore', version: 1, ownerId: randomUUID()}; await write(path.join(root, '_store.json'), owner); }
@@ -118,6 +118,20 @@ async function inventory() {
 function publicRecord(record) { const {ownerId, ...result} = record; return result; }
 async function run() {
   const capsuleRoot = path.join(canonicalParent, 'world-patch-tasks');
+  if (operation === 'reference-patch-invocation-metadata') {
+    // PRIVATE bounded status audit. Full original snapshot/image rebuilding
+    // stays on this worker; HTTP receives neither source chunks nor pixels.
+    const bytes = Buffer.from(payload);
+    if (!bytes.length || bytes.length > 128) fail('Joint invocation metadata quota', 413);
+    const value = JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(bytes));
+    exactKeys(value, ['runtimeHash'], 'internal joint metadata binding');
+    if (!/^[a-f0-9]{64}$/.test(value.runtimeHash ?? '')) fail('Exact joint runtime identity required');
+    const dir = path.join(canonicalParent, 'reference-world-patch-invocations', id);
+    try {await fs.lstat(dir);} catch (error) {if (error.code === 'ENOENT') return null; throw error;}
+    const {readReferencePatchInvocation} = await import('./reference-world-patch-invocation-data.mjs');
+    const saved = await readReferencePatchInvocation(dir, value.runtimeHash);
+    return {directory:saved.directory, value:saved.value, source:{receipt:saved.source.receipt}};
+  }
   if (['reference-patch-provider-input','reference-patch-provider-recheck'].includes(operation)) {
     // PRIVATE local preparation, not a provider dispatch. Use the same bounded
     // lane for source/pixel revalidation; do not initialize a missing store.

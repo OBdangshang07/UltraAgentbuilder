@@ -44,6 +44,12 @@ function intentAndBase(value) {
   return {intent: freeze(structuredClone(value)), base};
 }
 
+// HTTP can validate intent before querying a provider. Capabilities, runtime,
+// original pixels and filesystem paths are still exclusively server-owned.
+export function validateReferenceWorldPatchDesignIntent(value) {
+  return intentAndBase(value).intent;
+}
+
 function verifiedPictures(reference, intent) {
   exactKeys(reference, ['manifest','images'], 'joint reference pixels');
   const manifest = reference.manifest;

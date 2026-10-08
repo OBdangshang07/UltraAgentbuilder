@@ -11,8 +11,9 @@ import {codexRequestFingerprint} from './codex-persistent-receipt.mjs';
 import {createWorldPatchOwnerReference, inspectWorldPatchOwnerProcess} from './world-patch-owner-observation.mjs';
 import {prepareFrozenReferenceWorldPatchSendInput} from './reference-world-patch-send-input.mjs';
 import {readReferenceWorldPatchTaskImages} from './reference-world-patch-task-images.mjs';
+import {WORLD_PATCH_CANDIDATE_DOWNLOAD_BYTES, WORLD_PATCH_PREVIEW_DOWNLOAD_BYTES} from './world-patch-preview-download.mjs';
 import {REFERENCE_PATCH_CALL_POLICY, REFERENCE_PATCH_RESPONSE_BYTES, jointInvocationDirectory,
-  readJointInvocationEnvelope, writeJointInvocationEnvelope, readReferencePatchInvocation} from './reference-world-patch-invocation-data.mjs';
+  readJointInvocationEnvelope, writeJointInvocationEnvelope} from './reference-world-patch-invocation-data.mjs';
 
 // Internal joint path, not a public endpoint or world writer. Its distinct
 // write-ahead invocation journal never changes the original consume-once
@@ -23,7 +24,7 @@ export async function createReferenceWorldPatchDesignRunner(options) {
   const registry = await createReferenceWorldPatchJobRegistry({dataDir: options.dataDir, contexts: options.contexts});
   const dataDir = await fs.realpath(path.resolve(options.dataDir)), root = path.join(dataDir, 'reference-world-patch-invocations');
   await jointInvocationDirectory(root, true);
-  const runtimeHash = registry.runtimeHash, preparing = new Map(), running = new Map(), owned = new Map();
+  const runtimeHash = registry.runtimeHash, preparing = new Map(), running = new Map(), owned = new Map(), readers = new Map(), cleanups = new Set(), metadataReads = new Map();
   let closed = false;
   const directory = id => {
     if (!/^[a-f0-9]{64}$/.test(id ?? '')) throw Error('Exact joint capsule identity required');
@@ -31,9 +32,15 @@ export async function createReferenceWorldPatchDesignRunner(options) {
   };
   const checkpoint = signal => {if (closed || signal?.aborted) throw Error('Joint design runner closed/cancelled; original evidence retained');};
   const metadata = async id => {
-    const dir = directory(id); await jointInvocationDirectory(root);
-    try {await jointInvocationDirectory(dir);} catch (error) {if (error.code === 'ENOENT') return null; throw error;}
-    return readReferencePatchInvocation(dir, runtimeHash);
+    directory(id);
+    // Simultaneous reads of the exact same immutable request share ONE
+    // bounded audit. No persisted cache, enlarged queue or source fallback.
+    const pending = metadataReads.get(id); if (pending) return pending.promise;
+    const controller = new AbortController(), item = {controller,promise:null};
+    item.promise = options.contexts.operation('reference-patch-invocation-metadata', id,
+      Buffer.from(JSON.stringify({runtimeHash})), {signal:controller.signal});
+    metadataReads.set(id,item);
+    try {return await item.promise;} finally {if(metadataReads.get(id) === item) metadataReads.delete(id);}
   };
   async function get(id) {
     const saved = await metadata(id); if (!saved) return null;
@@ -100,7 +107,7 @@ export async function createReferenceWorldPatchDesignRunner(options) {
       : ['failed','interrupted','not-submitted'].includes(call.error?.diagnostic?.reason) ? 'failed' : 'unknown';
     return {format: 'FrozenReferenceWorldPatchJobStatus', version: 1, id, capsuleId: id,
       submissionHash: saved.value.submissionHash, manifestHash: saved.source.receipt.manifestHash, runtimeHash,
-      recipient: saved.source.receipt.recipient, state, callsReserved: call ? 1 : 0, maximumCalls: 1,
+      recipient: structuredClone(saved.source.receipt.recipient), state, callsReserved: call ? 1 : 0, maximumCalls: 1,
       automaticRetries: 0, modelSent: call ? 'possibly-or-confirmed' : false,
       responseCheck, localStop, canObserveOriginal: !active && call?.state === 'pending' && !!call.providerBinding?.turnId,
       candidatePublished: responseCheck?.candidateSaved === true,
@@ -224,7 +231,7 @@ export async function createReferenceWorldPatchDesignRunner(options) {
     // All concurrent callers can have observed a missing directory before the
     // first read resolves. Recheck this exact in-memory owner after that await.
     if (preparing.has(id)) {await preparing.get(id); const saved = await metadata(id); same(saved); return get(id);}
-    if (preparing.size || running.size) throw Error('Joint design lane busy; no model submitted');
+    if (preparing.size || running.size || readers.size) throw Error('Joint design lane busy; no model submitted');
     const operation = (async () => {
       const reservation = await registry.reserve(value), packet = await registry.readOwnedInput(id); checkpoint();
       const dir = directory(id);
@@ -248,9 +255,10 @@ export async function createReferenceWorldPatchDesignRunner(options) {
     })();
     preparing.set(id, operation); try {return await operation;} finally {if (preparing.get(id) === operation) preparing.delete(id);}
   }
-  async function observeOriginal(id) {
+  async function observeOriginal(id, {waitForCompletion = true} = {}) {
+    if (typeof waitForCompletion !== 'boolean') throw Error('Exact original observation wait mode required');
     checkpoint();
-    if (preparing.size || running.size) throw Error('Joint lane busy; original receipt only, no dispatch');
+    if (preparing.size || running.size || readers.size) throw Error('Joint lane busy; original receipt only, no dispatch');
     directory(id);
     const operation = (async () => {
       const saved = await metadata(id), status = await get(id);
@@ -264,6 +272,11 @@ export async function createReferenceWorldPatchDesignRunner(options) {
       const claimFile = path.join(saved.directory, '_observer.json'), claim = {format: 'ReferenceWorldPatchOriginalObserver',
         version: 1, id: randomUUID(), ownerReferenceHash: saved.value.ownerReferenceHash, originalCallOnly: true};
       await writeJointInvocationEnvelope(claimFile, claim);
+      const releaseClaim = async () => {
+        if (hash(await readJointInvocationEnvelope(claimFile)) !== hash(claim)) throw Error('Original joint observation claim changed; preserved');
+        await fs.unlink(claimFile); // this exact OWN read-only claim only
+      };
+      let cleanup;
       try {
         const input = await prepareFrozenReferenceWorldPatchSendInput({dataDir, capsuleId: id, send: saved.value.send, originalReceiptOnly: true});
         const images = await readReferenceWorldPatchTaskImages({dataDir, capsuleId: id, send: saved.value.send});
@@ -272,17 +285,71 @@ export async function createReferenceWorldPatchDesignRunner(options) {
           throw Error('Original joint observation input changed; no substituted prompt or pixels');
         await start(saved, {...input, images: images.images, outputSchema: (await import('../contracts/world-patch.mjs')).worldPatchProposalSchema,
           stageName: 'reference-world-patch-design', stageCount: 1}, true);
-        await (running.get(id)?.done ?? Promise.resolve()); return get(id);
-      } finally {
-        if (hash(await readJointInvocationEnvelope(claimFile)) !== hash(claim)) throw Error('Original joint observation claim changed; preserved');
-        await fs.unlink(claimFile); // this exact OWN read-only claim only
-      }
+        cleanup = (running.get(id)?.done ?? Promise.resolve()).finally(releaseClaim);
+        cleanups.add(cleanup); void cleanup.finally(() => cleanups.delete(cleanup)).catch(() => {});
+        if (waitForCompletion) await cleanup;
+        return get(id);
+      } catch (error) {if (!cleanup) await releaseClaim(); throw error;}
     })();
     preparing.set(id, operation); try {return await operation;} finally {if (preparing.get(id) === operation) preparing.delete(id);}
   }
-  return {runtimeHash, submit, get, observeOriginal, busy: () => preparing.size > 0 || running.size > 0,
+  async function download(id, candidateHash, downloadKind) {
+    checkpoint(); directory(id);
+    if (!/^[a-f0-9]{64}$/.test(candidateHash ?? '')) throw Error('Exact retained joint candidate hash required');
+    const previous = readers.get(id);
+    if (previous) {
+      if (previous.candidateHash !== candidateHash || previous.downloadKind !== downloadKind)
+        throw Error('Concurrent joint candidate download differs');
+      return previous.promise;
+    }
+    if (preparing.size || running.size || readers.size) throw Error('Joint candidate download lane busy; no fallback');
+    const controller = new AbortController(), item = {controller, candidateHash, downloadKind, promise:null};
+    item.promise = (async () => {
+      const saved = await metadata(id), before = await get(id); checkpoint(controller.signal);
+      if (!saved || before?.state !== 'completed-checked' || before.candidateHash !== candidateHash)
+        throw Error('Exact original completed joint candidate required');
+      const responseHash = before.responseCheck.responseHash;
+      const bytes = await new Promise((resolve, reject) => {
+        controller.signal.throwIfAborted(); let settled = false, message;
+        const worker = new Worker(new URL('./reference-world-patch-download-worker.mjs', import.meta.url), {
+          workerData:{directory:saved.directory, runtimeHash, candidateHash, responseHash, downloadKind},
+          resourceLimits:{maxOldGenerationSizeMb:512, stackSizeMb:4}});
+        const finish = (error, result) => {if (settled) return; settled = true; clearTimeout(timer);
+          controller.signal.removeEventListener('abort', abort);
+          worker.terminate().then(() => error ? reject(error) : resolve(result), reject);};
+        const abort = () => finish(Error('Joint candidate download cancelled; original data retained'));
+        const timer = setTimeout(() => finish(Error('Joint candidate download worker quota; no fallback')), 60000);
+        controller.signal.addEventListener('abort', abort, {once:true});
+        worker.once('message', value => {message = value;}); worker.once('error', error => finish(error));
+        worker.once('exit', code => {
+          if (controller.signal.aborted) return abort();
+          const maximum = downloadKind === 'candidate' ? WORLD_PATCH_CANDIDATE_DOWNLOAD_BYTES : WORLD_PATCH_PREVIEW_DOWNLOAD_BYTES;
+          if (code !== 0 || message?.ok !== true || !(message.bytes instanceof Uint8Array)
+            || !message.bytes.length || message.bytes.length > maximum) return finish(Error('Original joint download verification failed'));
+          finish(null, Buffer.from(message.bytes));
+        });
+      });
+      checkpoint(controller.signal);
+      const after = await get(id); checkpoint(controller.signal);
+      if (after?.state !== 'completed-checked' || after.candidateHash !== candidateHash
+        || hash(after.responseCheck) !== hash(before.responseCheck) || after.submissionHash !== before.submissionHash)
+        throw Error('Joint candidate lifecycle changed during download');
+      return bytes;
+    })();
+    readers.set(id, item);
+    try {return await item.promise;} finally {if (readers.get(id) === item) readers.delete(id);}
+  }
+  return {runtimeHash, submit, get, observeOriginal,
+    downloadPreview:(id, candidateHash) => download(id, candidateHash, 'preview'),
+    downloadCandidate:(id, candidateHash) => download(id, candidateHash, 'candidate'),
+    busy: () => preparing.size > 0 || running.size > 0 || readers.size > 0,
     async close() {closed = true; for (const item of running.values()) item.controller.abort();
+      for (const item of metadataReads.values()) item.controller.abort();
+      await Promise.allSettled([...metadataReads.values()].map(item=>item.promise));
+      for (const item of readers.values()) item.controller.abort();
+      await Promise.allSettled([...readers.values()].map(item => item.promise));
       await Promise.allSettled([...preparing.values()]);
       const active = [...running.values()]; for (const item of active) item.controller.abort();
-      await Promise.allSettled(active.map(item => item.done)); await registry.close(); owned.clear();}};
+      await Promise.allSettled(active.map(item => item.done));
+      await Promise.allSettled([...cleanups]); await registry.close(); owned.clear();}};
 }
