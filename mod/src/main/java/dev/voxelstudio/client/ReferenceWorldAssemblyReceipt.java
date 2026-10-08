@@ -22,7 +22,11 @@ final class ReferenceWorldAssemblyReceipt {
         if(!text(g,"agent").equals("codex")||!text(g,"generationMode").equals("scene")||!text(g,"sceneWorkflow").equals("components")
             ||!flag(g,"assemblyConfirmed")||!text(g,"assemblyRecovery").equals("safe")||!text(g,"assemblyDesignReview").equals("native")
             ||!Set.of("v2","v3","v4").contains(text(g,"assemblyQuality")))throw new IllegalStateException("完整联合需要明确的四档/原生质量/安全恢复请求");
-        intent("codex",text(g,"model"),text(g,"effort"),text(g,"prompt"));
+        // Full generation has its own 1..16000 UTF-16-character contract and
+        // complete advertised effort set, not the v1 environment intent's
+        // 6000-character/six-effort restriction or its single-call consent.
+        String prompt=text(g,"prompt");boolean blank=prompt.codePoints().allMatch(ch->ch>=9&&ch<=13||ch==32||ch==0xa0||ch==0x1680||ch>=0x2000&&ch<=0x200a||ch==0x2028||ch==0x2029||ch==0x202f||ch==0x205f||ch==0x3000||ch==0xfeff);
+        if(blank||prompt.length()>16000||!text(g,"model").matches("[A-Za-z0-9._:-]{1,128}")||!Set.of("none","minimal","low","medium","high","xhigh","max","ultra").contains(text(g,"effort")))throw new IllegalStateException("完整生成提示词/模型/推理协议不一致");
         if(g.has("assemblyCalls")&&number(g,"assemblyCalls")!=maximum(text(g,"qualityTier")))throw new IllegalStateException("完整联合预算须与原档位一致，不借用一调用确认");
         for(var k:List.of("baseJobId","repairJobId","spec","scenePatch","patch","importDirectory","reviewImages"))if(g.has(k))throw new IllegalStateException("不能替换原联合请求或继承其他任务");
     }

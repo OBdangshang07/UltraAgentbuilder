@@ -29,6 +29,16 @@ class ReferenceWorldAssemblyReceiptTest {
             if(f.get("tier").getAsString().equals("ultra"))assertEquals(224,plan.prepared().getAsJsonObject("maximumBounds").get("height").getAsInt());
         }
     }
+    @Test void fullGenerationDoesNotInheritLegacyPromptOrEffortRestrictions()throws Exception{
+        var original=fixtures().get(0).getAsJsonObject("generation");
+        for(var effort:List.of("none","minimal","low","medium","high","xhigh","max","ultra")){
+            var g=original.deepCopy();g.addProperty("effort",effort);g.addProperty("prompt","x".repeat(16000));assertDoesNotThrow(()->ReferenceWorldAssemblyReceipt.generation(g));
+            var c=new JsonObject();c.add("id",g.get("model"));c.addProperty("supportsImages",true);var efforts=new JsonArray();efforts.add(effort);c.add("efforts",efforts);assertDoesNotThrow(()->ReferenceWorldAssemblyReceipt.capability(c,g));
+        }
+        for(var prompt:List.of("x".repeat(16001),"", "\u00a0\ufeff\u3000")){var g=original.deepCopy();g.addProperty("prompt",prompt);assertThrows(RuntimeException.class,()->ReferenceWorldAssemblyReceipt.generation(g));}
+        for(var effort:List.of("default","unsupported")){var g=original.deepCopy();g.addProperty("effort",effort);assertThrows(RuntimeException.class,()->ReferenceWorldAssemblyReceipt.generation(g));}
+        var invalid=original.deepCopy();invalid.addProperty("model","legacy/slash-alias");assertThrows(RuntimeException.class,()->ReferenceWorldAssemblyReceipt.generation(invalid));
+    }
     @Test void changedPixelsAnnotationRecipientScopeRuntimeOrBudgetEvenRehashedCannotBind()throws Exception{
         var f=fixtures().get(0);for(var key:List.of("snapshotHash","recordHash","payloadSha256","referenceSetHash","origin","maximumBounds","imageAnnotations","selected","maximumCalls","generationHash","v1ConsentTransferable")){
             var p=f.getAsJsonObject("prepared").deepCopy();switch(key){case "origin"->p.add(key,JsonParser.parseString("[0,0,0]"));case "maximumBounds"->p.getAsJsonObject(key).addProperty("height",1);case "imageAnnotations"->p.getAsJsonArray(key).get(0).getAsJsonObject().getAsJsonObject("annotation").addProperty("caption","swapped");case "selected"->p.getAsJsonObject(key).addProperty("model","different");case "maximumCalls"->p.addProperty(key,26);case "v1ConsentTransferable"->p.addProperty(key,true);default->p.addProperty(key,"f".repeat(64));}
