@@ -5,7 +5,7 @@ import java.util.function.BooleanSupplier;
 
 /** Complete, immovable original-coordinate difference. An independent v2
  * display type, not a legacy patch candidate, Asset, confirmation or writer. */
-public final class AssemblyPatchPreview {
+public final class AssemblyPatchPreview implements WorldDifferenceView {
     private record SectionKey(int x,int y,int z){}
     private final AssemblyPatchBinding binding;private final List<WorldPatchPreview.Section> sections;
     private final Map<SelectionRegion.Point,WorldPatchPreview.Row> positions;
@@ -44,6 +44,7 @@ public final class AssemblyPatchPreview {
     private static int local(SelectionRegion.Point p){return Math.floorMod(p.y(),16)*256+Math.floorMod(p.z(),16)*16+Math.floorMod(p.x(),16);}
     private static void fail(String reason){throw new IllegalArgumentException(reason);}
     public AssemblyPatchBinding binding(){return binding;}public List<WorldPatchPreview.Section> sections(){return sections;}
+    public WorldSelection selection(){return binding.selection();}
     public List<String> palette(){return palette;}
     public WorldPatchPreview.Row at(SelectionRegion.Point point){return positions.get(point);}public int totalWrites(){return positions.size();}
     public Map<WorldPatchPreview.Difference,Integer> counts(){return counts;}public SelectionRegion bounds(){return bounds;}

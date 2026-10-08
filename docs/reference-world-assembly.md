@@ -433,3 +433,31 @@ Whole native rendering, fresh BEFORE, a single final confirmation, whole
 journal/execution/protected undo and actual game acceptance remain pending.
 Normal full-generation SEND and whole placement remain disabled. Do not apply
 parts individually or treat this source milestone as a certified release.
+
+### One whole-set fresh-world comparison (read-only)
+
+The whole candidate has its own `AssemblyPatchBeforeCheck` plan and result.
+Only the original server's complete reconstruction can prepare that plan.
+It compares the entire original W, including KEEP cells, and the original six
+disjoint adjacent faces in one traversal; it never refreshes Capture, treats
+unknown chunks as air, loads chunks or runs legacy BEFORE once per part.
+Each cooperative server step is capped at 4096 cells and a two-millisecond
+budget. This is not a preemptive time guarantee or measured game performance.
+
+`SelectionReadService.startAssemblyBeforeCheck` requires the same player,
+Capture object, retained original SEND, baseline and completed whole audit.
+Cancellation or a changed audit/world/coverage invalidates the comparison.
+Completed reports are checked again against the current server task. The
+separate package-private whole lease has a private constructor and no detach,
+writer, journal or confirmation authority at this stage.
+
+Both preview types implement a geometry-only `WorldDifferenceView` for the
+existing sparse renderer. This does not convert a whole set into a v1
+candidate or implement the normal whole controller/game screen. A separate
+owner-bound v2 final-ticket ledger enforces one use and a strict 45-second
+lifetime, but is not yet issued by a native whole transaction gateway.
+
+Whole final confirmation, journal/execution/protected undo, integrated player
+controls, live-world/render/Iris/IME/performance and actual model image/quality
+acceptance remain required. Normal full-generation SEND and whole placement
+remain disabled; free synthetic regression does not certify those gates.

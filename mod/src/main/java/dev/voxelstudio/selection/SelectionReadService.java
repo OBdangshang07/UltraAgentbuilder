@@ -86,12 +86,23 @@ public final class SelectionReadService {
         private volatile PatchAuditStatus status=new PatchAuditStatus(PatchAuditState.PREPARING,"原完整 SEND 的整组独立基线核验");
         public String id(){return id;}public CompletableFuture<AssemblyAuditReport> result(){return result;}public PatchAuditStatus status(){return status;}
     }
+    public record AssemblyBeforeStatus(AssemblyPatchBeforeCheck.State state,String reason,AssemblyPatchBeforeCheck.Progress progress){}
+    /** Observation only, not a lease, final ticket or permission to write. */
+    public record AssemblyBeforeReport(String id,Capture original,String auditId,AssemblyPatchBeforeCheck.Result comparison){
+        public boolean canAuthorizePlacement(){return false;}
+    }
+    public static final class AssemblyBeforeHandle {
+        private final String id=UUID.randomUUID().toString();
+        private final CompletableFuture<AssemblyBeforeReport> result=new CompletableFuture<>();
+        private volatile AssemblyBeforeStatus status=new AssemblyBeforeStatus(AssemblyPatchBeforeCheck.State.CHECKING,"后台绑定同一原整组重建；不写入世界",null);
+        public String id(){return id;}public CompletableFuture<AssemblyBeforeReport> result(){return result;}public AssemblyBeforeStatus status(){return status;}
+    }
     private static final Map<MinecraftServer,String> IDENTITIES=new WeakHashMap<>();
     private static final Map<MinecraftServer,Task> TASKS=new HashMap<>();
     private static final ExecutorService WORKER=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(1),r->{var t=new Thread(r,"voxel-context-finalize");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
     private static final class Task {
         UUID player;ServerWorld world;WorldSelection selection;WorldChangeTracker.Watch watch;SelectionScan scan;Handle handle;
-        long detachedRevision;CompletableFuture<Finalized> worker;Capture capture;SelectionBaseline baseline;SelectionCaptureLifetime<Capture> lifetime;BeforeTask before;PatchAudit audit;AssemblyAudit assemblyAudit;SelectionTimings timings=new SelectionTimings();
+        long detachedRevision;CompletableFuture<Finalized> worker;Capture capture;SelectionBaseline baseline;SelectionCaptureLifetime<Capture> lifetime;BeforeTask before;PatchAudit audit;AssemblyAudit assemblyAudit;AssemblyBefore assemblyBefore;SelectionTimings timings=new SelectionTimings();
         final Map<BlockState,SelectionScan.BlockFact> states=new HashMap<>();
         final SelectionChunkFence chunks=new SelectionChunkFence();int observedRestart=-1;
     }
@@ -104,6 +115,10 @@ public final class SelectionReadService {
     private static final class AssemblyAudit {
         AssemblyAuditHandle handle;AssemblyPatchInput input;CompletableFuture<AssemblyPatchCompiler.Compiled> worker;
         AssemblyPatchCompiler.Compiled compiled;AssemblyAuditReport report;volatile boolean cancelled;
+    }
+    private static final class AssemblyBefore {
+        AssemblyBeforeHandle handle;AssemblyAudit audit;AssemblyPatchPreview preview;CompletableFuture<AssemblyPatchBeforeCheck.Plan> worker;
+        AssemblyPatchBeforeCheck scan;AssemblyBeforeReport report;volatile boolean cancelled;
     }
     private record Finalized(String payload,SelectionTimings.Result timings,SelectionBaseline baseline) {}
     private static void onServer(MinecraftServer server) {if(!server.isOnThread())throw new IllegalStateException("World read requires server thread");}
@@ -219,7 +234,7 @@ public final class SelectionReadService {
         server.execute(()->{try{
             if(handle.result.isCancelled()){handle.status=new PatchAuditStatus(PatchAuditState.CANCELLED,"补丁核验已取消");return;}
             var t=checkedTask(server,player,original.id(),original.selection().revision());if(t.capture!=original||t.baseline==null)throw new IllegalStateException("不能用替代 Capture 核验补丁");
-            if(t.audit!=null||t.assemblyAudit!=null)throw new IllegalStateException("原快照已有补丁核验；先显式取消，不隐式替换");
+            if(t.audit!=null||t.assemblyAudit!=null||t.assemblyBefore!=null)throw new IllegalStateException("原快照已有补丁核验；先显式取消，不隐式替换");
             var audit=new PatchAudit();audit.handle=handle;audit.preview=preview;audit.originalResponse=proposal;var baseline=t.baseline;
             audit.worker=CompletableFuture.supplyAsync(()->{
                 var compiled=WorldPatchCompiler.read(baseline,proposal,preview.binding(),originalResponseHash,()->audit.cancelled);
@@ -256,7 +271,7 @@ public final class SelectionReadService {
             if(handle.result.isCancelled()){handle.status=new PatchAuditStatus(PatchAuditState.CANCELLED,"整组核验已取消");return;}
             var t=checkedTask(server,player,original.id(),original.selection().revision());
             if(t.capture!=original||t.baseline==null||!input.binding().selection().equals(t.selection))throw new IllegalStateException("整组核验要求原玩家仍持有的同一 Capture");
-            if(t.assemblyAudit!=null||t.audit!=null||t.before!=null||WorldPatchPlacementService.busy(server))throw new IllegalStateException("已有原候选核验、BEFORE、改造或撤销；先等待或显式取消");
+            if(t.assemblyAudit!=null||t.audit!=null||t.before!=null||WorldPatchPlacementService.busy(server)||t.assemblyBefore!=null)throw new IllegalStateException("已有原候选核验、BEFORE、改造或撤销；先等待或显式取消");
             t.lifetime.checkedAssembly(original,player,input.binding());
             var audit=new AssemblyAudit();audit.handle=handle;audit.input=input;var baseline=t.baseline;
             audit.worker=CompletableFuture.supplyAsync(()->AssemblyPatchCompiler.compile(baseline,input,()->audit.cancelled),WORKER);t.assemblyAudit=audit;
@@ -270,7 +285,7 @@ public final class SelectionReadService {
             t.lifetime.checkedAssembly(original,player,binding);result.complete(audit.report);
         }catch(Exception error){result.completeExceptionally(error);}});return result;
     }
-    static boolean assemblyAuditActive(MinecraftServer server){onServer(server);var t=TASKS.get(server);return t!=null&&t.assemblyAudit!=null;}
+    static boolean assemblyAuditActive(MinecraftServer server){onServer(server);var t=TASKS.get(server);return t!=null&&(t.assemblyAudit!=null||t.assemblyBefore!=null);}
     private static void tickAssemblyAudit(MinecraftServer server,Task t){
         var audit=t.assemblyAudit;if(audit==null||audit.report!=null||!audit.worker.isDone())return;
         try{var compiled=audit.worker.join();if(checkedTask(server,t.player,t.handle.id,t.selection.revision())!=t||t.assemblyAudit!=audit||compiled.baseline()!=t.baseline||audit.cancelled)throw new IllegalStateException("原整组或服务器基线已失效");
@@ -281,8 +296,94 @@ public final class SelectionReadService {
     }
     private static void stopAssemblyAudit(Task t,PatchAuditState state,String reason){
         var audit=t.assemblyAudit;t.assemblyAudit=null;if(audit==null)return;audit.cancelled=true;
+        if(t.assemblyBefore!=null&&t.assemblyBefore.audit==audit)stopAssemblyBefore(t,state==PatchAuditState.CANCELLED?AssemblyPatchBeforeCheck.State.CANCELLED:AssemblyPatchBeforeCheck.State.CONFLICT,reason);
         if(audit.worker!=null)audit.worker.cancel(false);audit.compiled=null;audit.report=null;audit.input=null;
         audit.handle.status=new PatchAuditStatus(state,reason);audit.handle.result.completeExceptionally(new IllegalStateException(reason));
+    }
+    /** One comparison for the COMPLETE original candidate, not a loop of v1
+     * BEFOREs or a refresh of Capture. Requires the retained server audit. */
+    public static AssemblyBeforeHandle startAssemblyBeforeCheck(MinecraftServer server,UUID player,Capture original,AssemblyPatchPreview preview,String auditId){
+        Objects.requireNonNull(original);Objects.requireNonNull(preview);Objects.requireNonNull(auditId);var handle=new AssemblyBeforeHandle();
+        handle.result.whenComplete((v,e)->{if(handle.result.isCancelled())cancelAssemblyBeforeCheck(server,handle.id);});
+        server.execute(()->{try{
+            if(handle.result.isCancelled()){handle.status=new AssemblyBeforeStatus(AssemblyPatchBeforeCheck.State.CANCELLED,"整组 BEFORE 已取消",null);return;}
+            var t=checkedTask(server,player,original.id(),original.selection().revision());
+            var audit=checkedAssemblyAudit(t,original,player,auditId,preview.binding());
+            if(t.assemblyBefore!=null||t.audit!=null||t.before!=null||WorldPatchPlacementService.busy(server))throw new IllegalStateException("已有整组或单片 BEFORE、改造或撤销；不能隐式替换");
+            var b=new AssemblyBefore();b.handle=handle;b.audit=audit;b.preview=preview;var compiled=audit.compiled;
+            b.worker=CompletableFuture.supplyAsync(()->AssemblyPatchBeforeCheck.prepare(compiled,preview,()->b.cancelled),WORKER);t.assemblyBefore=b;
+        }catch(Exception error){handle.status=new AssemblyBeforeStatus(AssemblyPatchBeforeCheck.State.FAILED,rootMessage(error),null);handle.result.completeExceptionally(error);}});return handle;
+    }
+    private static AssemblyAudit checkedAssemblyAudit(Task t,Capture original,UUID player,String id,AssemblyPatchBinding binding){
+        var audit=t.assemblyAudit;
+        if(t.capture!=original||audit==null||audit.cancelled||!audit.handle.id.equals(id)||audit.report==null||audit.compiled==null
+                ||audit.compiled.baseline()!=t.baseline||audit.handle.status.state()!=PatchAuditState.READY||!audit.input.binding().equals(binding))throw new IllegalStateException("缺少原服务器仍持有的同一完整候选核验");
+        t.lifetime.checkedAssembly(original,player,binding);return audit;
+    }
+    public static void cancelAssemblyBeforeCheck(MinecraftServer server,String id){server.execute(()->{var t=TASKS.get(server);if(t!=null&&t.assemblyBefore!=null&&t.assemblyBefore.handle.id.equals(id))stopAssemblyBefore(t,AssemblyPatchBeforeCheck.State.CANCELLED,"整组 BEFORE 已取消");});}
+    public static CompletableFuture<AssemblyBeforeReport> checkedAssemblyBeforeReport(MinecraftServer server,UUID player,Capture original,String id,AssemblyPatchBinding binding){
+        var result=new CompletableFuture<AssemblyBeforeReport>();server.execute(()->{try{
+            var t=checkedTask(server,player,original.id(),original.selection().revision());var b=t.assemblyBefore;
+            if(t.capture!=original||b==null||b.cancelled||!b.handle.id.equals(id)||b.report==null||b.scan==null
+                    ||b.handle.status.state()!=AssemblyPatchBeforeCheck.State.MATCHED||!b.preview.binding().equals(binding)
+                    ||checkedAssemblyAudit(t,original,player,b.audit.handle.id,binding)!=b.audit)throw new IllegalStateException("没有原整组当前完整 BEFORE");
+            b.scan.result();result.complete(b.report);
+        }catch(Exception error){result.completeExceptionally(error);}});return result;
+    }
+    private static AssemblyPatchBeforeCheck.Source assemblyBeforeSource(MinecraftServer server,Task t){
+        // Share only the bounded, no-load block reader. No v1 plan, candidate,
+        // comparison, binding, consent or placement lifecycle is reused.
+        var source=beforeSource(server,t);
+        return new AssemblyPatchBeforeCheck.Source(){
+            public void beginStep(){source.beginStep();}
+            public SelectionScan.Identity identity(){current(server,t);return source.identity();}
+            public boolean loaded(int x,int z){return source.loaded(x,z);}
+            public SelectionScan.BlockFact read(SelectionRegion.Point p){return source.read(p);}
+        };
+    }
+    private static void tickAssemblyBefore(MinecraftServer server,Task t){
+        var b=t.assemblyBefore;if(b==null||b.report!=null)return;
+        try{
+            if(checkedAssemblyAudit(t,t.capture,t.player,b.audit.handle.id,b.preview.binding())!=b.audit)throw new IllegalStateException("整组 BEFORE 的原核验已改变");
+            if(b.worker!=null){if(!b.worker.isDone())return;var plan=b.worker.join();b.worker=null;b.scan=new AssemblyPatchBeforeCheck(plan,assemblyBeforeSource(server,t),4096,2_000_000,System::nanoTime);}
+            var progress=b.scan.step();b.handle.status=new AssemblyBeforeStatus(progress.state(),progress.reason(),progress);
+            switch(progress.state()){
+                case CHECKING -> {}
+                case MATCHED -> {
+                    if(checkedTask(server,t.player,t.handle.id,t.selection.revision())!=t||t.assemblyBefore!=b
+                            ||checkedAssemblyAudit(t,t.capture,t.player,b.audit.handle.id,b.preview.binding())!=b.audit)throw new IllegalStateException("原整组 BEFORE 完成时已失效");
+                    b.report=new AssemblyBeforeReport(b.handle.id,t.capture,b.audit.handle.id,b.scan.result());b.handle.result.complete(b.report);
+                }
+                default -> stopAssemblyBefore(t,progress.state(),progress.reason());
+            }
+        }catch(Exception error){stopAssemblyBefore(t,AssemblyPatchBeforeCheck.State.FAILED,rootMessage(error));}
+    }
+    private static void stopAssemblyBefore(Task t,AssemblyPatchBeforeCheck.State state,String reason){
+        var b=t.assemblyBefore;t.assemblyBefore=null;if(b==null)return;b.cancelled=true;var previous=b.scan==null?null:b.scan.progress();
+        if(b.worker!=null)b.worker.cancel(false);if(b.scan!=null)b.scan.cancel();b.report=null;
+        var progress=previous==null?null:new AssemblyPatchBeforeCheck.Progress(state,reason,previous.checked(),previous.total(),previous.reads(),previous.steps(),previous.maxStepNanos());
+        b.handle.status=new AssemblyBeforeStatus(state,reason,progress);b.handle.result.completeExceptionally(new IllegalStateException(reason));
+    }
+    /** Same-live-task read-only witness for the future whole transaction.
+     * This cannot detach a world, issue consent, create a journal or write. */
+    static final class AssemblyNativeLease {
+        private final Task task;private final AssemblyAudit audit;private final AssemblyBefore before;
+        private final Capture original;private final AssemblyPatchPreview preview;private final AssemblyPatchCompiler.Compiled compiled;
+        private AssemblyNativeLease(Task task,AssemblyPatchPreview preview){this.task=task;audit=task.assemblyAudit;before=task.assemblyBefore;original=task.capture;this.preview=preview;compiled=audit.compiled;}
+        AssemblyPatchCompiler.Compiled compiled(){return compiled;}Capture original(){return original;}AssemblyPatchPreview preview(){return preview;}
+        boolean canAuthorizePlacement(){return false;}
+        void current(MinecraftServer server,UUID player){
+            if(checkedTask(server,player,original.id(),original.selection().revision())!=task||task.capture!=original
+                    ||task.assemblyAudit!=audit||task.assemblyBefore!=before||audit.compiled!=compiled||before.preview!=preview
+                    ||before.report==null||before.cancelled||before.handle.status.state()!=AssemblyPatchBeforeCheck.State.MATCHED
+                    ||checkedAssemblyAudit(task,original,player,audit.handle.id,compiled.binding())!=audit)throw new IllegalStateException("原整组服务器审核或 BEFORE 已改变；不能重绑");
+            before.scan.result();
+        }
+    }
+    static AssemblyNativeLease assemblyNativeLease(MinecraftServer server,UUID player,Capture original,AssemblyPatchPreview preview,String auditId,String beforeId){
+        var t=checkedTask(server,player,original.id(),original.selection().revision());var audit=checkedAssemblyAudit(t,original,player,auditId,preview.binding());var b=t.assemblyBefore;
+        if(b==null||b.audit!=audit||b.preview!=preview||!b.handle.id.equals(beforeId)||b.report==null||b.scan==null||b.handle.status.state()!=AssemblyPatchBeforeCheck.State.MATCHED)throw new IllegalStateException("缺少同一原整组的完整 fresh BEFORE");
+        var lease=new AssemblyNativeLease(t,preview);lease.current(server,player);return lease;
     }
     /** No writes. The exact Capture object must still be owned by this server;
      * a client copy with matching IDs/hashes cannot become the source of truth. */
@@ -293,7 +394,7 @@ public final class SelectionReadService {
             if(handle.result.isCancelled()){handle.status=new BeforeStatus(WorldPatchBeforeCheck.State.CANCELLED,"BEFORE 校验已取消",null);return;}
             var t=checkedTask(server,player,original.id(),original.selection().revision());
             if(t.capture!=original||t.baseline==null)throw new IllegalStateException("不能用替代快照申请 BEFORE 校验");
-            if(t.before!=null||t.assemblyAudit!=null)throw new IllegalStateException("原选区已有 BEFORE 或整组校验；先显式取消，不能隐式替换");
+            if(t.before!=null||t.assemblyAudit!=null||t.assemblyBefore!=null)throw new IllegalStateException("原选区已有 BEFORE 或整组校验；先显式取消，不能隐式替换");
             var before=new BeforeTask();before.handle=handle;before.preview=preview;
             final var baseline=t.baseline;
             before.worker=CompletableFuture.supplyAsync(()->WorldPatchBeforeCheck.prepare(baseline,preview,()->before.cancelled),WORKER);t.before=before;
@@ -393,7 +494,7 @@ public final class SelectionReadService {
             current(server,t);
             if(t.handle.status.state()==State.READY) {
                 if(t.watch.revision()!=t.detachedRevision||!chunkFenceCurrent(t)||expired(t))discard(server,State.STALE,"环境已改变或快照已过期，重新读取");
-                else {tickAudit(server,t);if(TASKS.get(server)==t)tickBefore(server,t);if(TASKS.get(server)==t)tickAssemblyAudit(server,t);}
+                else {tickAudit(server,t);if(TASKS.get(server)==t)tickBefore(server,t);if(TASKS.get(server)==t)tickAssemblyAudit(server,t);if(TASKS.get(server)==t)tickAssemblyBefore(server,t);}
                 return;
             }
             if(t.worker!=null) {
@@ -430,6 +531,7 @@ public final class SelectionReadService {
         stopBefore(t,state==State.CANCELLED?WorldPatchBeforeCheck.State.CANCELLED:WorldPatchBeforeCheck.State.CONFLICT,reason);
         stopAudit(t,state==State.CANCELLED?PatchAuditState.CANCELLED:PatchAuditState.STALE,reason);
         stopAssemblyAudit(t,state==State.CANCELLED?PatchAuditState.CANCELLED:PatchAuditState.STALE,reason);
+        stopAssemblyBefore(t,state==State.CANCELLED?AssemblyPatchBeforeCheck.State.CANCELLED:AssemblyPatchBeforeCheck.State.CONFLICT,reason);
         if(t.scan!=null)t.scan.cancel();if(t.watch!=null)t.watch.close();if(t.worker!=null)t.worker.cancel(false);t.states.clear();t.chunks.reset();t.capture=null;t.baseline=null;
         t.handle.status=new Status(state,reason,t.scan==null?null:t.scan.progress());t.handle.result.completeExceptionally(new IllegalStateException(reason));
     }

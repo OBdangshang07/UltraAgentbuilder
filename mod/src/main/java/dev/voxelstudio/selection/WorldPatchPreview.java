@@ -11,7 +11,7 @@ import java.util.function.BooleanSupplier;
  * The expected hashes must come from original-snapshot validation upstream.
  * Parsing here checks structure/digests/scope, not live server BEFORE states,
  * physics or permission. No production import or placement endpoint exists. */
-public final class WorldPatchPreview {
+public final class WorldPatchPreview implements WorldDifferenceView {
     public enum Difference { ADDED, REMOVED, REPLACED }
     public enum Mode { CHANGES, BEFORE, AFTER }
     public record Binding(WorldSelection selection,long contextRevision,String snapshotHash,
@@ -40,6 +40,7 @@ public final class WorldPatchPreview {
         this.binding=binding;this.sections=List.copyOf(sections);this.palette=List.copyOf(palette);this.bounds=bounds;this.positions=Map.copyOf(positions);this.counts=Map.copyOf(counts);
     }
     public Binding binding(){return binding;}
+    public WorldSelection selection(){return binding.selection();}
     public List<Section> sections(){return sections;}
     public List<String> palette(){return palette;}
     public SelectionRegion bounds(){return bounds;}

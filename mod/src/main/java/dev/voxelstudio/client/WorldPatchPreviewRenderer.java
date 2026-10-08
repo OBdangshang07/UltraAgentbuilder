@@ -37,6 +37,11 @@ final class WorldPatchPreviewRenderer implements AutoCloseable {
     /** Never queues work: controller waits for the previous worker to finish. */
     boolean idle(){return !cpuBusy;}
     void rebuild(WorldPatchPreview preview,WorldPatchPreview.Filter filter){
+        rebuild((WorldDifferenceView)preview,filter);
+    }
+    /** Shared geometry only: this does not convert a whole set into the
+     * legacy candidate, binding or placement lifecycle. */
+    void rebuild(WorldDifferenceView preview,WorldPatchPreview.Filter filter){
         if(closed||cpuBusy)throw new IllegalStateException("Patch renderer unavailable/busy");
         preview.checked(filter);long ticket=++generation;release();building=cpuBusy=true;error=null;faces=0;long started=System.nanoTime();
         var client=MinecraftClient.getInstance();
@@ -122,16 +127,16 @@ final class WorldPatchPreviewRenderer implements AutoCloseable {
     private void release(){for(var mesh:meshes)mesh.buffer.close();meshes.clear();}
     @Override public void close(){if(closed)return;closed=true;clear();worker.shutdownNow();}
     private static final class View implements BlockRenderView {
-        private final WorldPatchPreview preview;private final WorldPatchPreview.Filter filter;private final Map<String,BlockState> states;private final boolean original;
-        View(WorldPatchPreview preview,WorldPatchPreview.Filter filter,Map<String,BlockState> states,boolean original){this.preview=preview;this.filter=filter;this.states=states;this.original=original;}
+        private final WorldDifferenceView preview;private final WorldPatchPreview.Filter filter;private final Map<String,BlockState> states;private final boolean original;
+        View(WorldDifferenceView preview,WorldPatchPreview.Filter filter,Map<String,BlockState> states,boolean original){this.preview=preview;this.filter=filter;this.states=states;this.original=original;}
         @Override public BlockState getBlockState(BlockPos p){
             if(Math.abs((long)p.getX())>30000000||Math.abs((long)p.getZ())>30000000||p.getY()<-2048||p.getY()>2048)return Blocks.AIR.getDefaultState();
             var row=preview.at(new SelectionRegion.Point(p.getX(),p.getY(),p.getZ()));if(row==null||!filter.includes(row))return Blocks.AIR.getDefaultState();var text=WorldPatchPreview.displayState(row,filter.mode(),original);return text==null?Blocks.AIR.getDefaultState():states.get(text);
         }
         @Override public BlockEntity getBlockEntity(BlockPos p){return null;}
         @Override public FluidState getFluidState(BlockPos p){return getBlockState(p).getFluidState();}
-        @Override public int getHeight(){var w=preview.binding().selection().world();return w.maxY()-w.minY();}
-        @Override public int getBottomY(){return preview.binding().selection().world().minY();}
+        @Override public int getHeight(){var w=preview.selection().world();return w.maxY()-w.minY();}
+        @Override public int getBottomY(){return preview.selection().world().minY();}
         @Override public float getBrightness(Direction d,boolean shaded){return 1;}
         @Override public LightingProvider getLightingProvider(){return null;}
         @Override public int getColor(BlockPos p,ColorResolver resolver){return 0x91bd59;}
