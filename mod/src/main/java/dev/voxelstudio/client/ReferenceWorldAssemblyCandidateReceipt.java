@@ -24,16 +24,17 @@ final class ReferenceWorldAssemblyCandidateReceipt {
         boolean canAuthorizePlacement(){return false;}
     }
     static final class Part {
-        private final Metadata metadata;private final int index;private final byte[] patch,proposal;private final WorldPatchPreview preview;
-        private Part(Metadata m,int i,JsonObject p,WorldPatchPreview v){metadata=m;index=i;patch=wire(p,16*1024*1024);proposal=wire(p.get("proposal"),16*1024*1024);preview=v;}
+        private final Metadata metadata;private final int index;private final byte[] patch,proposal,previewBytes;private final WorldPatchPreview preview;
+        private Part(Metadata m,int i,JsonObject p,WorldPatchPreview v,byte[] originalPreview){metadata=m;index=i;patch=wire(p,16*1024*1024);proposal=wire(p.get("proposal"),16*1024*1024);preview=v;previewBytes=originalPreview.clone();}
         int index(){return index;}JsonObject patch(){return WorldPatchCandidateReceipt.strictJson(new String(patch,StandardCharsets.UTF_8),()->false).getAsJsonObject();}WorldPatchPreview preview(){return preview;}
         byte[] originalProposal(){return proposal.clone();}
         byte[] originalPatch(){return patch.clone();}
+        byte[] originalPreview(){return previewBytes.clone();}
         boolean partIsApplyScope(){return false;}boolean canAuthorizePlacement(){return false;}
     }
     static final class Whole {
         private final Metadata metadata;private final List<Part> parts;private final Map<SelectionRegion.Point,WorldPatchPreview.Row> rows;
-        private Whole(Metadata m,List<Part> p,Map<SelectionRegion.Point,WorldPatchPreview.Row> r){metadata=m;parts=List.copyOf(p);rows=Map.copyOf(r);}
+        private Whole(Metadata m,List<Part> p,Map<SelectionRegion.Point,WorldPatchPreview.Row> r){metadata=m;parts=List.copyOf(p);rows=WorldPointIndex.copy(r);}
         Metadata metadata(){return metadata;}List<Part> parts(){return parts;}
         int totalWrites(){return rows.size();}WorldPatchPreview.Row at(SelectionRegion.Point p){return rows.get(p);}
         boolean movable(){return false;}boolean completeSetVerified(){return true;}
@@ -53,7 +54,7 @@ final class ReferenceWorldAssemblyCandidateReceipt {
                     text(c,"assetHash"),text(c,"cellsHash"),text(c,"candidateHash"),text(c,"patchSetHash"),
                     selection.edit().min(),hashes,previews,totalWrites());
             var transported=new ArrayList<AssemblyPatchInput.Part>();
-            for(var part:parts){allowed(cancelled);transported.add(new AssemblyPatchInput.Part(part.index,part.proposal,part.patch,part.preview));}
+            for(var part:parts){allowed(cancelled);transported.add(new AssemblyPatchInput.Part(part.index,part.proposal,part.patch,part.preview,part.previewBytes));}
             allowed(cancelled);return new AssemblyPatchInput(binding,transported);
         }
     }
@@ -145,7 +146,7 @@ final class ReferenceWorldAssemblyCandidateReceipt {
         for(var k:List.of("snapshotHash","selectionHash"))same(proposal.get(k),metadata.candidate.get(k));
         var previewJson=envelope.getAsJsonObject("preview");String previewHash=metadata.candidate.getAsJsonArray("previewHashes").get(index).getAsString();
         var binding=new WorldPatchPreview.Binding(selection,number(metadata.reference,"contextRevision"),text(patch,"snapshotHash"),text(patch,"selectionHash"),text(patch,"patchHash"),previewHash);
-        var preview=WorldPatchPreview.parse(wire(previewJson),binding,cancelled);JsonArray writes=patch.getAsJsonArray("writes"),operations=proposal.getAsJsonArray("operations");
+        var previewBytes=wire(previewJson);var preview=WorldPatchPreview.parse(previewBytes,binding,cancelled);JsonArray writes=patch.getAsJsonArray("writes"),operations=proposal.getAsJsonArray("operations");
         long remaining=number(metadata.candidate,"operationCount")-8192L*index;int expected=(int)Math.min(8192,remaining);
         if(writes.size()!=expected||operations.size()!=expected||preview.totalWrites()!=expected)throw new IllegalStateException("原整组分片真实操作遗漏");
         var seen=new HashSet<SelectionRegion.Point>();
@@ -157,7 +158,7 @@ final class ReferenceWorldAssemblyCandidateReceipt {
             var row=preview.at(new SelectionRegion.Point(coords[0],coords[1],coords[2]));if(row==null)throw new IllegalStateException("原分片预览缺少写操作");
             if(!seen.add(row.position())||!row.before().equals(text(w,"before"))||!row.after().equals(text(w,"after"))||!row.difference().name().toLowerCase(Locale.ROOT).equals(text(w,"difference")))throw new IllegalStateException("原分片差异不一致或重复");
         }
-        file(metadata.candidate,name("part",index),patch);file(metadata.candidate,name("preview",index),previewJson);allowed(cancelled);return new Part(metadata,index,patch,preview);
+        file(metadata.candidate,name("part",index),patch);file(metadata.candidate,name("preview",index),previewJson);allowed(cancelled);return new Part(metadata,index,patch,preview,previewBytes);
     }
     static Whole whole(Metadata metadata,List<Part> ordered,BooleanSupplier cancelled){
         Objects.requireNonNull(metadata);Objects.requireNonNull(ordered);allowed(cancelled);if(ordered.size()!=metadata.partCount())throw new IllegalStateException("原整组分片未全部完成；不采用部分");

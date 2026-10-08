@@ -38,7 +38,7 @@ final class WorldPatchUndoExecution {
     private WorldPatchUndoJournal.Intent intent;private CompletableFuture<?> pending;private WorldPatchJournal.ReceiptState receipt;private WorldPatchJournal.Outcome outcome;
     WorldPatchUndoExecution(Log log,WorldPatchExecution.Source source,int maximumEntries,long maximumNanos,LongSupplier clock){
         this.log=Objects.requireNonNull(log);this.source=Objects.requireNonNull(source);this.clock=Objects.requireNonNull(clock);if(maximumEntries<1||maximumEntries>128||maximumNanos<1||maximumNanos>2_000_000)throw new IllegalArgumentException("Bounded undo budget required");this.maximumEntries=maximumEntries;this.maximumNanos=maximumNanos;
-        var plan=log.plan();selection=plan.original().binding().selection();writes=plan.writes();var indexed=new HashMap<SelectionRegion.Point,WorldPatchCompiler.Guard>();for(var g:plan.original().compiled().guards())indexed.put(g.position(),g);guards=Map.copyOf(indexed);
+        var plan=log.plan();selection=plan.original().binding().selection();writes=plan.writes();var indexed=new HashMap<SelectionRegion.Point,WorldPatchCompiler.Guard>();for(var g:plan.original().compiled().guards())indexed.put(g.position(),g);guards=WorldPointIndex.copy(indexed);
         // This epoch guards the new explicit undo operation only. It never
         // replaces the original Capture, patch identity or logged AFTER.
         var current=source.frame();revision=current.contextRevision();if(!frame())throw new IllegalArgumentException("Undo requires original world/selection and current creative host");

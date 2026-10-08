@@ -461,3 +461,28 @@ Whole final confirmation, journal/execution/protected undo, integrated player
 controls, live-world/render/Iris/IME/performance and actual model image/quality
 acceptance remain required. Normal full-generation SEND and whole placement
 remain disabled; free synthetic regression does not certify those gates.
+
+### Whole transaction ledger and bounded engine (not a player gateway)
+
+The independent v2 ledger retains the original source and every original
+proposal, patch and preview. One ordered whole write sequence is recorded in
+fixed 512-cell intent batches, with known applied prefixes and a sealed result.
+The engine separates disk work from cooperative world steps (at most 128 writes
+and a two-millisecond budget). Ambiguous writes or disk acknowledgements stop
+for review without replay; a disk review cannot create a live writer or undo.
+Original player edits, guards and revisions remain authoritative.
+
+Dense coordinate indexes now use defensive, unmodifiable HashMap copies rather
+than flat MapN tables, retaining the original Point equality, hashes and wire
+coordinates. This representation change does not relax guard checks, shrink
+the write set, change ordered writes or certify game-frame performance.
+
+Durable SEND claim results distinguish this call's original publication from
+observing a reference another store already published. Reading saved history
+does not grant another owner, retry or dispatch permission. Failed or uncertain
+pending files remain preserved; there is no automatic takeover or deletion.
+
+The whole engine still has no native lease detach, player final-confirmation
+gateway, protected undo executor/service or integrated controller. Normal full
+joint SEND and whole placement remain disabled pending exact-source regression,
+actual game, same-asset save/undo, special-block and release acceptance.

@@ -70,9 +70,12 @@ final class PatchReferenceStore {
             return result;
         }
     }
-    synchronized JsonObject remember(JsonObject input)throws IOException{
+    /** Only completion of THIS call's CREATE_NEW + move + exact read owns
+     * publication. Finding another store's original is observation, not SEND. */
+    private record Publication(JsonObject reference,boolean created){}
+    private Publication publish(JsonObject input)throws IOException{
         var reference=lane.verify(input.deepCopy());String id=WorldPatchTaskReceipt.text(reference,lane.identityKey);directories(true);
-        try{var previous=readAt(id);if(!previous.equals(reference))throw new IOException("Original patch reference cannot be rebound");return previous;}catch(NoSuchFileException absent){}
+        try{var previous=readAt(id);if(!previous.equals(reference))throw new IOException("Original patch reference cannot be rebound");return new Publication(previous,false);}catch(NoSuchFileException absent){}
         var names=names();
         // Complete pending bytes are not successful local publication. Keep
         // them, but never create a new dispatch claim beside uncertain history.
@@ -90,12 +93,13 @@ final class PatchReferenceStore {
         directory(root);bytes(pending);
         // No replacement, cleanup or retry inferred from a missing receipt.
         // A failed publication keeps its pending evidence and never dispatches.
-        Files.move(pending,target);return readAt(id);
+        Files.move(pending,target);return new Publication(readAt(id),true);
     }
+    synchronized JsonObject remember(JsonObject input)throws IOException{return publish(input).reference();}
     synchronized boolean claim(JsonObject input)throws IOException{
-        var reference=lane.verify(input.deepCopy());String id=WorldPatchTaskReceipt.text(reference,lane.identityKey);directories(true);
-        try{if(!readAt(id).equals(reference))throw new IOException("Original patch reference cannot be rebound");return false;}catch(NoSuchFileException absent){}
-        remember(reference);return true;
+        // No read-missing/remember/return-true gap: remember can observe a
+        // concurrent publisher and must not promote that read to ownership.
+        return publish(input).created();
     }
     synchronized JsonObject read(String id)throws IOException{file(id);directories(false);return readAt(id).deepCopy();}
     synchronized List<JsonObject> list()throws IOException{

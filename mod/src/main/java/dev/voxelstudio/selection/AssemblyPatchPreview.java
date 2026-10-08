@@ -36,7 +36,7 @@ public final class AssemblyPatchPreview implements WorldDifferenceView {
             entry.getValue().sort(Comparator.comparingInt(row->local(row.position())));var key=entry.getKey();combined.add(new WorldPatchPreview.Section(key.x,key.y,key.z,entry.getValue()));
         }
         WorldPatchJson.cancelled(cancelled);
-        sections=List.copyOf(combined);positions=Map.copyOf(rows);counts=Map.copyOf(totals);palette=List.copyOf(states);
+        sections=List.copyOf(combined);positions=WorldPointIndex.copy(rows);counts=Map.copyOf(totals);palette=List.copyOf(states);
         bounds=new SelectionRegion(new SelectionRegion.Point(lo[0],lo[1],lo[2]),new SelectionRegion.Point(hi[0],hi[1],hi[2]));
     }
     public static AssemblyPatchPreview from(AssemblyPatchInput original){return from(original,()->false);}

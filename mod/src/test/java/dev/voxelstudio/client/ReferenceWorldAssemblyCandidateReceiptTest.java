@@ -73,7 +73,7 @@ class ReferenceWorldAssemblyCandidateReceiptTest {
         assertEquals(whole.totalWrites(),input.binding().totalWrites());assertEquals(m.reference().get("requestHash").getAsString(),input.binding().requestHash());
         assertEquals(c.get("sourceHash").getAsString(),input.binding().sourceHash());assertEquals(c.get("currentNativeEvidenceHash").getAsString(),input.binding().currentNativeEvidenceHash());assertEquals(c.get("referenceBindingHash").getAsString(),input.binding().referenceBindingHash());
         assertEquals(m.patchSet(),input.binding().patchSet());assertFalse(input.canAuthorizePlacement());
-        for(int index=0;index<p.size();index++){assertArrayEquals(p.get(index).originalPatch(),input.parts().get(index).patch());assertArrayEquals(p.get(index).originalProposal(),input.parts().get(index).proposal());assertSame(p.get(index).preview(),input.parts().get(index).preview());}
+        for(int index=0;index<p.size();index++){assertArrayEquals(p.get(index).originalPatch(),input.parts().get(index).patch());assertArrayEquals(p.get(index).originalProposal(),input.parts().get(index).proposal());assertArrayEquals(p.get(index).originalPreview(),input.parts().get(index).previewBytes());assertSame(p.get(index).preview(),input.parts().get(index).preview());}
         assertThrows(java.util.concurrent.CancellationException.class,()->whole.worldInput(()->true));
     }
 }

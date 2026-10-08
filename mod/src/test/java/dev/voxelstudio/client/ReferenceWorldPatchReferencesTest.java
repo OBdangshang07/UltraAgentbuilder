@@ -69,4 +69,14 @@ final class ReferenceWorldPatchReferencesTest {
             start.countDown();int owners=0;for(var task:tasks)if(task.get(5,TimeUnit.SECONDS))owners++;assertEquals(1,owners);assertEquals(r,new ReferenceWorldPatchReferences(temp).read(r.get("capsuleId").getAsString()));
         }finally{pool.shutdownNow();}
     }
+    @Test void repeatedIndependentPublicationHasExactlyOneOwnerAndNeverAdoptsSavedHistory()throws Exception{
+        var reference=reference(fixture());var pool=Executors.newFixedThreadPool(2);
+        try{for(int round=0;round<96;round++){
+            Path data=temp.resolve("independent-"+round);var start=new CountDownLatch(1);var tasks=new ArrayList<Future<Boolean>>();
+            for(int actor=0;actor<2;actor++)tasks.add(pool.submit(()->{start.await();try{return new ReferenceWorldPatchReferences(data).claim(reference);}catch(IOException preserved){return false;}}));
+            start.countDown();int owners=0;for(var task:tasks)if(task.get(5,TimeUnit.SECONDS))owners++;
+            assertEquals(1,owners,"Independent publication round "+round);var store=new ReferenceWorldPatchReferences(data);assertEquals(reference,store.read(reference.get("capsuleId").getAsString()));assertFalse(store.claim(reference));
+        }}finally{pool.shutdownNow();}
+        var observed=new ReferenceWorldPatchReferences(temp.resolve("remember-only"));assertEquals(reference,observed.remember(reference));assertFalse(new ReferenceWorldPatchReferences(temp.resolve("remember-only")).claim(reference));
+    }
 }

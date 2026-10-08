@@ -37,7 +37,7 @@ public final class WorldPatchPreview implements WorldDifferenceView {
     private final Map<SelectionRegion.Point,Row> positions;
     private final Map<Difference,Integer> counts;
     private WorldPatchPreview(Binding binding,List<Section> sections,List<String> palette,SelectionRegion bounds,Map<SelectionRegion.Point,Row> positions,Map<Difference,Integer> counts){
-        this.binding=binding;this.sections=List.copyOf(sections);this.palette=List.copyOf(palette);this.bounds=bounds;this.positions=Map.copyOf(positions);this.counts=Map.copyOf(counts);
+        this.binding=binding;this.sections=List.copyOf(sections);this.palette=List.copyOf(palette);this.bounds=bounds;this.positions=WorldPointIndex.copy(positions);this.counts=Map.copyOf(counts);
     }
     public Binding binding(){return binding;}
     public WorldSelection selection(){return binding.selection();}

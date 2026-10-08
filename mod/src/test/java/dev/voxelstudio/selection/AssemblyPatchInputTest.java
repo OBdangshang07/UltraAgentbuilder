@@ -5,6 +5,12 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class AssemblyPatchInputTest {
+    @Test void originalPreviewWireIsDefensivelyRetainedAndWrongBytesAreRejected()throws Exception{
+        var input=AssemblyPatchFixtures.input(AssemblyPatchFixtures.header("lite"));var p=input.parts().get(0);var bytes=p.previewBytes();
+        var copied=new AssemblyPatchInput.Part(0,p.proposal(),p.patch(),p.preview(),bytes);bytes[0]=0;copied.previewBytes()[0]=0;assertEquals((byte)'{',copied.previewBytes()[0]);
+        var invalid=p.previewBytes();invalid[0]=0;assertThrows(RuntimeException.class,()->new AssemblyPatchInput.Part(0,p.proposal(),p.patch(),p.preview(),invalid));
+        assertNull(new AssemblyPatchInput.Part(0,p.proposal(),p.patch(),p.preview()).previewBytes());assertFalse(copied.canAuthorizePlacement());
+    }
     @Test void fullSetCannotAdoptOmittedRepeatedReorderedOrMixedOriginalScopeParts()throws Exception{
         var input=AssemblyPatchFixtures.input(AssemblyPatchFixtures.header("ultra"));var parts=input.parts();
         assertThrows(IllegalArgumentException.class,()->new AssemblyPatchInput(input.binding(),parts.subList(0,parts.size()-1)));

@@ -42,7 +42,7 @@ final class AssemblyPatchFixtures {
     static AssemblyPatchInput.Part transport(JsonObject f,int index,JsonObject envelope){
         var original=binding(f);var patch=envelope.getAsJsonObject("patch");var preview=envelope.getAsJsonObject("preview");
         var pin=new WorldPatchPreview.Binding(original.selection(),original.contextRevision(),original.snapshotHash(),original.selectionHash(),text(patch,"patchHash"),text(preview,"previewHash"));
-        return new AssemblyPatchInput.Part(index,bytes(patch.get("proposal")),bytes(patch),WorldPatchPreview.parse(bytes(preview),pin));
+        return new AssemblyPatchInput.Part(index,bytes(patch.get("proposal")),bytes(patch),WorldPatchPreview.parse(bytes(preview),pin),bytes(preview));
     }
     static AssemblyPatchInput input(JsonObject f)throws Exception{
         assertEquals(0,f.get("realModelCalls").getAsInt());assertEquals(0,f.get("worldWrites").getAsInt());

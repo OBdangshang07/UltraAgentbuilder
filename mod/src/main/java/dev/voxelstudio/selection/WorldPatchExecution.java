@@ -75,7 +75,7 @@ final class WorldPatchExecution {
     WorldPatchExecution(Log log,Source source,int maximumWrites,long maximumNanos,LongSupplier clock){
         this.log=Objects.requireNonNull(log);this.source=Objects.requireNonNull(source);this.clock=Objects.requireNonNull(clock);
         if(maximumWrites<1||maximumWrites>128||maximumNanos<1||maximumNanos>2_000_000)throw new IllegalArgumentException("Bounded native transaction budget required");
-        this.maximumWrites=maximumWrites;this.maximumNanos=maximumNanos;var plan=log.plan();selection=plan.binding().selection();revision=plan.binding().contextRevision();writes=plan.compiled().writes();var indexed=new HashMap<SelectionRegion.Point,WorldPatchCompiler.Guard>();for(var g:plan.compiled().guards())if(indexed.put(g.position(),g)!=null)throw new IllegalArgumentException("Native guard duplicates");guards=Map.copyOf(indexed);
+        this.maximumWrites=maximumWrites;this.maximumNanos=maximumNanos;var plan=log.plan();selection=plan.binding().selection();revision=plan.binding().contextRevision();writes=plan.compiled().writes();var indexed=new HashMap<SelectionRegion.Point,WorldPatchCompiler.Guard>();for(var g:plan.compiled().guards())if(indexed.put(g.position(),g)!=null)throw new IllegalArgumentException("Native guard duplicates");guards=WorldPointIndex.copy(indexed);
     }
     Progress progress(){return new Progress(state,confirmed.size(),writes.size(),steps,maxWritesPerStep,maxStepNanos,reason);}
     List<WorldPatchCompiler.Write> confirmedPrefix(){return List.copyOf(confirmed);}
