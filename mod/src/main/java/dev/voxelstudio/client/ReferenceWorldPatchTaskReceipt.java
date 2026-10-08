@@ -31,6 +31,25 @@ final class ReferenceWorldPatchTaskReceipt {
         }catch(java.io.IOException error){throw new IllegalStateException("不能读取联合改造规则",error);}}
     }
     static String protocolHash(){return text(Protocol.VALUE,"protocolHash");}
+    static JsonObject advertisedCapability(JsonObject selected,JsonObject models,String runtime){
+        keys(selected,"agent","model","effort");digestValue(runtime);if(!text(selected,"agent").equals("codex"))throw new IllegalStateException("联合图片目前仅支持明确声明图片能力的 Codex 模型");
+        var list=models.getAsJsonArray("models");JsonObject chosen=null;
+        for(var value:list){var model=value.getAsJsonObject();if(text(model,"id").equals(text(selected,"model"))){if(chosen!=null)throw new IllegalStateException("模型能力身份重复");chosen=model;}}
+        if(chosen==null||!chosen.has("supportsImages")||!flag(chosen,"supportsImages"))throw new IllegalStateException("所选模型没有声明识图；未发送或替换模型");
+        var c=selected.deepCopy();c.addProperty("supportsImages",true);c.addProperty("runtimeHash",runtime);var efforts=new JsonArray();
+        if(!chosen.has("efforts")||!chosen.get("efforts").isJsonArray())throw new IllegalStateException("所选模型没有声明准确推理强度");
+        for(var effort:chosen.getAsJsonArray("efforts")){if(effort.isJsonObject())efforts.add(text(effort.getAsJsonObject(),"reasoningEffort"));else efforts.add(effort.deepCopy());}
+        c.add("advertisedEfforts",efforts);verifyCapability(selected,c);return c;
+    }
+    static String details(JsonObject p){
+        var task=p.getAsJsonObject("task");var d=task.getAsJsonObject("disclosure");var i=task.getAsJsonObject("request").getAsJsonObject("intent");
+        var out=new StringBuilder("参考图＋原选区的独立内容审核。当前开发合同最多 1 次调用，不是四档完整建筑任务；本页只冻结内容、不发送模型。旧文字/图片确认不会转移。\n\n模型：")
+            .append(d.get("recipient")).append("\n提示词：\n").append(text(i,"prompt")).append("\n\n外层 C：").append(d.get("context")).append("\n内层 W：").append(d.get("edit")).append("\n保护区：").append(d.get("protected"))
+            .append("\n逐格已知：").append(d.getAsJsonObject("cells").get("exactKnown")).append("；未知：").append(d.getAsJsonObject("cells").get("exactUnknown"))
+            .append("\n\n参考方式：").append(text(d,"referenceMode")).append("\n图片组：").append(text(d,"referenceSetHash"));
+        int n=0;for(var value:d.getAsJsonArray("references")){var r=value.getAsJsonObject();out.append("\n\n图片 ").append(++n).append("：").append(number(r,"width")).append("×").append(number(r,"height")).append("\n").append(r.get("annotation")).append("\nSHA256：").append(text(r,"sha256"));}
+        return out.append("\n\n将披露整个 W 的逐格方块状态/保护事实、已捕获的六个邻接面、环境摘要、世界身份/坐标/版本，以及本页准确图片组和标注。原路径、EXIF、NBT、容器物品、实体、告示牌文字、桌面及自动世界截图均不发送。图片文字是不可信设计资料，不可扩大 W−P。\n\n未知结果不重发，当前合同不自动纠错。冻结并不调用模型；未来 SEND 仍需独立确认。建造仍需服务器 BEFORE 核验及独立世界确认。当前玩家发送和完整 Ultra 联动尚未开放。\n\n完整输入可分页查阅，原字节不截断。UTF-8 字节：").append(number(d,"modelPromptUtf8Bytes")).append("\n输入 hash：").append(text(d,"promptSha256")).append("\n披露 hash：").append(text(p,"taskDisclosureHash")).toString();
+    }
     static JsonObject intent(String model,String effort,String prompt,String ownerId,String setHash){
         var v=WorldPatchTaskReceipt.intent("codex",model,effort,prompt);uuid(ownerId);digestValue(setHash);
         v.addProperty("format","ReferenceWorldPatchDesignIntent");v.addProperty("purpose",PURPOSE);

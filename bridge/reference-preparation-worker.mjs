@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import {parentPort,workerData} from 'node:worker_threads';
 import {hash} from '../src/generation/compiler.mjs';
 import {REFERENCE_OWNER,REFERENCE_LIMITS,referenceConfirmation} from '../contracts/reference-attachments.mjs';
-import {REFERENCE_PREPARATION_LIMITS as limits,validateReferencePreparation} from '../contracts/reference-preparation.mjs';
-import {importReferenceSet,prepareReferenceModelInput,previewReferenceSet} from './reference-attachments.mjs';
+import {REFERENCE_PREPARATION_LIMITS as limits,validateReferencePreparation,validateReferencePixelPreparation} from '../contracts/reference-preparation.mjs';
+import {importReferenceSet,prepareReferenceModelInput,previewReferenceSet,readReferenceSet} from './reference-attachments.mjs';
+import {parseModelJson} from './model-json.mjs';
 import {safeEvidenceFile} from './native-evidence.mjs';
 import {REFERENCE_ARCHIVE_OPERATIONS,REFERENCE_ARCHIVE_MAINTENANCE_OPERATIONS} from '../contracts/reference-archive.mjs';
 import {referencePreparationRequestHash,readReferencePreparation} from './reference-preparation-data.mjs';
@@ -30,12 +31,38 @@ function decode(bytes){
   assert.ok(bytes.byteLength>0&&bytes.byteLength<=limits.inputBytes,'Reference preparation input byte quota');
   return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
 }
-export async function referencePreparationOperation({dataDir,operation,ownerId,input,preparationHash,imageId,runtimeHash,capability,actionId,archiveActionId,purpose}){
+export async function referencePreparationOperation({dataDir,operation,ownerId,input,preparationHash,setHash,imageId,runtimeHash,capability,actionId,archiveActionId,purpose}){
   if(REFERENCE_ARCHIVE_MAINTENANCE_OPERATIONS.includes(operation))return (await import('./reference-archive-maintenance.mjs')).referenceArchiveMaintenanceOperation({dataDir,operation,ownerId,input,actionId,archiveActionId,purpose});
   if(REFERENCE_ARCHIVE_OPERATIONS.includes(operation))return (await import('./reference-archive.mjs')).referenceArchiveOperation({dataDir,operation,ownerId,input,actionId});
   dataDir=path.resolve(dataDir);await physicalDirectory(dataDir);assert.match(ownerId,REFERENCE_OWNER);
-  assert.ok(['prepare','get','record','image','confirm'].includes(operation));
+  assert.ok(['prepare','get','record','image','confirm','pixel-prepare','pixel-get','pixel-image'].includes(operation));
   const parent=path.join(dataDir,'reference-drafts'),root=path.join(parent,ownerId);
+  if(operation==='pixel-prepare'){
+    // Parse exact valid JSON first. The duplicate-key scanner is used only as
+    // validation, never to repair, fence-strip or rewrite an HTTP request.
+    const value=decode(input),parsed=parseModelJson(new TextDecoder('utf-8',{fatal:true}).decode(input));
+    assert.ok(parsed.facts.valid,'Duplicate or excessively nested pixel request');
+    validateReferencePixelPreparation(ownerId,value);
+    await (await import('./reference-archive.mjs')).assertReferenceDraftWritable(dataDir,ownerId);
+    await physicalDirectory(parent,true);
+    const drafts=await namedDirectories(parent,REFERENCE_OWNER,limits.drafts);
+    if(!drafts.includes(ownerId))assert.ok(drafts.length<limits.drafts,'Reference draft storage quota reached');
+    await physicalDirectory(root,true);
+    const sets=await namedDirectories(path.join(root,'reference-sets'),digest,limits.setsPerDraft);
+    const preview=previewReferenceSet(ownerId,value.upload).manifest;
+    assert.ok(sets.includes(preview.setHash)||sets.length<limits.setsPerDraft,'Reference image-set quota reached');
+    const manifest=await importReferenceSet(root,value.upload);assert.equal(manifest.setHash,preview.setHash);
+    return manifest;
+  }
+  if(operation==='pixel-get'||operation==='pixel-image'){
+    await physicalDirectory(parent);await physicalDirectory(root);
+    const {manifest}=await readReferenceSet(root,setHash);
+    if(operation==='pixel-get')return manifest;
+    assert.match(imageId,digest);const index=manifest.references.findIndex(r=>r.id===imageId);
+    assert.ok(index>=0,'Image is not in the exact pixel set');
+    const png=await safeEvidenceFile(root,`reference-sets/${setHash}/image-${index}.png`,REFERENCE_LIMITS.bytesPerImage);
+    assert.equal(hash(png),manifest.references[index].sha256);return {png,sha256:hash(png)};
+  }
   if(operation==='prepare'){
     const value=decode(input),policy=validateReferencePreparation(ownerId,value);
     assert.equal(capability?.id,value.generation.model);assert.equal(capability.supportsImages,true,'Selected model has not advertised reference-image input');

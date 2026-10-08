@@ -89,6 +89,21 @@ async function submit(f,p) {
 }
 const turns = f => f.requests.filter(r => r.method === 'turn/start');
 
+test('pure pixel HTTP preparation supplies a NEW exact set to joint disclosure and freeze with zero turns and no ordinary consent',async t=>{
+  const f=await fixture(t),queries=f.modelQueries();
+  const upload={format:'UserReferenceUpload',version:1,mode:'multi-view',references:f.pixels.map((png,i)=>({png:png.toString('base64'),annotation:{purpose:'style',view:i?'side':'front',caption:'新编辑的准确参考图'}}))};
+  const stored=await f.request(`/v1/reference-drafts/${f.owner}/pixels`,{method:'POST',value:{format:'ReferencePixelPreparationRequest',version:1,upload}});
+  assert.equal(stored.status,200,stored.value.error);assert.notEqual(stored.value.setHash,f.reference.setHash);assert.equal(f.modelQueries(),queries);assert.equal(turns(f).length,0);
+  const intent={...f.input.intent,referenceSetHash:stored.value.setHash},route=`${prefix}/contexts/${f.id}`;
+  const disclosed=await f.request(route+'/disclosure',{method:'POST',value:{intent}});assert.equal(disclosed.status,200,disclosed.value.error);
+  assert.deepEqual(disclosed.value.task.disclosure.references,stored.value.references);assert.equal(disclosed.value.referenceConsentTransferable,false);
+  const frozen=await f.request(route+'/freeze',{method:'POST',value:{intent,confirmation:confirmation(disclosed.value)}});assert.equal(frozen.status,200,frozen.value.error);
+  assert.equal(frozen.value.referenceSetHash,stored.value.setHash);assert.equal(frozen.value.modelSent,false);
+  const original=await readFrozenReferenceWorldPatchTaskSource({dataDir:f.dir,capsuleId:frozen.value.capsuleId});
+  assert.deepEqual(original.reference.images,f.pixels);assert.deepEqual(original.reference.manifest,stored.value);assert.equal(turns(f).length,0);
+  assert.equal(await fs.stat(path.join(f.dir,'reference-drafts',f.owner,'preparations')).then(()=>true,()=>false),false);
+});
+
 test('full joint HTTP disclosure/review/freeze/images/SEND/candidate chain uses exact original two images and no world authority', async t => {
   const f = await fixture(t), p = await prepare(f);
   assert.equal(f.requests.length,0);

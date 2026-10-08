@@ -5,6 +5,18 @@ import {referenceArchiveCapabilities} from './reference-archive.mjs';
 
 export const REFERENCE_PREPARATION_LIMITS = Object.freeze({inputBytes:33554432+65536,drafts:64,setsPerDraft:4,preparationsPerDraft:8,lanes:1});
 export const REFERENCE_REQUEST_FIELDS = Object.freeze(['referenceUpload','referenceSet','referenceInput','referenceImages','referenceConfirmation','referencePreparationHash','userImages']);
+// Pure pixels have no model, task, budget or confirmation fields. Ordinary
+// generation preparation and joint task consent remain separate protocols.
+export function validateReferencePixelPreparation(ownerId,input){
+  if(!REFERENCE_OWNER.test(ownerId)||!input||input.format!=='ReferencePixelPreparationRequest'||input.version!==1
+    ||Object.keys(input).sort().join(',')!=='format,upload,version')throw Error('Exact pixel-only preparation required');
+  referenceUpload(input.upload);return input;
+}
+export function referencePixelPreparationCapabilities(){
+  return {format:'ReferencePixelPreparationCapabilities',version:1,pixelPreparationImplemented:true,
+    modelDiscovery:false,modelCalls:0,worldWrites:0,generationAuthorityTransferred:false,
+    canAuthorizePlacement:false,limits:{inputBytes:REFERENCE_PREPARATION_LIMITS.inputBytes,maximumImages:4,lanes:1}};
+}
 // Separate from SEND and archive restore. This reads exact active preparation
 // bytes for a NEW local editor draft; historical confirmation is never reused.
 export function referenceImageRestoreCapabilities(){

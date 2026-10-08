@@ -31,7 +31,7 @@ import {createReferenceWorldPatchHttpService} from './reference-world-patch-http
 import {worldPatchSendingCapabilities} from './world-patch-capabilities.mjs';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {ReferencePreparationStore} from './reference-preparation.mjs';
-import {referencePreparationCapabilities,referenceImageRestoreCapabilities,REFERENCE_PREPARATION_LIMITS,validateReferencePreparation} from '../contracts/reference-preparation.mjs';
+import {referencePreparationCapabilities,referenceImageRestoreCapabilities,referencePixelPreparationCapabilities,REFERENCE_PREPARATION_LIMITS,validateReferencePreparation} from '../contracts/reference-preparation.mjs';
 import {ReferenceGenerationStore} from './reference-generation-store.mjs';
 import {validateReferenceGenerationJobRequest,referenceGenerationJobCapabilities,REFERENCE_JOB_LIMITS} from '../contracts/reference-generation-job.mjs';
 import {referenceArchiveCapabilities,REFERENCE_ARCHIVE_LIMITS} from '../contracts/reference-archive.mjs';
@@ -358,6 +358,11 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         || /^\/v[12]\/world-patch\//.test(route))))
         return json(409, {error:'Finish original joint reference/patch work before changing its model, attachments or context'});
       if(route==='/v1/reference-preparations/capabilities'&&req.method==='GET')return json(200,referencePreparationCapabilities());
+      if(route==='/v1/reference-pixels/capabilities'){
+        if(req.method!=='GET')return json(405,{error:'Pixel capability is read-only'});
+        if(url.search||req.headers['transfer-encoding']||Number(req.headers['content-length'])>0)return json(400,{error:'Pixel capability does not accept query or body'});
+        return json(200,referencePixelPreparationCapabilities());
+      }
       if(route==='/v1/reference-image-restore/capabilities'&&req.method==='GET')return json(200,referenceImageRestoreCapabilities());
       if(route==='/v1/reference-generation-jobs/capabilities'&&req.method==='GET')return json(200,referenceGenerationJobCapabilities(referenceGenerationSending));
       if(route==='/v1/reference-archives/capabilities'&&req.method==='GET')return json(200,referenceArchiveCapabilities());
@@ -437,6 +442,26 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
             return json(429,{error:'Job/configuration quota changed during reference binding; original SEND retained'});
           const job=await createReferenceJob(saved),promise=run(job,saved.request).catch(()=>{});
           running.add(promise);promise.finally(()=>running.delete(promise));return json(202,publicJob(job));
+        }finally{referenceUploads--;}
+      }
+      const pixelRoute=route.match(/^\/v1\/reference-drafts\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})(?:\/pixels|\/sets\/([a-f0-9]{64})(?:\/images\/([a-f0-9]{64}))?)$/);
+      if(pixelRoute){
+        const [,ownerId,setHash,imageId]=pixelRoute,method=setHash?'GET':'POST';
+        if(req.method!==method)return json(405,{error:'Pixels do not grant preparation consent, SEND or world authority'});
+        if(url.search||setHash&&(req.headers['transfer-encoding']||Number(req.headers['content-length'])>0))return json(400,{error:'Exact pixel routes do not accept queries or GET bodies'});
+        if(shuttingDown||changingConfig)return json(409,{error:'Pixel preparation configuration changing; no model invoked'});
+        if(referenceUploads||referencePreparations.busy()||referenceGeneration.busy())return json(429,{error:'Reference pixel lane full; no model invoked'});
+        referenceUploads++;
+        try{
+          if(!setHash){
+            if(!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.headers['content-type']??''))return json(400,{error:'Exact UTF-8 JSON required'});
+            const input=await referenceInputBytes(req);
+            if(shuttingDown||changingConfig)throw Error('Pixel preparation configuration changed');
+            return json(200,await referencePreparations.operation('pixel-prepare',ownerId,{input}));
+          }
+          const value=await referencePreparations.operation(imageId?'pixel-image':'pixel-get',ownerId,{setHash,imageId});
+          if(!imageId)return json(200,value);
+          const bytes=Buffer.from(value.png);res.writeHead(200,{'Content-Type':'image/png','Content-Length':bytes.length,'ETag':value.sha256,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});return res.end(bytes);
         }finally{referenceUploads--;}
       }
       const referenceRoute=route.match(/^\/v1\/reference-drafts\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})(?:\/prepare|\/preparations\/([a-f0-9]{64})(?:\/(confirm|record|images\/([a-f0-9]{64})))?)$/);

@@ -16,10 +16,15 @@ import java.util.function.BooleanSupplier;
 /** Explicit local PNG/JPEG import, source-space crop and actual output preview.
  * No model call on opening, importing, editing or free preparation. */
 final class StudioReferenceScreen extends Screen {
+    record PixelTarget(BooleanSupplier editable,java.util.function.BiConsumer<ReferenceImageDraft.Snapshot,BridgeClient.ReferencePixels> receive) {
+        PixelTarget {Objects.requireNonNull(editable);Objects.requireNonNull(receive);}
+    }
     private record Row(ClickableWidget widget,int offset,BooleanSupplier enabled) {}
     private final Screen parent;
     private final ReferenceImageDraft draft;
     private final ReferenceDraftStore localStore;
+    private final PixelTarget pixelTarget;
+    private final WorldPatchPageState pixelPage=new WorldPatchPageState();
     private final List<Row> rows=new ArrayList<>();
     private String selected,path="",caption="",purpose="exterior",view="unknown",scaleDimension="height",meters="";
     private String status="仅本机图片草稿；先在创作页选择建筑提示词、支持图片的 Codex 模型与组件化档位。";
@@ -32,9 +37,11 @@ final class StudioReferenceScreen extends Screen {
     private Identifier texture;
     private ReferenceImageNormalizer.Result shown;
     private StudioTheme.Button prepare;
-    StudioReferenceScreen(Screen parent,ReferenceImageDraft draft){super(Text.literal("参考图建筑 · 编辑与发送准备"));this.parent=parent;this.draft=draft;this.localStore=new ReferenceDraftStore(StudioClient.BRIDGE.dataDirectory().resolve("client-state/reference-images-v1"));}
+    StudioReferenceScreen(Screen parent,ReferenceImageDraft draft){this(parent,draft,null);}
+    StudioReferenceScreen(Screen parent,ReferenceImageDraft draft,PixelTarget target){super(Text.literal(target==null?"参考图建筑 · 编辑与发送准备":"参考图＋选区 · 编辑图片"));this.parent=parent;this.draft=draft;pixelTarget=target;this.localStore=new ReferenceDraftStore(StudioClient.BRIDGE.dataDirectory().resolve("client-state/reference-images-v1"));if(target!=null)status="仅准备准确图片；不调用模型、不沿用新建建筑授权。";}
     private ReferenceImageDraft.Photo photo(){return selected==null?null:draft.photo(selected);}
-    boolean serverImagesEditable(){return !busy&&StudioScreen.referenceDraftEditable();}
+    private boolean targetEditable(){return pixelTarget==null?StudioScreen.referenceDraftEditable():pixelTarget.editable().getAsBoolean();}
+    boolean serverImagesEditable(){return !busy&&targetEditable();}
     String serverImagesOwner(){return draft.ownerId();}
     long serverImagesRevision(){return draft.revision();}
     void restoreServerImages(ReferenceImageRestoreReceipt.Loaded loaded,String owner,long revision){
@@ -52,6 +59,7 @@ final class StudioReferenceScreen extends Screen {
     private void error(Throwable e){status=StudioMessages.error(e);statusColor=StudioTheme.ERROR;}
     private void message(String text){status=text;statusColor=StudioTheme.MUTED;}
     @Override protected void init(){
+        pixelPage.enter();
         rows.clear();captionField=null;scaleField=null;cursor=0;sideWidth=Math.max(130,Math.min(264,(width-36)*42/100));bodyBottom=height-68;
         var photos=draft.photos();if(selected!=null&&photos.stream().noneMatch(p->p.id().equals(selected)))selected=null;
         if(selected==null&&!photos.isEmpty()){selected=photos.get(0).id();loadAnnotation();}
@@ -76,12 +84,12 @@ final class StudioReferenceScreen extends Screen {
             rowButton("移除当前图片（仅草稿）",()->true,()->{draft.remove(selected);selected=null;clearAndInit();message("已从本地草稿移除；不会删除原文件或已保存的任务图片。");});
         }
         rowButton("保存图片编辑到本机",()->!draft.photos().isEmpty(),this::confirmSave);
-        rowButton("恢复本机已保存的图片编辑",StudioScreen::referenceDraftEditable,this::confirmRestore);
+        rowButton("恢复本机已保存的图片编辑",this::targetEditable,this::confirmRestore);
         rowButton("删除本机已保存的图片草稿",()->true,this::confirmForget);
         rowButton("服务器准备草稿 · 归档与原操作",()->true,()->{if(saveAnnotation())client.setScreen(new StudioReferenceArchiveScreen(this));});
         rowButton("清空当前内存图片草稿",()->!draft.photos().isEmpty(),()->client.setScreen(new StudioInfoScreen(this,"清空当前内存草稿？","仅释放本次内存中的图片，不删除磁盘保存的图片草稿、源图、Bridge 准备记录或任务原图。未明确保存的编辑会在游戏退出时丢失。","确认清空内存",true,()->{draft.clear();selected=null;client.setScreen(this);message("内存图片草稿已清空；磁盘草稿、原文件和任务记录保留。");})));
-        addDrawableChild(new StudioTheme.Button(12,height-34,96,23,"返回创作页",StudioTheme.Kind.NORMAL,this::close));
-        prepare=addDrawableChild(new StudioTheme.Button(width-180,height-34,168,23,"免费检查 · 准备发送",StudioTheme.Kind.PRIMARY,this::prepare));
+        addDrawableChild(new StudioTheme.Button(12,height-34,96,23,pixelTarget==null?"返回创作页":"返回选区任务",StudioTheme.Kind.NORMAL,this::close));
+        prepare=addDrawableChild(new StudioTheme.Button(width-180,height-34,168,23,pixelTarget==null?"免费检查 · 准备发送":"准备图片 · 返回改造页",StudioTheme.Kind.PRIMARY,this::prepare));
         var mode=addDrawableChild(new StudioTheme.Button(sideWidth+24,bodyTop,width-sideWidth-36,23,cropMode?"原图裁剪 · 拖选范围":"实际发送效果 · 点击裁剪",StudioTheme.Kind.NORMAL,()->{cropMode=!cropMode;dragging=false;clearAndInit();}));mode.active=selected!=null&&!busy;
         scroll=StudioLayout.clampScroll(scroll,cursor,Math.max(1,bodyBottom-bodyTop));layoutRows();refreshPreview();setInitialFocus(pathField);
     }
@@ -116,6 +124,7 @@ final class StudioReferenceScreen extends Screen {
     private void dropTexture(){if(texture!=null&&client!=null){client.getTextureManager().destroyTexture(texture);texture=null;}}
     private void prepare(){
         if(busy||!saveAnnotation())return;
+        if(pixelTarget!=null){prepareJointPixels();return;}
         final ReferenceImageDraft.Snapshot snapshot;final JsonObject generation;
         try{snapshot=draft.snapshot();generation=StudioScreen.referenceGenerationRequest(snapshot.ownerId());}catch(Exception e){error(e);return;}
         String world=StudioScreen.referenceWorldScope();busy=true;message("免费检查所选模型、档位与完整预算；尚未上传模型或创建生成任务。");clearAndInit();
@@ -130,6 +139,16 @@ final class StudioReferenceScreen extends Screen {
                     var exact=generation.deepCopy();exact.addProperty("assemblyConfirmed",true);preparePixels(snapshot,exact,policy,world);
                 }));
             }catch(Exception e){error(e);clearAndInit();}
+        }));
+    }
+    private void prepareJointPixels(){
+        final ReferenceImageDraft.Snapshot exact;try{if(!targetEditable())throw new IllegalStateException("原选区已改变；请返回任务重新读取");exact=draft.snapshot();}catch(Exception e){error(e);return;}
+        busy=true;message("本机准备规范化图片并逐像素核验；模型调用 0。");clearAndInit();long ticket=pixelPage.begin();var page=pixelPage.publication();
+        StudioClient.BRIDGE.prepareReferencePixels(exact,()->page.getAsBoolean()&&pixelTarget.editable().getAsBoolean()).whenComplete((pixels,failure)->client.execute(()->{
+            busy=false;boolean current=pixelPage.finish(ticket)&&client.currentScreen==this&&draft.current(exact)&&targetEditable();
+            if(!current){message("图片或原选区页面改变；原图片记录保留，未沿用旧准备或发送。");if(client.currentScreen==this)clearAndInit();return;}
+            if(failure!=null){error(failure);clearAndInit();return;}
+            try{pixelTarget.receive().accept(exact,pixels);}catch(Exception e){error(e);clearAndInit();}
         }));
     }
     private void preparePixels(ReferenceImageDraft.Snapshot snapshot,JsonObject generation,JsonObject policy,String world){
@@ -152,10 +171,10 @@ final class StudioReferenceScreen extends Screen {
     private void confirmRestore(){
         if(busy||!saveAnnotation())return;long revision=draft.revision();
         client.setScreen(new StudioInfoScreen(this,"恢复本机图片编辑？","恢复将替换当前内存图片及编辑，不读取原文件路径、不上传、不调用模型。\n\n恢复的是新图片草稿，仍需重新选择提示词、模型和预算，重新准备并独立确认发送；不是续发旧任务。正在运行或提交回执未知的任务必须保持原身份，不能在此重发。","恢复为新图片草稿",false,()->{
-            client.setScreen(this);if(busy||!StudioScreen.referenceDraftEditable()||draft.revision()!=revision){error(new IllegalStateException("图片或任务状态变化；未恢复旧草稿"));return;}
+            client.setScreen(this);if(busy||!targetEditable()||draft.revision()!=revision){error(new IllegalStateException("图片或任务状态变化；未恢复旧草稿"));return;}
             busy=true;message("后台读取并校验原图、编辑与实际输出像素…");clearAndInit();
             localStore.load().whenComplete((saved,error)->client.execute(()->{busy=false;
-                if(error!=null)error(error);else try{if(!StudioScreen.referenceDraftEditable())throw new IllegalStateException("原任务状态变化，未恢复或重发");draft.restore(saved.mode(),saved.photos(),revision);selected=null;message("已恢复准确图片编辑为新草稿；原发送确认失效，零模型调用。");}catch(Exception invalid){error(invalid);}
+                if(error!=null)error(error);else try{if(!targetEditable())throw new IllegalStateException("原任务状态变化，未恢复或重发");draft.restore(saved.mode(),saved.photos(),revision);selected=null;message("已恢复准确图片编辑为新草稿；原发送确认失效，零模型调用。");}catch(Exception invalid){error(invalid);}
                 if(client.currentScreen==this)clearAndInit();
             }));
         }));
@@ -166,7 +185,7 @@ final class StudioReferenceScreen extends Screen {
             localStore.forget().whenComplete((removed,error)->client.execute(()->{busy=false;if(error!=null)error(error);else message(removed?"已删除本机保存副本，不可撤销；当前内存、源图与任务证据保留。":"没有已保存的本机图片草稿；未删除任何文件。");if(client.currentScreen==this)clearAndInit();}));
         }));
     }
-    @Override public void tick(){pathField.tick();if(captionField!=null)captionField.tick();if(scaleField!=null)scaleField.tick();layoutRows();prepare.active=!busy&&!draft.photos().isEmpty();}
+    @Override public void tick(){pathField.tick();if(captionField!=null)captionField.tick();if(scaleField!=null)scaleField.tick();layoutRows();prepare.active=!busy&&targetEditable()&&!draft.photos().isEmpty();}
     @Override public void render(DrawContext d,int mx,int my,float delta){
         d.fill(0,0,width,height,StudioTheme.BG);d.drawText(textRenderer,title,12,12,StudioTheme.ACCENT,false);d.drawText(textRenderer,StudioTheme.fit(textRenderer,"1–4 张图 · 只读取明确选择的本机文件 · 点击保存后可跨游戏恢复",width-24),12,28,StudioTheme.MUTED,false);
         StudioTheme.panel(d,8,bodyTop-4,sideWidth+8,Math.max(1,bodyBottom-bodyTop+8));StudioTheme.panel(d,sideWidth+20,bodyTop-4,width-sideWidth-28,Math.max(1,bodyBottom-bodyTop+8));
@@ -190,7 +209,7 @@ final class StudioReferenceScreen extends Screen {
     @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(dragging&&button==0){dragX1=fractionX(x);dragY1=fractionY(y);return true;}return super.mouseDragged(x,y,button,dx,dy);}
     @Override public boolean mouseReleased(double x,double y,int button){if(dragging&&button==0){dragging=false;dragX1=fractionX(x);dragY1=fractionY(y);if(Math.abs(dragX0-dragX1)*imageWidth>=2&&Math.abs(dragY0-dragY1)*imageHeight>=2)transform(ReferenceImageDraft.crop(photo().source().dimensions,dragX0,dragY0,dragX1,dragY1),photo().turns());return true;}return super.mouseReleased(x,y,button);}
     @Override public boolean mouseScrolled(double x,double y,double amount){if(x<sideWidth+20&&y>=bodyTop&&y<=bodyBottom){scroll=StudioLayout.clampScroll(scroll-(int)(amount*29),cursor,Math.max(1,bodyBottom-bodyTop));layoutRows();return true;}return super.mouseScrolled(x,y,amount);}
-    @Override public void removed(){previewTicket++;previewPending=false;dragging=false;dropTexture();captionField=null;scaleField=null;}
+    @Override public void removed(){pixelPage.leave();previewTicket++;previewPending=false;dragging=false;dropTexture();captionField=null;scaleField=null;}
     @Override public void close(){saveAnnotation();client.setScreen(parent);}
     @Override public boolean shouldPause(){return false;}
     static String modeLabel(String v){return switch(v){case "reconstruct"->"尽量还原";case "multi-view"->"多视图统一还原";default->"提取设计语言";};}

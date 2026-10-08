@@ -67,6 +67,36 @@ public final class BridgeClient implements AutoCloseable {
         ReferencePreparation {preparation=preparation.deepCopy();images=List.copyOf(images);}
         @Override public JsonObject preparation(){return preparation.deepCopy();}
     }
+    record ReferencePixels(JsonObject manifest,List<ReferenceImageNormalizer.Result> images) {
+        ReferencePixels {manifest=manifest.deepCopy();images=List.copyOf(images);}
+        @Override public JsonObject manifest(){return manifest.deepCopy();}
+    }
+    private JsonObject pixelJson(Connection c,String route,String body,int maximum)throws Exception {
+        current(c);var b=builder(c,route,60);if(body!=null)b.header("Content-Type","application/json; charset=utf-8").POST(HttpRequest.BodyPublishers.ofString(body));
+        var response=send(c,b.build(),maximum);if(response.statusCode()!=200)throw new IllegalStateException("纯图片准备不可读取，HTTP "+response.statusCode()+"；未发送模型");
+        String text=java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(response.body())).toString();
+        var value=WorldPatchCandidateReceipt.strictJson(text,()->Thread.currentThread().isInterrupted()).getAsJsonObject();current(c);return value;
+    }
+    /** One bounded background lane. No discovery, ordinary preparation,
+     * confirmation, SEND, replacement image or automatic retry is used. */
+    CompletableFuture<ReferencePixels> prepareReferencePixels(ReferenceImageDraft.Snapshot draft,BooleanSupplier live){
+        return connect().thenCompose(c->submit(references,()->{
+            WorldPatchSend.allowed(live);ReferencePixelPreparationReceipt.capabilities(pixelJson(c,"/v1/reference-pixels/capabilities",null,4096));
+            String body=ReferencePixelPreparationReceipt.request(draft).toString();if(body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>33554432+65536)throw new IllegalStateException("纯图片传输组超限");
+            WorldPatchSend.allowed(live);String prefix="/v1/reference-drafts/"+draft.ownerId();
+            var manifest=ReferencePixelPreparationReceipt.verify(draft,pixelJson(c,prefix+"/pixels",body,65536));
+            String set=prefix+"/sets/"+ReferencePreparationReceipt.text(manifest,"setHash");var images=new ArrayList<ReferenceImageNormalizer.Result>();
+            for(int i=0;i<draft.photos().size();i++){
+                WorldPatchSend.allowed(live);current(c);var record=manifest.getAsJsonArray("references").get(i).getAsJsonObject();
+                var response=send(c,builder(c,set+"/images/"+ReferencePreparationReceipt.text(record,"id"),60).build(),ReferenceImageNormalizer.MAX_OUTPUT_BYTES);
+                if(response.statusCode()!=200)throw new IllegalStateException("原规范化图片读取失败；不换图或发送模型");
+                images.add(ReferencePreparationReceipt.pixels(draft.photos().get(i),record,response.body()));
+            }
+            WorldPatchSend.allowed(live);ReferencePreparationReceipt.same(manifest,ReferencePixelPreparationReceipt.verify(draft,pixelJson(c,set,null,65536)));
+            current(c);WorldPatchSend.allowed(live);return new ReferencePixels(manifest,images);
+        }));
+    }
     /** Pixels/base64/JSON/HTTP/verification stay off the rendering thread and
      * cannot queue ahead of cancellation, normal discovery or world reads. */
     CompletableFuture<ReferencePreparation> prepareReference(ReferenceImageDraft.Snapshot draft,JsonObject generation,JsonObject ordinaryPolicy){
@@ -348,6 +378,13 @@ public final class BridgeClient implements AutoCloseable {
     CompletableFuture<String> referencePatchRuntime(){
         return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/reference-world-patch/capabilities",null,16384,
             v->{ReferenceWorldPatchJobReceipt.capabilitiesRuntime(v);return v;},()->{})).thenApply(ReferenceWorldPatchJobReceipt::capabilitiesRuntime);
+    }
+    CompletableFuture<JsonObject> referencePatchModel(JsonObject selected){
+        var exact=selected.deepCopy();return referencePatchRuntime().thenCompose(runtime->{
+            if(runtime==null)throw new IllegalStateException("配套尚未开启联合开发协议；未发送模型");
+            return connect().thenCompose(c->referencePatchExchange(c,"GET","/v1/agents/codex/models",null,131072,
+                models->ReferenceWorldPatchTaskReceipt.advertisedCapability(exact,models,runtime),()->{}));
+        });
     }
     CompletableFuture<List<JsonObject>> referencePatchHistory(){return submit(contexts,()->new ReferenceWorldPatchReferences(data).list());}
     CompletableFuture<JsonObject> readReferencePatchJob(JsonObject input){

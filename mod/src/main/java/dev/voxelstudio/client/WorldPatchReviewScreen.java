@@ -8,7 +8,8 @@ import java.util.List;
 final class WorldPatchReviewScreen extends Screen {
     private final Screen parent;private final JsonObject prepared;private final Runnable confirm;private final String details,prompt;
     private int x,w,scroll,page;private boolean raw;private List<net.minecraft.text.OrderedText> lines;
-    WorldPatchReviewScreen(Screen parent,JsonObject prepared,Runnable confirm){super(Text.literal("原位改造内容审核 · 尚不发送"));this.parent=parent;this.prepared=prepared;this.confirm=confirm;details=WorldPatchTaskReceipt.details(prepared);prompt=prepared.getAsJsonObject("task").getAsJsonObject("disclosure").get("modelPrompt").getAsString();}
+    WorldPatchReviewScreen(Screen parent,JsonObject prepared,Runnable confirm){this(parent,prepared,WorldPatchTaskReceipt.details(prepared),confirm);}
+    WorldPatchReviewScreen(Screen parent,JsonObject prepared,String details,Runnable confirm){super(Text.literal("原位改造内容审核 · 尚不发送"));this.parent=parent;this.prepared=prepared;this.confirm=confirm;this.details=details;prompt=prepared.getAsJsonObject("task").getAsJsonObject("disclosure").get("modelPrompt").getAsString();}
     private void text(){String value=details;if(raw)value="完整原始模型输入 · 第 "+(page+1)+"/"+pages()+" 页（仅显示，原字节不变）\n\n"+WorldPatchPromptPages.at(prompt,page);lines=textRenderer.wrapLines(Text.literal(value),w-28);scroll=0;}
     private int pages(){return WorldPatchPromptPages.count(prompt);}
     @Override protected void init(){w=Math.min(600,width-24);x=(width-w)/2;text();int part=(w-36)/3;

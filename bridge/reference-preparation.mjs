@@ -11,7 +11,7 @@ export class ReferencePreparationStore {
   operation(operation,ownerId,options={}){
     if(this.closed)return Promise.reject(Error('Reference preparation store closed'));
     if(this.busy())return Promise.reject(Object.assign(Error('Reference preparation lane full; no model invoked'),{statusCode:429}));
-    if((operation!=='archive-list'&&!REFERENCE_OWNER.test(ownerId))||!['prepare','get','record','image','confirm',...REFERENCE_ARCHIVE_OPERATIONS,...REFERENCE_ARCHIVE_MAINTENANCE_OPERATIONS].includes(operation))return Promise.reject(Error('Invalid reference preparation operation'));
+    if((operation!=='archive-list'&&!REFERENCE_OWNER.test(ownerId))||!['prepare','get','record','image','confirm','pixel-prepare','pixel-get','pixel-image',...REFERENCE_ARCHIVE_OPERATIONS,...REFERENCE_ARCHIVE_MAINTENANCE_OPERATIONS].includes(operation))return Promise.reject(Error('Invalid reference preparation operation'));
     if(options.input?.byteLength>limits.inputBytes)return Promise.reject(Object.assign(Error('Reference preparation byte quota'),{statusCode:413}));
     return new Promise((resolve,reject)=>{
       const worker=new Worker(new URL('./reference-preparation-worker.mjs',import.meta.url),{workerData:{...options,dataDir:this.dataDir,operation,ownerId,kind:'reference-preparation-v1'},
