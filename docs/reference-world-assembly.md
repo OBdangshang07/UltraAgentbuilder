@@ -3,7 +3,8 @@
 This engineering path uses the existing reference-analysis, concept,
 representative-prototype, component and native-review orchestration. It does
 not enlarge the normally disabled, one-call reference-world-patch v1 contract.
-Normal player HTTP/UI integration and installed-game acceptance are still pending.
+Free paired-HTTP preparation is available behind a process-owned opt-in. Full
+player SEND/UI integration and installed-game acceptance are still pending.
 Complete original candidate persistence and bounded read-only result workers
 are available internally; they do not enable that player SEND path.
 
@@ -111,6 +112,42 @@ An internal job owner must retain the original candidate identity and enforce
 worker concurrency/resource/time quotas before exposing it to normal HTTP/UI.
 An original turn reference is not an independent closed-provider-receipt audit;
 that distinction and real-image understanding remain explicitly unverified.
+
+## Bounded preparation and original-result resource lane
+
+`ReferenceWorldAssemblyResources` derives paths only from its private data root
+and the original pixel UUID. A single worker with at most two queued operations
+handles free preparation, exact independent binding, complete-candidate metadata
+and transport-part reads. Inputs are copied before queueing. Fatal UTF-8/strict
+keys, 64 KiB input, 40 MiB output, 120-second operation and worker-memory quotas
+are fixed internally; HTTP cannot override them. The queue waits for the original
+worker to actually retire before starting another writer. Cancel/close/quota
+stops retain original partial evidence without retries, repairs or takeovers.
+
+The internal bind operation requires a NEW original job directory created by
+the future job owner; the worker does not create or claim a job. Metadata/part
+operations retain all original preparation/candidate identities and verify the
+entire set, not a single independently placeable part. They do not discover a
+model, replay the pipeline, render or compile a substitute, refresh a capture,
+reserve a call, or write a world.
+
+The separate `/v1/reference-world-assembly` protocol advertises version 2 and
+honestly reports that SEND, player UI and placement are not yet implemented.
+`POST /contexts/{contextId}/prepare` accepts only `referenceOwnerId`,
+`referenceSetHash` and the complete `generation` request. Exact paired loopback
+Host/no-Origin/Bearer checks run first. The server obtains the selected model's
+image/effort advertisement and dispatches heavy source verification to the
+bounded worker. Preparation neither creates a job nor inherits ordinary/v1
+consent. It binds the actual full shared-tier policy, never a one-call replacement.
+
+`startBridge` defaults `referenceWorldAssemblyPreparation` to false. Only the
+owning process can opt in; HTTP/config/normal CLI cannot enable it. In-flight
+preparation fences changes to model configuration, reference attachments,
+contexts and other job lanes. Health and read-only capability queries remain
+responsive. Closing the service cancels its original preparation/discovery and
+workers without dispatching or adopting a task. Full job ownership, SEND,
+native-render transport, persistent history/original-turn observation and the
+complete-set world transaction remain subsequent integration gates.
 
 ## Verification and limitations
 

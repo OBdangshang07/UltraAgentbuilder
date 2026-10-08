@@ -28,6 +28,7 @@ import {WorldContextConsents} from './world-context-consent.mjs';
 import {createContextAnalysisRunner} from './world-context-analysis-runner.mjs';
 import {createWorldPatchDesignRunner} from './world-patch-design-runner.mjs';
 import {createReferenceWorldPatchHttpService} from './reference-world-patch-http.mjs';
+import {createReferenceWorldAssemblyHttpService} from './reference-world-assembly-http.mjs';
 import {worldPatchSendingCapabilities} from './world-patch-capabilities.mjs';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {ReferencePreparationStore} from './reference-preparation.mjs';
@@ -73,13 +74,14 @@ async function referenceInputBytes(req,maximum=REFERENCE_PREPARATION_LIMITS.inpu
   if(Number(req.headers['content-length'])>maximum)throw quota();let size=0;const chunks=[];
   for await(const part of req){size+=part.length;if(size>maximum)throw quota();chunks.push(part);}return Buffer.concat(chunks,size);
 }
-export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath, port = 0, adapter, claudeAdapter, deepseekAdapter, experimentalContextAnalysis = false, experimentalWorldPatchDesign = false, worldPatchSending = false, referenceGenerationSending = false, referenceWorldPatchSending = false } = {}) {
+export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath, port = 0, adapter, claudeAdapter, deepseekAdapter, experimentalContextAnalysis = false, experimentalWorldPatchDesign = false, worldPatchSending = false, referenceGenerationSending = false, referenceWorldPatchSending = false, referenceWorldAssemblyPreparation = false } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
   if (typeof experimentalContextAnalysis !== 'boolean') throw new Error('Explicit process-owned context analysis switch required');
   if (typeof experimentalWorldPatchDesign !== 'boolean') throw new Error('Explicit process-owned patch design switch required');
   if (typeof worldPatchSending !== 'boolean') throw new Error('Explicit process-owned production patch SEND switch required');
   if (typeof referenceGenerationSending !== 'boolean') throw new Error('Explicit process-owned reference SEND switch required');
   if (typeof referenceWorldPatchSending !== 'boolean') throw new Error('Explicit process-owned joint reference/patch SEND switch required');
+  if (typeof referenceWorldAssemblyPreparation !== 'boolean') throw new Error('Explicit process-owned complete joint preparation switch required');
   dataDir = path.resolve(dataDir);
   await fs.mkdir(path.join(dataDir, 'jobs'), { recursive: true });
   const connectionFile = path.join(dataDir, 'connection.json');
@@ -120,13 +122,19 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
   const recoverable=[];let shuttingDown=false,runtimeIdentity;
   let nativeRendererSeen=0;
   const runtimeHash=()=>runtimeIdentity??=assemblyRuntimeIdentity();
-  let jointPatch;
+  let jointPatch, jointAssembly;
   try {
     jointPatch = await createReferenceWorldPatchHttpService({dataDir, contexts, adapterFor:agentFor, enabled:referenceWorldPatchSending,
       state:() => ({closing:shuttingDown, changingConfig, busy:referenceUploads || contextUploads
+        || jointAssembly?.busy()
         || referencePreparations.busy() || referenceGeneration.busy() || patchDesign?.busy() || contextAnalysis?.busy()
         || [...jobs.values()].some(j => !terminal(j.state))})});
+    jointAssembly = await createReferenceWorldAssemblyHttpService({dataDir,enabled:referenceWorldAssemblyPreparation,adapterFor:agentFor,
+      state:() => ({closing:shuttingDown,changingConfig,busy:referenceUploads || contextUploads || jointPatch.busy()
+        || contexts.active || contexts.queue.length || referencePreparations.busy() || referenceGeneration.busy()
+        || patchDesign?.busy() || contextAnalysis?.busy() || [...jobs.values()].some(j => !terminal(j.state))})});
   } catch (error) {
+    await jointAssembly?.close(); await jointPatch?.close();
     await patchDesign?.close(); await contextAnalysis?.close(); await referenceGeneration.close(); await referencePreparations.close();
     contextConsents.close(); await contexts.close(); await fs.unlink(lockFile); throw error;
   }
@@ -352,7 +360,8 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
       if (supplied.length !== token.length || !timingSafeEqual(supplied, Buffer.from(token))) return json(401, { error: 'Pairing token required' });
       const url = new URL(req.url, `http://${expectedHost}`), route = url.pathname;
       if (await jointPatch.handle(req, res, url)) return;
-      if (jointPatch.busy() && (route.startsWith('/v1/reference-drafts') || req.method === 'POST' && (
+      if (await jointAssembly.handle(req, res, url)) return;
+      if ((jointPatch.busy() || jointAssembly.busy()) && (route.startsWith('/v1/reference-drafts') || req.method === 'POST' && (
         route === '/v1/reference-generation-jobs' || route === '/v1/jobs' || route.startsWith('/v1/config/')
         || route.startsWith('/v1/world-contexts/') || route.startsWith('/v1/context-analysis/')
         || /^\/v[12]\/world-patch\//.test(route))))
@@ -412,7 +421,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
       }
       if(route==='/v1/reference-generation-jobs'&&req.method==='POST'){
         if(!referenceGenerationSending)return json(409,{error:'Reference generation SEND is not enabled; no model invoked'});
-        if(changingConfig||referenceUploads||referencePreparations.busy()||referenceGeneration.busy()||patchDesign?.busy()||jointPatch.busy())
+        if(changingConfig||referenceUploads||referencePreparations.busy()||referenceGeneration.busy()||patchDesign?.busy()||jointPatch.busy()||jointAssembly.busy())
           return json(429,{error:'Reference SEND/configuration lane full; no new model invoked'});
         referenceUploads++;
         try{
@@ -438,7 +447,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
             throw Error('Native renderer is not ready; original SEND retained, no model invoked');
           const current=(await agent.models()).find(m=>m.id===saved.request.model);
           if(current?.supportsImages!==true)throw Error('Selected model no longer advertises reference-image input; no model invoked');
-          if(changingConfig||patchDesign?.busy()||jointPatch.busy()||jobs.size>=1000||[...jobs.values()].filter(j=>!terminal(j.state)).length>=2)
+          if(changingConfig||patchDesign?.busy()||jointPatch.busy()||jointAssembly.busy()||jobs.size>=1000||[...jobs.values()].filter(j=>!terminal(j.state)).length>=2)
             return json(429,{error:'Job/configuration quota changed during reference binding; original SEND retained'});
           const job=await createReferenceJob(saved),promise=run(job,saved.request).catch(()=>{});
           running.add(promise);promise.finally(()=>running.delete(promise));return json(202,publicJob(job));
@@ -536,7 +545,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         if (req.method === 'POST' && ['send', 'observe-original', 'recheck-response'].includes(action)) {
           if (contextAnalysis?.busy() || [...jobs.values()].some(j => !terminal(j.state))) return json(409, {error: 'Finish active model work before patch dispatch or original observation'});
           const input = await body(req, 4096);
-          if (jointPatch.busy() || changingConfig || shuttingDown) return json(409, {error:'Joint/configuration lane changed; no patch dispatch'});
+          if (jointPatch.busy() || jointAssembly.busy() || changingConfig || shuttingDown) return json(409, {error:'Joint/configuration lane changed; no patch dispatch'});
           if (action === 'send') {
             if (input.capsuleId !== id) throw new Error('Patch SEND route/identity differs');
             return json(202, await patchDesign.submit(input));
@@ -562,7 +571,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         if (req.method === 'POST' && action === 'observe-original') {
           if (patchDesign?.busy()) return json(409, {error: 'Finish patch model work before analysis observation'});
           const input = await body(req, 1024); exactKeys(input, ['confirmed'], 'original context observation');
-          if (jointPatch.busy() || changingConfig || shuttingDown) return json(409, {error:'Joint/configuration lane changed; no analysis observation'});
+          if (jointPatch.busy() || jointAssembly.busy() || changingConfig || shuttingDown) return json(409, {error:'Joint/configuration lane changed; no analysis observation'});
           if (input.confirmed !== true) throw new Error('Explicit original-turn observation required; no generation submitted');
           return json(200, await contextAnalysis.observeOriginal(id));
         }
@@ -577,7 +586,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
           if (changingConfig) return json(409, {error: 'Context model configuration changing; no model invoked'});
           if (patchDesign?.busy()) return json(409, {error: 'Finish patch model work before analysis send'});
           const input = await body(req, 32768);
-          if (jointPatch.busy() || changingConfig || shuttingDown) return json(409, {error:'Joint/configuration lane changed; no analysis dispatch'});
+          if (jointPatch.busy() || jointAssembly.busy() || changingConfig || shuttingDown) return json(409, {error:'Joint/configuration lane changed; no analysis dispatch'});
           if (input.contextId !== id) throw new Error('Context analysis route/request identity differs');
           return json(202, await contextAnalysis.submit(input));
         }
@@ -642,12 +651,12 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         return json(200, { protocol: 1, version: RELEASE_VERSION, minecraft: '1.20.1', node: process.version, codexPath: configuredPath,resolvedCodexPath:agent.cli??null,codexVersion:agent.version??null,claudePath:configuredClaudePath,deepseekPath:configuredDeepseekPath, components, capabilities: ['job-key-lookup','codex-path-config','claude-experimental','deepseek-data-only','progressive-agent-discovery','generation-preflight','layered-generation','height-384','deepseek-output-budget','navigation-review','verified-generation-examples','building-spec-v2','special-blocks','visual-refinement','scene-spec-v1','scoped-scene-revisions','design-provenance','failed-scene-repair','scene-checkpoints','scene-components','quality-tiers-v1','assembly-design-review-v1','assembly-occupancy-images','assembly-safe-recovery-v1','storey-facade-layout-v1','floor-linked-interiors-v1','assembly-quality-v2','assembly-quality-v3','assembly-quality-v4','native-revision-comparison-v1','structured-quality-review-v1','native-concept-comparison-v1','native-asset-evidence-v1','scoped-coordinated-refinement-v1'], generationSubmitted: false });
       }
       if (req.method === 'POST' && ['/v1/config/codex-path','/v1/config/claude-path','/v1/config/deepseek-path'].includes(route)) {
-        if (changingConfig || referenceUploads || referencePreparations.busy() || referenceGeneration.busy() || contextAnalysis?.busy() || patchDesign?.busy() || jointPatch.busy() || [...jobs.values()].some(j => !terminal(j.state))) return json(409, { error: 'Finish/cancel active jobs before changing Agent path' });
+        if (changingConfig || referenceUploads || referencePreparations.busy() || referenceGeneration.busy() || contextAnalysis?.busy() || patchDesign?.busy() || jointPatch.busy() || jointAssembly.busy() || [...jobs.values()].some(j => !terminal(j.state))) return json(409, { error: 'Finish/cancel active jobs before changing Agent path' });
         const input = await body(req);
         const isClaude=route.endsWith('claude-path'),isDeepseek=route.endsWith('deepseek-path'),field=isDeepseek?'deepseekPath':isClaude?'claudePath':'codexPath',value=input[field];
         if (typeof value !== 'string' || value.length > 2048) throw new Error('Invalid Agent path');
         // Check again after the asynchronous body read, before taking the configuration lock.
-        if (changingConfig || referenceUploads || referencePreparations.busy() || referenceGeneration.busy() || contextAnalysis?.busy() || patchDesign?.busy() || jointPatch.busy() || [...jobs.values()].some(j => !terminal(j.state))) return json(409, { error: 'Active task or configuration change' });
+        if (changingConfig || referenceUploads || referencePreparations.busy() || referenceGeneration.busy() || contextAnalysis?.busy() || patchDesign?.busy() || jointPatch.busy() || jointAssembly.busy() || [...jobs.values()].some(j => !terminal(j.state))) return json(409, { error: 'Active task or configuration change' });
         changingConfig = true;
         try {
           if (value) await (isDeepseek?findDeepseek(value):isClaude?findClaude(value):findCodex(value));
@@ -681,7 +690,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
       }
       if (req.method === 'POST' && route === '/v1/jobs') {
         const input = await body(req);
-        if(referenceUploads||referenceGeneration.busy()||jointPatch.busy())return json(429,{error:'Reference SEND storage is active; no new model invoked'});
+        if(referenceUploads||referenceGeneration.busy()||jointPatch.busy()||jointAssembly.busy())return json(429,{error:'Reference SEND storage is active; no new model invoked'});
         if (['worldContext', 'contextId', 'contextConsent', 'worldPatch'].some(k => Object.hasOwn(input, k))) throw new Error('World-context editing is not connected to generation; no model invoked');
         if (changingConfig) return json(409, { error: 'Agent configuration is changing; retry discovery' });
         if (input.maxRepairs !== undefined && (!Number.isInteger(input.maxRepairs) || input.maxRepairs < 0 || input.maxRepairs > 2)) throw new Error('maxRepairs must be 0..2');
@@ -704,7 +713,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         // after that boundary so concurrent identical requests cannot double-call.
         const concurrent=[...jobs.values()].find(j=>j.key===input.key);
         if(concurrent)return json(concurrent.requestHash===requestHash?200:409,concurrent.requestHash===requestHash?publicJob(concurrent):{error:'Idempotency key reused with changed input'});
-        if(changingConfig||referenceUploads||referenceGeneration.busy()||referenceSubmissions.has(input.key)||patchDesign?.busy()||jointPatch.busy()||[...jobs.values()].filter(j=>!terminal(j.state)).length>=2||jobs.size>=1000)return json(429,{error:'Job/configuration quota changed during preflight'});
+        if(changingConfig||referenceUploads||referenceGeneration.busy()||referenceSubmissions.has(input.key)||patchDesign?.busy()||jointPatch.busy()||jointAssembly.busy()||[...jobs.values()].filter(j=>!terminal(j.state)).length>=2||jobs.size>=1000)return json(429,{error:'Job/configuration quota changed during preflight'});
         const id = randomUUID(), job = { id, key: input.key, requestHash, agent:input.agent??'codex',prompt: input.prompt, model: input.model, effort: input.effort,preflight:policy, baseJobId: input.baseJobId,createdAt: new Date().toISOString(), state: 'queued', events: [] };
         jobs.set(id, job);
         try { await fs.mkdir(jobDir(id));
@@ -749,12 +758,13 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
   });
   server.requestTimeout = 120000;
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); }); }
-  catch (e) { await jointPatch.close(); await patchDesign?.close(); await contextAnalysis?.close(); await referencePreparations.close(); await referenceGeneration.close(); contextConsents.close(); await contexts.close(); await fs.unlink(lockFile); throw e; }
+  catch (e) { await jointAssembly.close(); await jointPatch.close(); await patchDesign?.close(); await contextAnalysis?.close(); await referencePreparations.close(); await referenceGeneration.close(); contextConsents.close(); await contexts.close(); await fs.unlink(lockFile); throw e; }
   const connection = { protocol: 1, port: server.address().port, token, pid: process.pid };
   await atomic(connectionFile, connection);
   let closing;
   closeService = () => closing ??= (async () => {
     shuttingDown=true;
+    await jointAssembly.close();
     await jointPatch.close();
     await patchDesign?.close();
     await contextAnalysis?.close();
