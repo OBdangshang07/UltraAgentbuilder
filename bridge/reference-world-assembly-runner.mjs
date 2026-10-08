@@ -23,7 +23,7 @@ export function createReferenceWorldAssemblyRunner(options) {
       state:task.state,stageEventsObserved:task.stageEvents,reservedCalls:task.reservedCalls,
       maximumCalls:task.packet?.prepared.maximumCalls??null,tier:task.packet?.prepared.tier??null,
       preparationHash:task.packet?.prepared.preparationHash??null,requestHash:task.packet?.requestHash??null,
-      candidate:task.candidate??null,originalLiveExecutionOnly:true,automaticRetries:0,
+      candidate:task.candidate??null,nativeEvidence:task.nativeEvidence??null,originalLiveExecutionOnly:true,automaticRetries:0,
       providerReceiptsIndependentlyAudited:false,serverBaselineVerified:false,allowsNewModelCall:false,
       canAuthorizePlacement:false,worldWrites:0});
   }
@@ -41,8 +41,13 @@ export function createReferenceWorldAssemblyRunner(options) {
       task.done=(async()=>{
         try {
           const result=await runReferenceWorldAssembly({directory:packet.directory,referenceInput:packet.referenceInput,
-            preparationHash:packet.prepared.preparationHash,adapter,nativeEvidence,signal:task.controller.signal,execution,
-            onStage:async()=>{task.stageEvents++;}});
+            preparationHash:packet.prepared.preparationHash,adapter,signal:task.controller.signal,execution,
+            nativeEvidence:options=>nativeEvidence({...options,jobDirectory:packet.directory,onWaiting:async status=>{
+              task.controller.signal.throwIfAborted();
+              if(!/^[a-f0-9]{64}$/.test(status?.id??'')||!['waiting','complete'].includes(status.state))throw Error('Exact original native status required');
+              task.nativeEvidence={id:status.id,state:status.state,...(status.state==='complete'?{evidenceHash:status.evidenceHash}:{})};
+            }}),
+            onStage:async(_,context)=>{task.stageEvents++;if(context?.reservedCalls!==undefined)task.reservedCalls=context.reservedCalls;}});
           task.reservedCalls=result.candidate.reservedCalls;
           task.candidate={candidateHash:result.candidate.candidateHash,patchSetHash:result.candidate.patchSetHash,
             partCount:result.candidate.partCount,operationCount:result.candidate.operationCount,

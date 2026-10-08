@@ -3,14 +3,12 @@
 This engineering path uses the existing reference-analysis, concept,
 representative-prototype, component and native-review orchestration. It does
 not enlarge the normally disabled, one-call reference-world-patch v1 contract.
-Free paired-HTTP preparation is available behind a process-owned opt-in. Full
-player SEND/UI integration and installed-game acceptance are still pending.
-Complete original candidate persistence and bounded read-only result workers
-are available internally; they do not enable that player SEND path.
-
-An internal original-owner full runner is now implemented. Normal paired SEND,
-native-render HTTP, persistent public history and player controls remain pending;
-the normally disabled player route is NOT enabled by this source milestone.
+Paired preparation, full SEND, original native-render transport and persistent
+read-only history are implemented behind independent process-owned opt-ins.
+The normal companion CLI still leaves this v2 joint SEND disabled: full player
+controls, installed-game acceptance and whole-set world transactions are pending.
+Complete original candidate persistence and bounded result workers do not grant
+world-write authority or make a transport part an independent apply scope.
 
 ## Independent preparation and SEND
 
@@ -45,8 +43,8 @@ An existing complete binding is reread, never replaced. Unknown or partial
 input directories stop copying; neither concurrent requests nor expiration
 permits takeover. Job-owned original images and archived context remain
 readable after draft removal or expiry, but fresh preparation/dispatch still
-checks the original capture expiration. This input path remains internal until
-normal versioned joint job HTTP/UI and installed-game gates are integrated.
+checks the original capture expiration. The player entry remains unavailable until
+full versioned joint controls and installed-game gates are integrated.
 
 ### Independent original job ownership and one-use runner handoff
 
@@ -113,11 +111,73 @@ without replay. Sanitized runner status separates running/preview-ready from
 unknown or cancelled work, and never claims an independent provider-receipt
 audit, a fresh server baseline or permission to write the world.
 
-This is an internal controller, not completed normal HTTP/history/UI integration.
+This controller is now connected to the opt-in paired HTTP lane below, not a
+completed normal player UI or world transaction.
 Final fresh BEFORE conflict checks and one explicit whole-set world confirmation
 are still mandatory and are not implemented by this generation-lifetime change.
 
 ## Shared pipeline, not four separate generators
+
+### Opt-in full paired HTTP and original native transport
+
+The imported Bridge constructor accepts the immutable boolean
+`referenceWorldAssemblySending`. Its default and the normal companion CLI
+remain false. HTTP/configuration cannot turn it on. Free preparation has its own
+`referenceWorldAssemblyPreparation` switch; legacy v1 joint consent never enables
+either full SEND or world writes.
+
+All routes require the existing exact loopback Host, absent Origin and paired
+Bearer authorization. The prefix is `/v1/reference-world-assembly`:
+
+| Route | Method | Behavior |
+| --- | --- | --- |
+| `/capabilities` | GET | Separates implemented, enabled and native-ready states; player UI/placement remain unavailable |
+| `/contexts/{uuid}/prepare` | POST | Free original pixel/context/model preparation, no task or provider call |
+| `/jobs` | POST | One exact v2 full-budget SEND, one new original owner and full shared runner |
+| `/jobs` | GET | At most eight retained original tasks, no eviction or redispatch |
+| `/jobs/{uuid}` | GET | Sanitized original live status, or bounded read-only retained ledger/candidate verification |
+| `/jobs/{uuid}/cancel` | POST | Explicit `confirmed:true` retires the original task, never repeats an unknown call |
+| `/jobs/{uuid}/candidate?candidateHash={hash}` | GET | Reverify the complete original set before returning metadata |
+| `/jobs/{uuid}/parts/{index}?candidateHash={hash}` | GET | Reverify the complete original set before returning one transport part |
+| `/jobs/{uuid}/native-evidence/{hash}/{request,manifest,cells}` | GET | Only original task-owned, hash-bound render data; cells are binary |
+| `/jobs/{uuid}/native-evidence/{hash}/upload` | POST | Only the currently waiting original request; immutable verified PNG receipt |
+
+The old `/jobs/{uuid}/send` route is not available. Each new SEND rechecks the
+selected adapter's explicit image capability and exact effort and a recent
+asset-only native-renderer heartbeat. It binds that exact adapter object to the
+original task. One mutation lane and four HTTP observation slots fence concurrent
+actions; health, capability/status reads and native servicing remain responsive.
+Other generation/configuration/attachment/context writers cannot mutate the
+inputs while the original joint task is active.
+
+The request must be completely received and validated before reservation.
+Aborted or invalid bodies dispatch no provider call. After an authorized full
+SEND is accepted, a lost acknowledgement or closed panel does not cancel it.
+An exact duplicate observes the original task without new model discovery,
+reservation or dispatch; a changed body is rejected. Explicit cancellation or
+Bridge close still retires its live original execution.
+
+Native reads verify the original request, manifest, dimensions and every cell
+byte, rejecting redirects, hardlinks, concurrent growth and changed hashes.
+Uploads accept neither paths nor world captures and commit the final receipt
+last. Existing linked upload members are rejected before that commitment.
+Restarted or disabled processes can inspect retained originals and verify complete
+candidates, but cannot obtain a new live execution capability. Missing history
+is empty; a partial or corrupt record is an error, not permission to repair it.
+Pending calls remain `unknown-needs-original-inspection`, with `canResume:false`.
+This milestone adds no provider-observer endpoint or independent receipt audit.
+
+Workers retain the existing one-active/two-queued, 512 MiB old-generation memory,
+120-second and bounded-output quotas. Native uploads have a separate 12 MB
+input allowance; other internal inputs remain 64 KiB. The eight-record quota
+does not silently evict previous tasks. Full before/after world checks, whole-set
+confirmation and undo must still be integrated; no part can be applied alone.
+
+Free regression exercises all four real shared synthetic pipelines through
+paired HTTP and native servicing, including the 224-block Ultra complete set,
+lost acknowledgements, concurrent duplicates, restarts, cancellation, tampering
+and privacy rejection. Its provider responses and transparent PNGs are authored
+fixtures, not real image understanding, native game rendering or design evidence.
 
 `runReferenceWorldAssembly` calls the existing `runDurableAssembly` and
 `runSceneAssembly`. Original reference pixels are sent through the existing

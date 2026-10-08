@@ -74,7 +74,7 @@ async function referenceInputBytes(req,maximum=REFERENCE_PREPARATION_LIMITS.inpu
   if(Number(req.headers['content-length'])>maximum)throw quota();let size=0;const chunks=[];
   for await(const part of req){size+=part.length;if(size>maximum)throw quota();chunks.push(part);}return Buffer.concat(chunks,size);
 }
-export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath, port = 0, adapter, claudeAdapter, deepseekAdapter, experimentalContextAnalysis = false, experimentalWorldPatchDesign = false, worldPatchSending = false, referenceGenerationSending = false, referenceWorldPatchSending = false, referenceWorldAssemblyPreparation = false } = {}) {
+export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath, port = 0, adapter, claudeAdapter, deepseekAdapter, experimentalContextAnalysis = false, experimentalWorldPatchDesign = false, worldPatchSending = false, referenceGenerationSending = false, referenceWorldPatchSending = false, referenceWorldAssemblyPreparation = false, referenceWorldAssemblySending = false } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
   if (typeof experimentalContextAnalysis !== 'boolean') throw new Error('Explicit process-owned context analysis switch required');
   if (typeof experimentalWorldPatchDesign !== 'boolean') throw new Error('Explicit process-owned patch design switch required');
@@ -82,6 +82,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
   if (typeof referenceGenerationSending !== 'boolean') throw new Error('Explicit process-owned reference SEND switch required');
   if (typeof referenceWorldPatchSending !== 'boolean') throw new Error('Explicit process-owned joint reference/patch SEND switch required');
   if (typeof referenceWorldAssemblyPreparation !== 'boolean') throw new Error('Explicit process-owned complete joint preparation switch required');
+  if (typeof referenceWorldAssemblySending !== 'boolean') throw new Error('Explicit process-owned complete joint SEND switch required');
   dataDir = path.resolve(dataDir);
   await fs.mkdir(path.join(dataDir, 'jobs'), { recursive: true });
   const connectionFile = path.join(dataDir, 'connection.json');
@@ -129,10 +130,11 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         || jointAssembly?.busy()
         || referencePreparations.busy() || referenceGeneration.busy() || patchDesign?.busy() || contextAnalysis?.busy()
         || [...jobs.values()].some(j => !terminal(j.state))})});
-    jointAssembly = await createReferenceWorldAssemblyHttpService({dataDir,enabled:referenceWorldAssemblyPreparation,adapterFor:agentFor,
+    jointAssembly = await createReferenceWorldAssemblyHttpService({dataDir,enabled:referenceWorldAssemblyPreparation,sending:referenceWorldAssemblySending,adapterFor:agentFor,
       state:() => ({closing:shuttingDown,changingConfig,busy:referenceUploads || contextUploads || jointPatch.busy()
         || contexts.active || contexts.queue.length || referencePreparations.busy() || referenceGeneration.busy()
-        || patchDesign?.busy() || contextAnalysis?.busy() || [...jobs.values()].some(j => !terminal(j.state))})});
+        || patchDesign?.busy() || contextAnalysis?.busy() || [...jobs.values()].some(j => !terminal(j.state)),
+        nativeRendererReady:Date.now()-nativeRendererSeen<=30000})});
   } catch (error) {
     await jointAssembly?.close(); await jointPatch?.close();
     await patchDesign?.close(); await contextAnalysis?.close(); await referenceGeneration.close(); await referencePreparations.close();

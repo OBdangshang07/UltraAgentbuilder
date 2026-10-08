@@ -31,7 +31,7 @@ async function fixture(t,{tier='lite',enabled=true,holdModels}={}) {
 
 for(const tier of ['lite','pro','max','ultra'])test(tier+' paired HTTP preparation binds original pixels, W/P/environment and full-tier policy without any task or SEND',async t=>{
   const f=await fixture(t,{tier}),cap=await f.request(prefix+'/capabilities');assert.equal(cap.status,200);
-  assert.equal(cap.value.version,2);assert.equal(cap.value.preparationEnabled,true);assert.equal(cap.value.sendingImplemented,false);
+  assert.equal(cap.value.version,2);assert.equal(cap.value.preparationEnabled,true);assert.equal(cap.value.sendingImplemented,true);
   assert.equal(cap.value.sendingEnabled,false);assert.equal(cap.value.canAuthorizePlacement,false);
   const response=await f.request(f.route,{method:'POST',value:f.body});assert.equal(response.status,200,response.value.error);
   assert.deepEqual(response.value,f.prepared);assert.equal(response.value.maximumCalls,{lite:8,pro:14,max:20,ultra:26}[tier]);

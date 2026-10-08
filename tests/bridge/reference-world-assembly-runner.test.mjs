@@ -134,7 +134,7 @@ test('explicit cancel retires original execution and later duplicate start canno
       else request.signal.addEventListener('abort',()=>reject(request.signal.reason),{once:true});});}};
   const runner=h.makeRunner(adapter);await runner.start(h.f.ownerId);await waiting;const stopped=await runner.cancel(h.f.ownerId);
   assert.equal(stopped.state,'cancelled-needs-original-inspection');assert.equal(h.calls.length,1);
-  assert.equal(stopped.reservedCalls,null);assert.equal(stopped.automaticRetries,0);assert.equal(stopped.candidate,null);
+  assert.equal(stopped.reservedCalls,1);assert.equal(stopped.automaticRetries,0);assert.equal(stopped.candidate,null);
   assert.deepEqual(await runner.start(h.f.ownerId),stopped);assert.equal(h.calls.length,1);assert.equal(runner.busy(),false);
 });
 

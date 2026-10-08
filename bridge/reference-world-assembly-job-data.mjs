@@ -58,7 +58,9 @@ export function validateReferenceWorldAssemblyDispatchClaim(claim,value) {
  * Runtime mismatch is history, not permission to issue a replacement owner. */
 export async function readReferenceWorldAssemblyJobRecord({dataDir,id,expectedRequestHash=null}) {
   if(typeof id!=='string'||!REFERENCE_OWNER.test(id)||expectedRequestHash!==null&&!digest(expectedRequestHash))throw Error('Original full joint job identity required');
-  const root=await jointAssemblyJobRoot(dataDir),directory=path.join(root,id);
+  let root;
+  try{root=await jointAssemblyJobRoot(dataDir);}catch(error){if(error.code==='ENOENT')return null;throw error;}
+  const directory=path.join(root,id);
   try{await jointInvocationDirectory(directory);}catch(error){if(error.code==='ENOENT')return null;throw error;}
   const value=await readJointAssemblyJobEnvelope(path.join(directory,'request.json'),REFERENCE_WORLD_ASSEMBLY_JOB_LIMITS.recordBytes);
   exactKeys(value,['format','version','purpose','id','request','requestHash','prepared','referenceInput','ownerReference','ownerReferenceHash',

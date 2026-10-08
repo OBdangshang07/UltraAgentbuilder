@@ -7,6 +7,8 @@ import {prepareReferenceWorldAssemblyDraft,bindReferenceWorldAssemblyDraft,valid
 import {readReferenceWorldAssemblyCandidate,readReferenceWorldAssemblyCandidatePart} from './reference-world-assembly.mjs';
 import {JOINT_ASSEMBLY_RESOURCE_LIMITS} from './reference-world-assembly-resources.mjs';
 import {readReferenceWorldAssemblyJobRecord} from './reference-world-assembly-job-data.mjs';
+import {readReferenceWorldAssemblyJobStatus,listReferenceWorldAssemblyRecords} from './reference-world-assembly-history.mjs';
+import {readReferenceWorldAssemblyNative,uploadReferenceWorldAssemblyNative} from './reference-world-assembly-native.mjs';
 
 const digest=/^[a-f0-9]{64}$/;
 async function physical(root) {
@@ -23,13 +25,21 @@ async function physical(root) {
 try {
   exactKeys(workerData,['dataDir','operation','id','payload'],'private joint resource worker');
   const {operation,id,payload}=workerData;
-  if(!['prepare','bind','metadata','part','job-record'].includes(operation)||typeof id!=='string'||!REFERENCE_OWNER.test(id))throw Error('Original joint operation/UUID required');
-  if(!(payload instanceof Uint8Array)||payload.byteLength<1||payload.byteLength>JOINT_ASSEMBLY_RESOURCE_LIMITS.inputBytes)
+  if(!['prepare','bind','metadata','part','job-record','job-status','job-list','native-read','native-upload'].includes(operation)
+    ||(operation==='job-list'?id!==null:typeof id!=='string'||!REFERENCE_OWNER.test(id)))throw Error('Original joint operation/UUID required');
+  if(!(payload instanceof Uint8Array)||payload.byteLength<1||payload.byteLength>(operation==='native-upload'?JOINT_ASSEMBLY_RESOURCE_LIMITS.nativeUploadBytes:JOINT_ASSEMBLY_RESOURCE_LIMITS.inputBytes))
     throw Object.assign(Error('Joint input byte quota'),{statusCode:413});
   const input=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(payload));
-  const dataDir=await physical(workerData.dataDir),directory=path.join(dataDir,'reference-world-assembly-jobs',id);
+  const dataDir=await physical(workerData.dataDir),directory=id===null?null:path.join(dataDir,'reference-world-assembly-jobs',id);
   let result;
-  if(operation==='job-record') {
+  if(operation==='job-list') {
+    exactKeys(input,[],'original full-task history list');result=await listReferenceWorldAssemblyRecords({dataDir});
+  }else if(operation==='job-status') {
+    exactKeys(input,['expectedRequestHash'],'original full-task status');result=await readReferenceWorldAssemblyJobStatus({dataDir,id,...input});
+  }else if(operation==='native-read'||operation==='native-upload') {
+    exactKeys(input,['expectedRequestHash','evidenceId',operation==='native-read'?'member':'upload'],'original full-task native transport');
+    result=await (operation==='native-read'?readReferenceWorldAssemblyNative:uploadReferenceWorldAssemblyNative)({dataDir,id,...input});
+  }else if(operation==='job-record') {
     exactKeys(input,['expectedRequestHash'],'original full joint reservation read');
     result=await readReferenceWorldAssemblyJobRecord({dataDir,id,expectedRequestHash:input.expectedRequestHash});
   }else if(operation==='prepare'||operation==='bind') {

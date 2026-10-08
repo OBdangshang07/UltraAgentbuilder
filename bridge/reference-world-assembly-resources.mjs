@@ -3,9 +3,9 @@ import {Worker} from 'node:worker_threads';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {REFERENCE_OWNER} from '../contracts/reference-attachments.mjs';
 
-export const JOINT_ASSEMBLY_RESOURCE_LIMITS=Object.freeze({queue:2,inputBytes:65536,
+export const JOINT_ASSEMBLY_RESOURCE_LIMITS=Object.freeze({queue:2,inputBytes:65536,nativeUploadBytes:12000000,
   outputBytes:40*1024**2,operationMs:120000,oldGenerationMb:512,stackMb:4});
-const operations=['prepare','bind','metadata','part','job-record'];
+const operations=['prepare','bind','metadata','part','job-record','job-status','job-list','native-read','native-upload'];
 const failure=(message,statusCode=409)=>Object.assign(Error(message),{statusCode});
 const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};
 
@@ -22,12 +22,12 @@ export class ReferenceWorldAssemblyResources {
   }
   busy(){return !!this.active||this.queue.length>0||this.cleanups.size>0;}
   operation(operation,id,payload,{signal}={}) {
-    if(!operations.includes(operation)||typeof id!=='string'||!REFERENCE_OWNER.test(id))
+    if(!operations.includes(operation)||(operation==='job-list'?id!==null:typeof id!=='string'||!REFERENCE_OWNER.test(id)))
       return Promise.reject(failure('Exact independent joint operation and original UUID required',400));
     if(this.closed)return Promise.reject(failure('Joint resources closed; original evidence retained',503));
     if(signal!==undefined&&!(signal instanceof AbortSignal))return Promise.reject(failure('Joint cancellation signal required',400));
     if(signal?.aborted)return Promise.reject(failure('Joint resource operation cancelled; original evidence retained'));
-    if(!(payload instanceof Uint8Array)||payload.byteLength<1||payload.byteLength>JOINT_ASSEMBLY_RESOURCE_LIMITS.inputBytes)
+    if(!(payload instanceof Uint8Array)||payload.byteLength<1||payload.byteLength>(operation==='native-upload'?JOINT_ASSEMBLY_RESOURCE_LIMITS.nativeUploadBytes:JOINT_ASSEMBLY_RESOURCE_LIMITS.inputBytes))
       return Promise.reject(failure('Joint resource input byte quota',413));
     if(this.active&&this.queue.length>=JOINT_ASSEMBLY_RESOURCE_LIMITS.queue)
       return Promise.reject(failure('Joint resource queue full; no retry or model invoked',429));
