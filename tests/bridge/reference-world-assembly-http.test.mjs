@@ -45,13 +45,26 @@ for(const tier of ['lite','pro','max','ultra'])test(tier+' paired HTTP preparati
   assert.doesNotMatch(JSON.stringify(response.value),/connection\.json|Bearer|dataDir|directory|[A-Z]:[\\/]/);
 });
 
-test('normal default startup disables complete joint preparation; neither config nor a SEND body can enable it',async t=>{
+test('imported default startup disables complete joint preparation; neither config nor a SEND body can enable it',async t=>{
   const f=await fixture(t,{enabled:false}),cap=await f.request(prefix+'/capabilities');
   assert.equal(cap.value.preparationEnabled,false);assert.equal(cap.value.sendingEnabled,false);
   assert.equal((await f.request(f.route,{method:'POST',value:f.body})).status,409);assert.equal(f.queries(),0);
   assert.equal((await f.request(prefix+'/jobs/'+f.f.ownerId+'/send',{method:'POST',value:{confirmed:true,enabled:true}})).status,404);
   assert.equal((await f.request(f.route+'?enabled=true',{method:'POST',value:f.body})).status,400);
   await assert.rejects(fs.stat(f.resources.root),e=>e.code==='ENOENT');
+});
+
+test('complete joint HTTP preserves only a fixed closed-query diagnostic and never prepares or SENDs on discovery failure',async t=>{
+  const diagnostic={format:'WindowsOwnerQueryFailure',version:1,reason:'query-failed',phase:'boot-before',
+    helperStarted:true,helperClosed:true,helperExitCode:1,helperExitSignal:null,spawnCode:null,
+    ownershipRecovered:false,canAuthorizePlacement:false};
+  const f=await fixture(t,{holdModels:async()=>{throw Object.assign(Error('synthetic-private-path-and-stderr'),
+    {code:'WINDOWS_OWNER_QUERY_FAILED',observationDiagnostic:diagnostic});}});
+  const response=await f.request(f.route,{method:'POST',value:f.body});assert.equal(response.status,409);
+  assert.deepEqual(response.value.diagnostic,diagnostic);assert.doesNotMatch(JSON.stringify(response.value),/synthetic-private/);
+  assert.equal(response.value.error,'Complete joint request rejected; original evidence retained; no automatic resubmission');
+  assert.equal(f.queries(),1);await assert.rejects(fs.stat(f.resources.root),e=>e.code==='ENOENT');
+  assert.deepEqual((await f.request('/v1/jobs')).value.jobs,[]);
 });
 
 test('paired HTTP enforces exact Host, no Origin, bearer, route, method and fatal UTF-8 without model queries',async t=>{

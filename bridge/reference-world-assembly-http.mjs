@@ -7,6 +7,7 @@ import {ReferenceWorldAssemblyResources,JOINT_ASSEMBLY_RESOURCE_LIMITS} from './
 import {createReferenceWorldAssemblyJobRegistry} from './reference-world-assembly-job-registry.mjs';
 import {createReferenceWorldAssemblyRunner} from './reference-world-assembly-runner.mjs';
 import {requestNativeEvidence} from './native-evidence.mjs';
+import {publicWindowsOwnerQueryFailure} from './windows-owner-query.mjs';
 
 const prefix='/v1/reference-world-assembly',uuid='[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const contextRoute=new RegExp(`^${prefix}/contexts/(${uuid})/prepare$`);
@@ -159,8 +160,10 @@ export async function createReferenceWorldAssemblyHttpService({dataDir,enabled=f
       }else {
         const value=await status(job[1],signal);json(value?200:404,value??{error:'Original complete joint job not found'});
       }
-    }catch(error){if(!res.destroyed&&!res.headersSent)json([400,404,405,409,413,429,503].includes(error.statusCode)?error.statusCode:409,
-      {error:error.publicMessage??'Complete joint request rejected; original evidence retained; no automatic resubmission'});}
+    }catch(error){const diagnostic=publicWindowsOwnerQueryFailure(error);
+      if(!res.destroyed&&!res.headersSent)json([400,404,405,409,413,429,503].includes(error.statusCode)?error.statusCode:409,
+      {error:error.publicMessage??'Complete joint request rejected; original evidence retained; no automatic resubmission',
+        ...(diagnostic?{diagnostic}:{})});}
     finally{if(item){item.detach();active.delete(item);if(item.mutation)mutations--;item.finish();}}
     return true;
   }

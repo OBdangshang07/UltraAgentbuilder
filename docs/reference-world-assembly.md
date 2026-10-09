@@ -1,5 +1,26 @@
 # Shared reference and environment assembly (internal v2)
 
+## Current default CLI availability
+
+Normal direct companion startup now advertises the complete v2 preparation and
+SEND lanes, including when the JAR's builtin extractor starts that same CLI.
+Imported service defaults and the old one-call joint SEND remain disabled.
+Availability grants no transmission or world-write consent: original pixels,
+image capability, native readiness, full-budget v2 disclosure/confirmation,
+original snapshot and separate final world confirmation remain mandatory.
+
+The exact predecessor package has completed a new installed-game gate through
+ordinary full preparation/SEND and closed-page observation, five native groups
+(28 frames), all 54,406 apply/undo rows and an independent 298,080-cell saved
+comparison with zero changes. Its provider responses were synthetic and its
+Bridge explicitly opted in. It is NOT proof of the default builtin full SEND,
+real image understanding, architecture quality, Iris/IME, performance or release.
+That predecessor's own CI retains one pre-SEND 409 failure despite passing its
+local suites; the root cause is not yet established. New fixed diagnostic fields
+disclose no raw helper errors or paths and authorize no owner takeover or resend.
+The new package, its own CI, default builtin full game and real-model gates must
+be independently verified. The descriptions below retain earlier-stage history.
+
 This engineering path uses the existing reference-analysis, concept,
 representative-prototype, component and native-review orchestration. It does
 not enlarge the normally disabled, one-call reference-world-patch v1 contract.

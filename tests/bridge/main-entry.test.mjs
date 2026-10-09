@@ -30,9 +30,19 @@ test('actual independent files remain distinct and exact own file is accepted',a
   await fs.writeFile(file,'// synthetic only',{flag:'wx'});await fs.writeFile(other,'// synthetic only',{flag:'wx'});
   assert.equal(await isDirectEntrypoint(file,pathToFileURL(file)),true);assert.equal(await isDirectEntrypoint(other,pathToFileURL(file)),false);
 });
-test('normal server uses physical entry identity without enabling complete joint SEND',async()=>{
+test('normal server uses physical entry identity and v2 availability without legacy SEND or automatic replay',async()=>{
   const source=await fs.readFile(new URL('../../bridge/server.mjs',import.meta.url),'utf8');
   assert.match(source,/if \(await isDirectEntrypoint\(process\.argv\[1\],import\.meta\.url\)\)/);
   const cli=source.slice(source.indexOf('if (await isDirectEntrypoint'));
-  assert.doesNotMatch(cli,/referenceWorldAssemblySending\s*:\s*true|providerRetries|resume\(/);
+  assert.match(cli,/referenceWorldAssemblyPreparation\s*:\s*true/);
+  assert.match(cli,/referenceWorldAssemblySending\s*:\s*true/);
+  assert.doesNotMatch(cli,/referenceWorldPatchSending\s*:\s*true|providerRetries|resume\(/);
+  // Availability belongs only to the physically identified direct entry.
+  // Actual CLI HTTP tests separately prove empty history, independent v2
+  // confirmation, rejected unconfirmed SEND, zero automatic retry and no
+  // world permission; imported defaults cannot inherit these CLI switches.
+  const importedDefaults=source.slice(source.indexOf('export async function startBridge'),source.indexOf('\n',source.indexOf('export async function startBridge')));
+  assert.match(importedDefaults,/referenceWorldPatchSending\s*=\s*false/);
+  assert.match(importedDefaults,/referenceWorldAssemblyPreparation\s*=\s*false/);
+  assert.match(importedDefaults,/referenceWorldAssemblySending\s*=\s*false/);
 });

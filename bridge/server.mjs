@@ -792,10 +792,13 @@ if (await isDirectEntrypoint(process.argv[1],import.meta.url)) {
   const at = process.argv.indexOf('--data-dir');
   const dataDir = at >= 0 ? process.argv[at + 1] : path.join(here, '../.studio-data');
   let config = {}; try { config = await readJson(path.join(dataDir, 'config.json')); } catch {}
-  // Normal companion startup exposes the versioned reference lane. This is
-  // availability only: preparation and the separate, exact SEND confirmation
-  // are still mandatory. Config/HTTP cannot enable the imported default lane.
-  const instance = await startBridge({ dataDir, codexPath: config.codexPath,claudePath:config.claudePath,deepseekPath:config.deepseekPath, worldPatchSending: true, referenceGenerationSending: true });
+  // Normal companion startup exposes the versioned reference and complete
+  // joint lanes. Availability is NOT a SEND or world-write authorization:
+  // original preparation, native readiness and independent exact confirmation
+  // remain mandatory. Imported defaults and legacy one-call opt-ins stay off.
+  const instance = await startBridge({ dataDir, codexPath: config.codexPath,claudePath:config.claudePath,deepseekPath:config.deepseekPath,
+    worldPatchSending: true, referenceGenerationSending: true,
+    referenceWorldAssemblyPreparation: true, referenceWorldAssemblySending: true });
   console.log(`Voxel Studio Bridge ready (protocol 1, loopback port ${instance.connection.port})`);
   let closing = false;
   const close = () => { if (closing) return; closing = true; instance.close().finally(() => process.exit()); };

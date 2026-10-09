@@ -36,7 +36,8 @@ export async function referenceWorldPatchClientFixture(t, options={}) {
     const bytes=Buffer.from(await response.arrayBuffer());
     // Production returns redacted errors. Preserve the actual failure reason
     // rather than turning an unavailable owner query into an opaque assertion.
-    let reason='';if(![200,202].includes(response.status))try{reason=JSON.parse(bytes).error??'';}catch{reason='invalid response';}
+    let reason='';if(![200,202].includes(response.status))try{const failure=JSON.parse(bytes);
+      reason=(failure.error??'')+(failure.diagnostic?' '+JSON.stringify(failure.diagnostic):'');}catch{reason='invalid response';}
     assert.ok([200,202].includes(response.status),`Production synthetic joint HTTP must succeed (${response.status}; ${reason})`);return bytes;
   };
   const imageFreeze=JSON.parse(await request(`/tasks/${f.receipt.capsuleId}/images`,f.send));

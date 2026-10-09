@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {collectWindowsOwnerQuery, WINDOWS_OWNER_QUERY_LIMITS} from '../../bridge/windows-owner-query.mjs';
+import {collectWindowsOwnerQuery, publicWindowsOwnerQueryFailure, WINDOWS_OWNER_QUERY_LIMITS} from '../../bridge/windows-owner-query.mjs';
 import * as bridgeObservation from '../../bridge/world-patch-owner-observation.mjs';
 import * as scriptObservation from '../../scripts/world-patch-owner-observation.mjs';
 
@@ -117,6 +117,29 @@ test('first failure and its phase cannot be overwritten after a timeout', async 
 test('signal-only helper death is rejected without claiming observed owner death', async () => {
   const f = fixture(); f.child.emit('spawn'); f.child.emit('close', null, 'SIGTERM');
   await failure(f, 'query-failed'); assert.equal(f.kills(), 0);
+});
+test('paired HTTP diagnostic is a defensive copy of only the closed fixed query contract', async () => {
+  const f = fixture(); f.child.emit('spawn');
+  f.child.stderr.emit('data', Buffer.from('synthetic-private-stderr\nVOXEL_OWNER_STAGE:process\n'));
+  f.child.emit('close', 1, null);
+  const error = await failure(f, 'query-failed', 'process');
+  error.message = 'synthetic-private-message'; error.path = 'synthetic-private-path';
+  const diagnostic = publicWindowsOwnerQueryFailure(error);
+  assert.deepEqual(diagnostic, error.observationDiagnostic); assert.notEqual(diagnostic, error.observationDiagnostic);
+  assert.doesNotMatch(JSON.stringify(diagnostic), /synthetic-private/);
+  diagnostic.phase = 'machine'; assert.equal(error.observationDiagnostic.phase, 'process');
+});
+test('unrecognized or authority-bearing query diagnostics remain redacted', async () => {
+  const f = fixture(); f.timeout(); f.child.emit('close', null, 'SIGTERM');
+  const error = await failure(f, 'timeout'), original = error.observationDiagnostic;
+  for (const change of [{format:'Other'}, {version:2}, {reason:'synthetic-private-reason'}, {phase:'synthetic-private-phase'},
+    {helperStarted:'true'}, {helperClosed:false}, {helperExitCode:'synthetic-private-code'},
+    {helperExitSignal:'synthetic-private-signal'}, {spawnCode:'synthetic-private-code'},
+    {ownershipRecovered:true}, {canAuthorizePlacement:true}, {path:'synthetic-private-path'}]) {
+    assert.equal(publicWindowsOwnerQueryFailure({...error, observationDiagnostic:{...original,...change}}), null);
+  }
+  for (const value of [null, {}, Error('synthetic-private'), {code:'OTHER',observationDiagnostic:original},
+    {code:'WINDOWS_OWNER_QUERY_FAILED', observationDiagnostic:null}]) assert.equal(publicWindowsOwnerQueryFailure(value), null);
 });
 for (const [label, observation] of [['bridge', bridgeObservation], ['script', scriptObservation]]) {
   test(label + ' still rejects invalid observations instead of granting recovery', () => {

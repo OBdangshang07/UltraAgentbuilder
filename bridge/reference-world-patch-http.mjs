@@ -3,6 +3,7 @@ import {contextHash} from '../src/world/context-snapshot.mjs';
 import {validateReferenceWorldPatchDesignIntent} from '../src/world/reference-world-patch-design-task.mjs';
 import {validateFrozenReferenceWorldPatchExplicitSend, bindFrozenReferenceWorldPatchSend} from '../contracts/reference-world-patch-send.mjs';
 import {createReferenceWorldPatchDesignRunner} from './reference-world-patch-design-runner.mjs';
+import {publicWindowsOwnerQueryFailure} from './windows-owner-query.mjs';
 
 const prefix = '/v1/reference-world-patch';
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', digest = '[a-f0-9]{64}';
@@ -149,8 +150,10 @@ export async function createReferenceWorldPatchHttpService({dataDir, contexts, a
         const value = await runner.get(job[1]); checkpoint(signal); json(value ? 200 : 404, value ?? {error:'Original joint job not found'});
       }
     } catch (error) {
+      const diagnostic = publicWindowsOwnerQueryFailure(error);
       if (!res.destroyed && !res.headersSent) json([400,404,405,409,413,429,503].includes(error.statusCode) ? error.statusCode : 409,
-        {error:error.publicMessage ?? 'Joint request rejected; original evidence retained; no automatic resubmission'});
+        {error:error.publicMessage ?? 'Joint request rejected; original evidence retained; no automatic resubmission',
+          ...(diagnostic ? {diagnostic} : {})});
     } finally {if (item) {item.detach(); active.delete(item); item.resolveDone();}}
     return true;
   }

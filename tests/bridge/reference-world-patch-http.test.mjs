@@ -89,6 +89,22 @@ async function submit(f,p) {
 }
 const turns = f => f.requests.filter(r => r.method === 'turn/start');
 
+test('joint HTTP exposes only fixed owner-query diagnostics and retains rejection with zero provider turns', async t => {
+  const f = await fixture(t), diagnostic = {format:'WindowsOwnerQueryFailure',version:1,reason:'query-failed',phase:'process',
+    helperStarted:true,helperClosed:true,helperExitCode:1,helperExitSignal:null,spawnCode:null,
+    ownershipRecovered:false,canAuthorizePlacement:false};
+  f.adapter.models = async () => {throw Object.assign(Error('synthetic-private-path-and-stderr'),
+    {code:'WINDOWS_OWNER_QUERY_FAILED',observationDiagnostic:diagnostic});};
+  const response = await f.request(`${prefix}/contexts/${f.id}/disclosure`, {method:'POST',value:{intent:f.input.intent}});
+  assert.equal(response.status,409); assert.deepEqual(response.value.diagnostic,diagnostic);
+  assert.equal(response.value.error,'Joint request rejected; original evidence retained; no automatic resubmission');
+  assert.doesNotMatch(JSON.stringify(response.value),/synthetic-private/); assert.equal(turns(f).length,0);
+  diagnostic.path='synthetic-private-path';
+  const unrecognized = await f.request(`${prefix}/contexts/${f.id}/disclosure`, {method:'POST',value:{intent:f.input.intent}});
+  assert.equal(unrecognized.status,409); assert.deepEqual(Object.keys(unrecognized.value),['error']);
+  assert.equal(turns(f).length,0);
+});
+
 test('pure pixel HTTP preparation supplies a NEW exact set to joint disclosure and freeze with zero turns and no ordinary consent',async t=>{
   const f=await fixture(t),queries=f.modelQueries();
   const upload={format:'UserReferenceUpload',version:1,mode:'multi-view',references:f.pixels.map((png,i)=>({png:png.toString('base64'),annotation:{purpose:'style',view:i?'side':'front',caption:'新编辑的准确参考图'}}))};

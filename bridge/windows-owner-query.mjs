@@ -4,6 +4,27 @@
 export const WINDOWS_OWNER_QUERY_LIMITS = Object.freeze({timeoutMs: 15000, stdoutBytes: 8192, stderrBytes: 8192});
 const phases = new Set(['machine', 'boot-before', 'process', 'boot-after', 'serialize']);
 const spawnCodes = new Set(['ENOENT', 'EACCES', 'EPERM']);
+const failureReasons = new Set(['spawn-error', 'stdout-limit', 'stderr-limit', 'stream-error', 'timeout', 'query-failed']);
+const diagnosticKeys = ['format', 'version', 'reason', 'phase', 'helperStarted', 'helperClosed',
+  'helperExitCode', 'helperExitSignal', 'spawnCode', 'ownershipRecovered', 'canAuthorizePlacement'];
+
+// Paired HTTP may disclose ONLY this fixed diagnostic contract, not an Error,
+// stderr, paths, process facts or its message. A failed/closed QUERY HELPER is
+// never evidence the observed owner stopped and never authorizes a new SEND.
+export function publicWindowsOwnerQueryFailure(error) {
+  try {
+    const value = error?.observationDiagnostic;
+    if (error?.code !== 'WINDOWS_OWNER_QUERY_FAILED' || !value || typeof value !== 'object'
+      || Object.keys(value).length !== diagnosticKeys.length || diagnosticKeys.some(key => !Object.hasOwn(value, key))
+      || value.format !== 'WindowsOwnerQueryFailure' || value.version !== 1 || !failureReasons.has(value.reason)
+      || value.phase !== null && !phases.has(value.phase) || typeof value.helperStarted !== 'boolean'
+      || value.helperClosed !== true || value.ownershipRecovered !== false || value.canAuthorizePlacement !== false
+      || value.helperExitCode !== null && !Number.isSafeInteger(value.helperExitCode)
+      || value.helperExitSignal !== null && !['SIGTERM', 'SIGKILL'].includes(value.helperExitSignal)
+      || value.spawnCode !== null && !spawnCodes.has(value.spawnCode) && value.spawnCode !== 'OTHER') return null;
+    return Object.fromEntries(diagnosticKeys.map(key => [key, value[key]]));
+  } catch { return null; }
+}
 
 export function collectWindowsOwnerQuery(child, {setTimer = setTimeout, clearTimer = clearTimeout} = {}) {
   return new Promise((resolve, reject) => {
