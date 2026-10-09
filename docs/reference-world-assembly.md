@@ -486,3 +486,20 @@ The whole engine still has no native lease detach, player final-confirmation
 gateway, protected undo executor/service or integrated controller. Normal full
 joint SEND and whole placement remain disabled pending exact-source regression,
 actual game, same-asset save/undo, special-block and release acceptance.
+
+### Whole protected undo core (not a server service)
+
+The separate v2 undo ledger/engine reverses only the original acknowledged
+whole prefix, using a one-use witness from the same closed live apply ledger.
+A private sealed receipt proof verifies original core bytes and all original
+events on the disk worker; it does not reconstruct authority from an archive
+or repeatedly compile a replacement candidate for every undo batch.
+
+Changed targets or neighbors are explicitly preserved. Changes during undo,
+permission/chunk conflicts, ambiguous native writes, lost/late disk replies
+and failed partial publications stop without automatic retry or recovery.
+All original whole/part identities and immutable coordinates are retained.
+The core alone cannot mint final undo consent, open a Minecraft source or
+prove region-file save durability. The whole native source, apply/undo services,
+bidirectional operation exclusion, final player UI and exact-JAR game acceptance
+remain required before normal whole SEND or placement can be enabled.
