@@ -23,7 +23,7 @@ public final class BridgeClient implements AutoCloseable {
     private final Path root, data;
     private final boolean builtin;
     private volatile Path runtime;
-    private volatile String expectedVersion, preparation="配套尚未启动";
+    private volatile String expectedVersion, expectedBundleHash, preparation="配套尚未启动";
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final ExecutorService connector=pool("connect",1), control=pool("control",2), discovery=pool("discovery",2), downloads=pool("download",1),contexts=pool("context",1,2),references=pool("reference",1,2);
     private final AtomicLong epoch=new AtomicLong(), loadEpoch=new AtomicLong();
@@ -641,7 +641,7 @@ public final class BridgeClient implements AutoCloseable {
     }
     private synchronized void invalidate(Connection c){if(connection==c){connection=null;epoch.incrementAndGet();}}
     private Connection establish(long ticket)throws Exception{
-        if(builtin){var prepared=BuiltinCompanion.prepare(root,s->preparation=s);runtime=prepared.directory();expectedVersion=prepared.version();}
+        if(builtin){var prepared=BuiltinCompanion.prepare(root,s->preparation=s);runtime=prepared.directory();expectedVersion=prepared.version();expectedBundleHash=prepared.manifestHash();}
         if(builtin)BuiltinCompanion.directory(data);else Files.createDirectories(data);Path file=data.resolve("connection.json");
         if(Files.exists(file)){
             Connection c=readConnection(file,ticket);
@@ -662,7 +662,17 @@ public final class BridgeClient implements AutoCloseable {
             Thread.sleep(100);
         }throw new IllegalStateException("Bridge startup timed out");
     }
-    private void validateHealth(byte[] bytes){var h=JsonParser.parseString(new String(bytes,java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();if(h.get("protocol").getAsInt()!=1)throw new IllegalStateException("Unsupported Bridge protocol");if(expectedVersion!=null&&(!h.has("version")||!expectedVersion.equals(h.get("version").getAsString())))throw new IllegalStateException("旧版本 Bridge 仍在运行，请先退出旧游戏/配套后重试；未终止其他进程或修改旧数据");preparation="本机服务已就绪";}
+    private void validateHealth(byte[] bytes){
+        var h=JsonParser.parseString(new String(bytes,java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+        if(h.get("protocol").getAsInt()!=1)throw new IllegalStateException("Unsupported Bridge protocol");
+        if(expectedVersion!=null&&(!h.has("version")||!expectedVersion.equals(h.get("version").getAsString())))throw new IllegalStateException("旧版本 Bridge 仍在运行，请先退出旧游戏/配套后重试；未终止其他进程或修改旧数据");
+        if(expectedBundleHash!=null){
+            var identity=h.get("builtinBundleHash");
+            if(identity==null||!identity.isJsonPrimitive()||!identity.getAsJsonPrimitive().isString()||!identity.getAsString().matches("[a-f0-9]{64}")||!expectedBundleHash.equals(identity.getAsString()))
+                throw new IllegalStateException("配套构建与当前模组不一致；请先退出旧游戏/配套后重试，原任务和数据保留，未终止其他进程");
+        }
+        preparation="本机服务已就绪";
+    }
     private static Connection readConnection(Path file,long epoch)throws Exception{
         var c=JsonParser.parseString(Files.readString(file)).getAsJsonObject();int port=c.get("port").getAsInt();String token=c.get("token").getAsString();
         if(c.get("protocol").getAsInt()!=1||port<1||port>65535||!token.matches("[0-9a-f]{64}"))throw new IllegalStateException("Invalid Bridge connection / protocol mismatch");

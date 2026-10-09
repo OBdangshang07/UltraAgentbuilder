@@ -28,6 +28,10 @@ class BuiltinRuntimeTest {
         Path root=parent.resolve("中文 single jar");BridgeClient client=new BridgeClient(root,true);ProcessHandle ownedProcess=null;
         try{
             var health=client.request("GET","/v1/health",null).get(30,TimeUnit.SECONDS);assertEquals(expectedVersion,health.get("version").getAsString());assertTrue(health.getAsJsonArray("capabilities").asList().stream().anyMatch(v->v.getAsString().equals("scene-spec-v1")));assertFalse(Files.exists(root.resolve("bridge/server.mjs")));assertFalse(Files.exists(root.resolve("runtime/node.exe")));
+            try(var stream=BuiltinRuntimeTest.class.getResourceAsStream("/voxelstudio-bundle/manifest.json")){
+                assertNotNull(stream);String expectedHash=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(stream.readAllBytes()));
+                assertEquals(expectedHash,health.get("builtinBundleHash").getAsString(),"Actual packaged startup must bind the original manifest even with long-path cache");
+            }
             assertEquals(root.toAbsolutePath().normalize().resolve("data"),client.dataDirectory());
             long ownedPid=JsonParser.parseString(Files.readString(root.resolve("data/connection.json"))).getAsJsonObject().get("pid").getAsLong();ownedProcess=ProcessHandle.of(ownedPid).orElseThrow();
             // Actual Java extraction and ordinary packaged CLI, not an

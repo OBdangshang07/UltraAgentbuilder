@@ -26,6 +26,19 @@ class BridgeClientTest {
     }
     static void reply(HttpExchange e,String text)throws java.io.IOException{byte[] b=text.getBytes(java.nio.charset.StandardCharsets.UTF_8);e.sendResponseHeaders(200,b.length);try(var out=e.getResponseBody()){out.write(b);}}
     @AfterEach void stop(){releaseSlow.countDown();client.close();server.stop(0);handlers.shutdownNow();}
+    @Test void builtinIdentityMustMatchBeforeAnyApplicationRouteAndMismatchNeverStopsForeignOwner()throws Exception{
+        var expectedVersion=BridgeClient.class.getDeclaredField("expectedVersion");expectedVersion.setAccessible(true);expectedVersion.set(client,"0.4.10-alpha");
+        var expectedHash=BridgeClient.class.getDeclaredField("expectedBundleHash");expectedHash.setAccessible(true);expectedHash.set(client,"a".repeat(64));
+        var applicationReads=new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext("/v1/identity-probe",e->{applicationReads.incrementAndGet();reply(e,"{\"ok\":true}");});
+        for(var value:new String[]{"",",\"builtinBundleHash\":null",",\"builtinBundleHash\":true",",\"builtinBundleHash\":\""+"b".repeat(64)+"\"",",\"builtinBundleHash\":\"short\""}){
+            server.removeContext("/v1/health");server.createContext("/v1/health",e->reply(e,"{\"protocol\":1,\"version\":\"0.4.10-alpha\""+value+"}"));
+            assertThrows(ExecutionException.class,()->client.request("GET","/v1/identity-probe",null).get(5,TimeUnit.SECONDS));
+            assertEquals(0,applicationReads.get());assertTrue(ProcessHandle.current().isAlive());assertTrue(Files.exists(dir.resolve("data/connection.json")));
+        }
+        server.removeContext("/v1/health");server.createContext("/v1/health",e->reply(e,"{\"protocol\":1,\"version\":\"0.4.10-alpha\",\"builtinBundleHash\":\""+"a".repeat(64)+"\"}"));
+        assertTrue(client.request("GET","/v1/identity-probe",null).get(5,TimeUnit.SECONDS).get("ok").getAsBoolean());assertEquals(1,applicationReads.get());
+    }
     @Test void cancelBypassesBlockedDiscovery()throws Exception{
         var slow=client.request("GET","/v1/agents",null);assertTrue(slowStarted.await(5,TimeUnit.SECONDS));
         assertEquals("cancelled",client.request("POST","/v1/jobs/test/cancel",null).get(1,TimeUnit.SECONDS).get("state").getAsString());assertFalse(slow.isDone());

@@ -24,6 +24,14 @@ class BuiltinCompanionTest {
         assertEquals(first,again);assertTrue(Files.exists(first.directory().resolve(".agents/skills/voxel-studio/SKILL.md")));assertEquals("preserved",Files.readString(root.resolve("data/private.json")));assertEquals("legacy",Files.readString(root.resolve("legacy.txt")));
     }
     @Test void newVersionCoexistsWithOldRuntime()throws Exception{var f=files();var a=install(dir,f,"0.1.3-alpha");var b=install(dir,f,"0.1.4-alpha");assertNotEquals(a.directory(),b.directory());assertTrue(Files.exists(a.directory().resolve("runtime/node.exe")));}
+    @Test void exactManifestIdentitySurvivesReuseAndSameVersionDifferentBundlesCoexist()throws Exception{
+        var f=files();var original=install(dir,f,"0.1.4-alpha");
+        assertEquals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(manifest(f,"0.1.4-alpha"))),original.manifestHash());
+        assertEquals(original,install(dir,f,"0.1.4-alpha"));
+        var changed=new LinkedHashMap<>(f);changed.put("bridge/server.mjs","different-synthetic-server".getBytes());var other=install(dir,changed,"0.1.4-alpha");
+        assertEquals(original.version(),other.version());assertNotEquals(original.manifestHash(),other.manifestHash());assertNotEquals(original.directory(),other.directory());
+        assertArrayEquals(f.get("bridge/server.mjs"),Files.readAllBytes(original.directory().resolve("bridge/server.mjs")));
+    }
     @Test void corruptExistingRuntimeFailsWithoutOverwriting()throws Exception{var f=files();var a=install(dir,f,"0.1.4-alpha");Files.writeString(a.directory().resolve("bridge/server.mjs"),"modified");assertThrows(IOException.class,()->install(dir,f,"0.1.4-alpha"));assertEquals("modified",Files.readString(a.directory().resolve("bridge/server.mjs")));}
     @Test void corruptArchiveNeverPublishesRunnableTarget()throws Exception{var f=files();assertThrows(IOException.class,()->BuiltinCompanion.install(dir,manifest(f,"0.1.4-alpha"),name->new ByteArrayInputStream("incorrect".getBytes()),s->{}));try(var paths=Files.list(dir.resolve("bundles"))){assertFalse(paths.anyMatch(p->Files.isDirectory(p)&&p.getFileName().toString().startsWith("0.1.4")));}}
     @Test void unsafePathsAndDuplicateCaseAreRejectedBeforeWriting()throws Exception{

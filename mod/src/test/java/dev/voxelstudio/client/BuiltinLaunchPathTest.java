@@ -29,6 +29,7 @@ class BuiltinLaunchPathTest {
         var files=fixture.files();var root=longRoot();Files.createDirectory(root.resolve("data"));Files.writeString(root.resolve("data/evidence.txt"),"preserved");
         var original=BuiltinCompanion.install(root,fixture.manifest(files,"0.1.4-alpha"),name->new ByteArrayInputStream(files.get(name)),s->{});
         var cached=install(root,cacheHome,files);assertNotEquals(original.directory(),cached.directory());
+        assertEquals(original.manifestHash(),cached.manifestHash(),"Relocating the verified runtime cache must not change its build identity");
         assertTrue(cached.directory().startsWith(cacheHome.resolve("UltraAgentbuilder/builtin-companion")));
         assertTrue(cached.directory().resolve("runtime/node.exe").toString().length()<=240);
         assertArrayEquals(files.get("runtime/node.exe"),Files.readAllBytes(cached.directory().resolve("runtime/node.exe")));

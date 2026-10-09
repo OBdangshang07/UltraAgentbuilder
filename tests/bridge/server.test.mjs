@@ -39,6 +39,7 @@ test('authenticated loopback, worker compile/export, masks, idempotency and hist
     assert.equal((await fetch(base+'/v1/health',{headers:{...headers,Origin:'http://malicious.example'}})).status,403);
     assert.equal((await request('/v1/health'))[1].protocol,1);
     assert.equal((await request('/v1/health'))[1].version,RELEASE_VERSION);
+    assert.equal((await request('/v1/health'))[1].builtinBundleHash,null,'source-only Bridge must not echo client/task metadata as builtin identity');
     const [status,job]=await request('/v1/jobs',{key:'sample',sample:true});assert.equal(status,202);
     assert.equal((await request('/v1/jobs',{key:'sample',sample:true}))[1].id,job.id);
     assert.equal((await request('/v1/jobs',{key:'sample',sample:false}))[0],409);

@@ -17,13 +17,13 @@ final class BuiltinCompanion {
     // executable beyond MAX_PATH, even with a long-path prefix. This applies
     // to the native executable only, not model tokens or geometry limits.
     private static final int MAX_LAUNCH_PATH=240;
-    record Runtime(Path directory,String version) {}
+    record Runtime(Path directory,String version,String manifestHash) {}
     @FunctionalInterface interface Resources { InputStream open(String name)throws IOException; }
     @FunctionalInterface interface DirectoryMove { void move(Path source,Path target)throws IOException; }
     @FunctionalInterface interface Pause { void waitMillis(long millis)throws InterruptedException; }
     static boolean bundled(){return BuiltinCompanion.class.getResource(RESOURCE+"manifest.json")!=null;}
     static Runtime prepare(Path root,Consumer<String> progress)throws Exception{
-        if(!bundled()){directory(root);return new Runtime(root,null);} // Source-only development/legacy companion.
+        if(!bundled()){directory(root);return new Runtime(root,null,null);} // Source-only development/legacy companion.
         if(!System.getProperty("os.name","").toLowerCase(Locale.ROOT).contains("windows")||!Set.of("amd64","x86_64").contains(System.getProperty("os.arch","")))throw new IOException("内置运行时仅支持 Windows x64；没有下载或安装任何程序");
         try(var stream=BuiltinCompanion.class.getResourceAsStream(RESOURCE+"manifest.json")){
             String home=System.getenv("LOCALAPPDATA");
@@ -48,7 +48,7 @@ final class BuiltinCompanion {
             total+=size;if(total>MAX_TOTAL)throw new IOException("Builtin size quota exceeded");
         }
         if(!names.containsAll(List.of("runtime/node.exe","bridge/server.mjs","package.json",".agents/skills/voxel-studio/skill.md")))throw new IOException("Incomplete builtin companion");
-        root=root.toAbsolutePath().normalize();directory(root);String id=version+"-"+digest(metadata);
+        root=root.toAbsolutePath().normalize();directory(root);String manifestHash=digest(metadata),id=version+"-"+manifestHash;
         if(forLaunch&&exceedsLaunchPath(root,id)){
             Path previousBundles=root.resolve("bundles"),previous=previousBundles.resolve(id);
             // A shorter cache must not conceal a corrupt existing runtime.
@@ -64,7 +64,7 @@ final class BuiltinCompanion {
             FileLock acquired=null;long deadline=System.nanoTime()+60_000_000_000L;
             while(acquired==null){try{acquired=channel.tryLock();}catch(OverlappingFileLockException ignored){}if(acquired==null){if(System.nanoTime()>deadline)throw new IOException("内置配套正被另一实例准备，请稍后重试");Thread.sleep(100);}}
             try(var held=acquired){
-                if(Files.exists(target,LinkOption.NOFOLLOW_LINKS)){verify(target,entries,metadata);progress.accept("内置配套已就绪");return new Runtime(target,version);}
+                if(Files.exists(target,LinkOption.NOFOLLOW_LINKS)){verify(target,entries,metadata);progress.accept("内置配套已就绪");return new Runtime(target,version,manifestHash);}
                 Path stage=Files.createTempDirectory(bundles,".unpack-");int done=0;
                 for(var value:entries){var e=value.getAsJsonObject();String name=e.get("path").getAsString();Path file=stage.resolve(name);Files.createDirectories(file.getParent());
                     try(var input=resources.open(name)){
@@ -77,7 +77,7 @@ final class BuiltinCompanion {
                 // No REPLACE_EXISTING or ATOMIC_MOVE: on Windows the latter
                 // may replace a target that appeared after the absence check.
                 publishVerifiedDirectory(stage,target,metadata,entries,(source,destination)->Files.move(source,destination),Thread::sleep);
-                progress.accept("内置配套已就绪");return new Runtime(target,version);
+                progress.accept("内置配套已就绪");return new Runtime(target,version,manifestHash);
             }
         }
     }

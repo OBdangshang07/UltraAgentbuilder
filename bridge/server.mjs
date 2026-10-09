@@ -8,6 +8,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { CodexAdapter, findCodex } from './codex-adapter.mjs';
 import { RELEASE_VERSION } from './release.mjs';
+import {builtinRuntimeIdentity} from './builtin-runtime-identity.mjs';
 import { ClaudeAdapter, findClaude } from './claude-adapter.mjs';
 import { DeepseekAdapter, findDeepseek } from './deepseek-adapter.mjs';
 import {AgentDiscovery} from './agent-discovery.mjs';
@@ -78,6 +79,7 @@ async function referenceInputBytes(req,maximum=REFERENCE_PREPARATION_LIMITS.inpu
 }
 export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath, port = 0, adapter, claudeAdapter, deepseekAdapter, experimentalContextAnalysis = false, experimentalWorldPatchDesign = false, worldPatchSending = false, referenceGenerationSending = false, referenceWorldPatchSending = false, referenceWorldAssemblyPreparation = false, referenceWorldAssemblySending = false } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
+  const builtinIdentity = await builtinRuntimeIdentity(path.resolve(here, '..'), process.execPath);
   if (typeof experimentalContextAnalysis !== 'boolean') throw new Error('Explicit process-owned context analysis switch required');
   if (typeof experimentalWorldPatchDesign !== 'boolean') throw new Error('Explicit process-owned patch design switch required');
   if (typeof worldPatchSending !== 'boolean') throw new Error('Explicit process-owned production patch SEND switch required');
@@ -647,7 +649,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         return json(405,{error:'Invalid native evidence action'});
       }
       if(req.method==='GET'&&route==='/v1/quality-tiers')return json(200,{version:1,tiers:qualityTiers(),visualReview:false,qualityVersions:['v1','v2','v3','v4'],designReviewModes:['text','images','native'],imageReviewRequires:'explicitly image-capable Codex model and confirmed image mode; native additionally requires quality v2/v3/v4 and a ready client renderer; v3/v4 require native rendered concepts',qualityGuaranteed:false});
-      if (req.method === 'GET' && route === '/v1/health') return json(200, { protocol: 1, version: RELEASE_VERSION, minecraft: '1.20.1', capabilities: ['job-key-lookup', 'codex-path-config', 'claude-path-config', 'deepseek-path-config','agent-specific-discovery','progressive-agent-discovery','claude-experimental', 'native-bundle', 'revision-diff','generation-preflight','layered-generation','height-384','deepseek-output-budget','navigation-review','verified-generation-examples','building-spec-v2','special-blocks','visual-refinement','scene-spec-v1','scoped-scene-revisions','design-provenance','failed-scene-repair','scene-checkpoints','scene-components','quality-tiers-v1','assembly-design-review-v1','assembly-occupancy-images','assembly-safe-recovery-v1','storey-facade-layout-v1','floor-linked-interiors-v1','assembly-quality-v2','assembly-quality-v3','assembly-quality-v4','native-revision-comparison-v1','structured-quality-review-v1','native-concept-comparison-v1','native-asset-evidence-v1','scoped-coordinated-refinement-v1'] });
+      if (req.method === 'GET' && route === '/v1/health') return json(200, { protocol: 1, version: RELEASE_VERSION, builtinBundleHash: builtinIdentity?.manifestSha256 ?? null, minecraft: '1.20.1', capabilities: ['job-key-lookup', 'codex-path-config', 'claude-path-config', 'deepseek-path-config','agent-specific-discovery','progressive-agent-discovery','claude-experimental', 'native-bundle', 'revision-diff','generation-preflight','layered-generation','height-384','deepseek-output-budget','navigation-review','verified-generation-examples','building-spec-v2','special-blocks','visual-refinement','scene-spec-v1','scoped-scene-revisions','design-provenance','failed-scene-repair','scene-checkpoints','scene-components','quality-tiers-v1','assembly-design-review-v1','assembly-occupancy-images','assembly-safe-recovery-v1','storey-facade-layout-v1','floor-linked-interiors-v1','assembly-quality-v2','assembly-quality-v3','assembly-quality-v4','native-revision-comparison-v1','structured-quality-review-v1','native-concept-comparison-v1','native-asset-evidence-v1','scoped-coordinated-refinement-v1'] });
       if (req.method === 'GET' && route === '/v1/diagnostics') {
         const required = ['bridge/server.mjs','bridge/scene-checkpoint-worker.mjs','contracts/building-spec.schema.mjs','contracts/scene-draft-edit.schema.mjs','prompts/building-v1.md','.agents/skills/voxel-studio/SKILL.md'];
         const components = [];
