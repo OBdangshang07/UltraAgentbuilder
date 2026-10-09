@@ -4,13 +4,16 @@ import com.google.gson.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.io.CleanupMode;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.file.*;
 import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BuiltinRuntimeTest {
     @TempDir(cleanup=CleanupMode.ON_SUCCESS) Path dir;
-    @Test void builtinAloneStartsBridgeAndCompilesFreeSampleWithoutExternalCompanion()throws Exception{
+    @ParameterizedTest @ValueSource(booleans={false,true})
+    void builtinAloneStartsBridgeAndCompilesFreeSampleWithoutExternalCompanion(boolean longInstance)throws Exception{
         Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));assertTrue(BuiltinCompanion.bundled());
         String expectedVersion=null;int ownMetadata=0;
         var metadata=BuiltinRuntimeTest.class.getClassLoader().getResources("fabric.mod.json");
@@ -19,9 +22,17 @@ class BuiltinRuntimeTest {
             if(value.get("id").getAsString().equals("voxel_studio")){ownMetadata++;expectedVersion=value.get("version").getAsString();}
         }
         assertEquals(1,ownMetadata,"Select our mod metadata, not a dependency's same-named resource");
-        Path root=dir.resolve("中文 single jar");BridgeClient client=new BridgeClient(root,true);ProcessHandle ownedProcess=null;
+        Path parent=dir;
+        if(longInstance)while(parent.toAbsolutePath().toString().length()<230)parent=Files.createDirectory(parent.resolve("long-instance-path"));
+        Path root=parent.resolve("中文 single jar");BridgeClient client=new BridgeClient(root,true);ProcessHandle ownedProcess=null;
         try{
             var health=client.request("GET","/v1/health",null).get(30,TimeUnit.SECONDS);assertEquals(expectedVersion,health.get("version").getAsString());assertTrue(health.getAsJsonArray("capabilities").asList().stream().anyMatch(v->v.getAsString().equals("scene-spec-v1")));assertFalse(Files.exists(root.resolve("bridge/server.mjs")));assertFalse(Files.exists(root.resolve("runtime/node.exe")));
+            assertEquals(root.toAbsolutePath().normalize().resolve("data"),client.dataDirectory());
+            if(longInstance){
+                assertFalse(Files.exists(root.resolve("bundles")),"Long-path startup must not publish an unlaunchable runtime in the instance");
+                Path cache=Path.of(System.getenv("LOCALAPPDATA")).resolve("UltraAgentbuilder/builtin-companion");
+                assertTrue(client.localDiagnostics().get(5,TimeUnit.SECONDS).contains("运行目录："+cache.toAbsolutePath().normalize()));
+            }
             long ownedPid=JsonParser.parseString(Files.readString(root.resolve("data/connection.json"))).getAsJsonObject().get("pid").getAsLong();ownedProcess=ProcessHandle.of(ownedPid).orElseThrow();
             assertTrue(client.request("GET","/v1/jobs",null).get(5,TimeUnit.SECONDS).getAsJsonArray("jobs").isEmpty());
             var req=new JsonObject();req.addProperty("key","builtin-free-fixture");req.addProperty("sample",true);String id=client.request("POST","/v1/jobs",req).get(5,TimeUnit.SECONDS).get("id").getAsString();

@@ -12,8 +12,12 @@ public final class VoxelStudio implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(dev.voxelstudio.selection.SelectionReadService::tick);
         ServerTickEvents.END_SERVER_TICK.register(dev.voxelstudio.selection.WorldPatchPlacementService::tick);
         ServerTickEvents.END_SERVER_TICK.register(dev.voxelstudio.selection.WorldPatchUndoService::tick);
+        ServerTickEvents.END_SERVER_TICK.register(dev.voxelstudio.selection.AssemblyPatchPlacementService::tick);
+        ServerTickEvents.END_SERVER_TICK.register(dev.voxelstudio.selection.AssemblyPatchUndoService::tick);
         ServerTickEvents.END_SERVER_TICK.register(s->dev.voxelstudio.selection.SelectionPerformanceProbe.serverEnd());
         ServerLifecycleEvents.SERVER_STOPPING.register(PlacementService::stopping);
+        ServerLifecycleEvents.SERVER_STOPPING.register(dev.voxelstudio.selection.AssemblyPatchUndoService::stopping);
+        ServerLifecycleEvents.SERVER_STOPPING.register(dev.voxelstudio.selection.AssemblyPatchPlacementService::stopping);
         ServerLifecycleEvents.SERVER_STOPPING.register(dev.voxelstudio.selection.WorldPatchUndoService::stopping);
         ServerLifecycleEvents.SERVER_STOPPING.register(dev.voxelstudio.selection.WorldPatchPlacementService::stopping);
         ServerLifecycleEvents.SERVER_STOPPING.register(dev.voxelstudio.selection.SelectionReadService::stopping);

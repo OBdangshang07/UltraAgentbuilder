@@ -63,6 +63,7 @@ public final class ProjectionController {
     public void loadComparison(Asset next){load(next,true);}
     private void load(Asset next,boolean comparison) {
         StudioClient.PATCH_PREVIEW.clear();
+        StudioClient.ASSEMBLY_PREVIEW.clear();
         if (busy) return;
         asset = next; scope = MinecraftClient.getInstance().world; worldKey = key();editHistory.clear();scrollRemainder=0;
         visible=false;locked=false;positioned=false;if(!comparison){rotation=0;mirror=false;}moveAxis=ProjectionTools.Axis.LOOK;
@@ -70,7 +71,7 @@ public final class ProjectionController {
         if (scope != null && anchor.equals(BlockPos.ORIGIN)) anchor = MinecraftClient.getInstance().player.getBlockPos().add(3,0,3);
         changed(true); status = "已加载建筑：" + next.id;
     }
-    public void show() { if (asset == null || busy) return; StudioClient.PATCH_PREVIEW.clear();scope = MinecraftClient.getInstance().world; worldKey = key(); visible = true; changed(false); }
+    public void show() { if (asset == null || busy) return; StudioClient.PATCH_PREVIEW.clear();StudioClient.ASSEMBLY_PREVIEW.clear();scope = MinecraftClient.getInstance().world; worldKey = key(); visible = true; changed(false); }
     public void move(int x, int y, int z) { if (asset == null || busy) return;var before=snapshot();locked=true;positioned=true;try{anchor=new BlockPos(Math.addExact(anchor.getX(),x),Math.addExact(anchor.getY(),y),Math.addExact(anchor.getZ(),z));}catch(ArithmeticException e){status="坐标超出整数范围，未移动";return;}editHistory.remember(before,snapshot());changed(false); }
     public void coordinates(BlockPos p) { if (busy) return;var before=snapshot();locked=true;positioned=true;anchor=p;editHistory.remember(before,snapshot());changed(false); }
     public void rotate() { if (asset == null || busy) return;var before=snapshot();rotation=(rotation+1)%4;editHistory.remember(before,snapshot());changed(true); }

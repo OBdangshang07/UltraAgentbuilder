@@ -74,6 +74,12 @@ final class AssemblyPatchJournal {
         private int cursor,batches;private Intent pending;private boolean broken,finished;private ReceiptState stop;
         private Live(Path directory,Plan plan){this.directory=directory;this.plan=plan;}
         Path directory(){return directory;}Plan plan(){return plan;}
+        /** CPU-only observation of THIS live ledger's acknowledged closure.
+         * It does not reread disk, mint undo consent or authorize a writer. */
+        synchronized Sealed sealed(List<WorldPatchCompiler.Write> prefix){
+            if(broken||!finished||pending!=null||cursor==0||prefix.size()!=cursor||!prefix.equals(plan.compiled.writes().subList(0,cursor)))throw new IllegalStateException("Whole undo requires this original closed live ledger");
+            return new Sealed(plan,directory,prefix,published);
+        }
         private void available()throws IOException{if(broken||finished)throw new IOException("Whole journal closed or uncertain; no replay");}
         private void verifyCore()throws IOException{
             plan.verifyArchive(directory);var core=core(plan.binding().partHashes().size());int count=0;
@@ -110,6 +116,20 @@ final class AssemblyPatchJournal {
             var result=new JsonObject();result.addProperty("format","AssemblyPatchAmbiguousOperation");result.addProperty("version",2);result.addProperty("id",plan.id.toString());result.addProperty("planHash",plan.hash);result.addProperty("index",token.index);
             var text=String.valueOf(reason);result.addProperty("reason",text.substring(0,Math.min(1024,text.length())));persist("ambiguous.json",result);
         }
+    }
+    /** Private-constructor same-live-ledger receipt witness. Disk review can
+     * never construct this object. Verification remains disk-worker-only and
+     * compares exact core bytes/events without recompiling a substitute. */
+    static final class Sealed {
+        private final Plan plan;private final Path directory;private final List<WorldPatchCompiler.Write> prefix;private final Map<String,String> events;
+        private Sealed(Plan plan,Path directory,List<WorldPatchCompiler.Write> prefix,Map<String,String> events){this.plan=plan;this.directory=directory;this.prefix=List.copyOf(prefix);this.events=Map.copyOf(events);}
+        boolean matches(Plan plan,Path directory,List<WorldPatchCompiler.Write> prefix){return this.plan==plan&&this.directory.equals(directory)&&this.prefix.equals(prefix);}
+        void verify()throws IOException{
+            plan.verifyArchive(directory);var core=core(plan.binding().partHashes().size());int count=0;
+            try(var stream=Files.newDirectoryStream(directory)){for(var file:stream){count++;var name=file.getFileName().toString();if(core.contains(name))continue;var expected=events.get(name);if(expected==null||!expected.equals(sha(WorldPatchJournalFiles.read(file,eventMaximum(name)))))throw new IOException("Original sealed whole event changed/unknown; no undo replay");}}
+            if(count!=core.size()+events.size()||!events.containsKey("outcome.json"))throw new IOException("Original whole sealed event missing");
+        }
+        boolean canAuthorizePlacement(){return false;}
     }
     static Live create(Path root,Plan plan)throws IOException{
         Objects.requireNonNull(plan);root=root.toAbsolutePath().normalize();WorldPatchJournalFiles.directory(root);var directory=root.resolve(plan.id.toString());Files.createDirectory(directory);WorldPatchJournalFiles.directory(directory);

@@ -425,6 +425,12 @@ public final class BridgeClient implements AutoCloseable {
                     .thenApply(ignored->ReferenceWorldAssemblyCandidateReceipt.whole(metadata,parts,cancelled)));
             }));
     }
+    /** Complete geometry/input is prepared off the client thread. It cannot
+     * enter the old loadPatchCandidate or ordinary new-building Asset path. */
+    CompletableFuture<AssemblyPatchCheckedCandidate> loadReferenceAssemblyCandidate(JsonObject original,JsonObject finalStatus,BooleanSupplier live){
+        return readReferenceAssemblyCandidate(original,finalStatus,live).thenCompose(whole->
+            submit(contexts,()->AssemblyPatchCheckedCandidate.prepare(whole,()->!live.getAsBoolean())));
+    }
     CompletableFuture<ReferenceWorldAssemblyPlan> prepareReferenceAssembly(SelectionReadService.Capture capture,JsonObject generation,JsonObject manifest,BooleanSupplier live){
         final JsonObject g,m;try{WorldPatchSend.allowed(live);g=generation.deepCopy();m=manifest.deepCopy();ReferenceWorldAssemblyReceipt.generation(g);}catch(Exception e){return CompletableFuture.failedFuture(e);}
         return referenceAssemblyCapabilities().thenCompose(caps->{

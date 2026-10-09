@@ -448,18 +448,21 @@ budget. This is not a preemptive time guarantee or measured game performance.
 Capture object, retained original SEND, baseline and completed whole audit.
 Cancellation or a changed audit/world/coverage invalidates the comparison.
 Completed reports are checked again against the current server task. The
-separate package-private whole lease has a private constructor and no detach,
-writer, journal or confirmation authority at this stage.
+separate package-private whole lease has a private constructor. Its internal
+handoff retains the same original task/watch and revokes read authority; only
+the explicit final-confirmation service may use it. Public reports and
+matching client hashes still cannot construct it or authorize a writer.
 
 Both preview types implement a geometry-only `WorldDifferenceView` for the
 existing sparse renderer. This does not convert a whole set into a v1
-candidate or implement the normal whole controller/game screen. A separate
+candidate or grant the whole client controller write authority. A separate
 owner-bound v2 final-ticket ledger enforces one use and a strict 45-second
-lifetime, but is not yet issued by a native whole transaction gateway.
+lifetime. The whole apply service issues it only after its complete original
+server audit and fresh BEFORE comparison. The independent player controls below
+invoke those services, but still need exact-source and installed-game acceptance.
 
-Whole final confirmation, journal/execution/protected undo, integrated player
-controls, live-world/render/Iris/IME/performance and actual model image/quality
-acceptance remain required. Normal full-generation SEND and whole placement
+Integrated player controls are implemented but unaccepted. Live-world/render/Iris/IME/performance and actual
+model image/quality acceptance remain required. Normal full-generation SEND and whole placement
 remain disabled; free synthetic regression does not certify those gates.
 
 ### Whole transaction ledger and bounded engine (not a player gateway)
@@ -482,7 +485,112 @@ observing a reference another store already published. Reading saved history
 does not grant another owner, retry or dispatch permission. Failed or uncertain
 pending files remain preserved; there is no automatic takeover or deletion.
 
-The whole engine still has no native lease detach, player final-confirmation
-gateway, protected undo executor/service or integrated controller. Normal full
+The whole engine has distinct apply and protected undo services and a separate
+player final-confirmation controller awaiting acceptance. Normal full
 joint SEND and whole placement remain disabled pending exact-source regression,
 actual game, same-asset save/undo, special-block and release acceptance.
+
+### Distinct whole-native origin (not an enabled player gateway)
+
+The original whole lease can prepare the independent whole journal plan and
+transfer the same server world, original player, complete selection, watch,
+chunk fence and compiled candidate into a private `AssemblyNativeWorld`.
+The task is removed and its original read lifetime revoked exactly once.
+Changed audits, BEFORE, world/coverage, player or capture prevent handoff.
+This origin is not the legacy per-part native world and cannot be created from
+a public audit/result or a copied candidate.
+
+`AssemblyPatchNativeSource` implements only the whole engine's Source/Frame.
+It accepts exactly the original ordered writes (or the inverse of the original
+sealed acknowledged prefix for an explicitly confirmed later undo), never an
+arbitrary replacement row list. Reads and writes require the server thread,
+loaded original chunk instances, the original single-player creative host and
+dimension. Original W-P, static-state policy, target BEFORE, exact parsed native
+state, height and world-border checks remain binding. No load/generation API,
+command, NBT import or per-part execution loop is introduced.
+
+The source can close its own watch and offer one separately owned undo epoch
+only for the same original compiled candidate and live undo witness. It cannot
+mint final apply/undo consent or claim region-file durability. The final player
+controller is implemented but unaccepted; special-state physics and exact-JAR
+installed-game tests remain required.
+Normal full joint SEND and whole placement remain disabled.
+
+### Whole server services and operation exclusion (not player enablement)
+
+`AssemblyPatchPlacementService` owns one complete original audit, one fresh
+BEFORE and one owner-bound 45-second final confirmation. Only explicit confirm
+transfers the original lease into one ordered whole transaction. It has a
+separate v2 journal directory, bounded server ticks, disk-worker receipts,
+cancel/status/stop handling and no per-part apply loop or automatic replay.
+
+`AssemblyPatchUndoService` prepares read-only from the same retained live sealed
+operation. Only separate protection acknowledgement and final confirmation
+consume its one-use undo origin. The new undo watch is checked again after
+journal preparation; it never refreshes the original AFTER or restores player
+edits. An archive review cannot manufacture either service's authority.
+
+`WorldOperationExclusion` snapshots non-recursive leaf busy states. Old building,
+single-patch and read entry points also reject the new whole lane, while audits
+and BEFORE may belong to their own active preparation. Undo additionally rejects
+an outstanding read. Same-family owner and preparation checks remain in their
+original services. Pure policy and wiring tests do not prove live-world behavior.
+
+The services are registered for server tick and shutdown. The normal whole
+loader/matcher/controller and result/final/operation/undo screens now have source
+implementations; exact-source and exact-JAR game acceptance remain required.
+Normal full SEND remains disabled. Static
+state restrictions have not been loosened to accept coupled or dynamic blocks.
+
+### Complete player controls (implemented, not accepted or enabled for SEND)
+
+The result page loads the complete original candidate through paired GETs and
+rechecks FINAL. A bounded background lane constructs one typed whole input and
+preview, never a legacy patch or building Asset. Original Capture, selection,
+revision and all saved hashes fence download and publication. Closed or changed
+pages cannot publish the result, and missing parts cannot become a partial preview.
+
+The distinct controller uses the geometry-only sparse renderer at immutable
+original world coordinates. BEFORE/AFTER/changes, category and layer filters
+change only display, not the full write scope. Deletion outlines remain visible
+in AFTER mode; emphasis markers are capped without cutting the native mesh.
+Building and legacy patch projections are mutually excluded. Real client ticks,
+render, reload and shutdown own the whole preview lifecycle.
+
+Preview actions bind the displayed candidate by object identity, recheck the
+same original snapshot at click time, and disable after invalidation. Closing
+or relayout retires the old callbacks; a later equal hash cannot replace the
+displayed object. This is a UI lifetime fence, not final world consent.
+
+The game HUD distinguishes fixed whole previews from movable new buildings.
+It shows the complete operation count and display-only layer filter. After an
+accepted apply or undo, a scope-bound read-only HUD follows the retained live
+operation while pages are closed. World/player/dimension change or shutdown
+drops those display references and rejects late publication. It cannot query
+or resume disk history, create a writer, cancel or confirm a transaction; the
+progress page retains the separate explicit controls. Displayed counts do not
+prove region-file durability. These source changes still require exact-source
+regression and installed-game lifecycle/render acceptance.
+
+The single-patch preview now uses the same displayed-object lifetime fence,
+with separate preview and checked-candidate bindings. Display-only previews do
+not acquire audit/apply routes; candidate replacement cannot preserve a stale
+button. Its fixed-coordinate HUD and reopen key also remain distinct from a
+movable new building. Both whole and single-patch apply/undo progress queries
+filter the retained task's original plan dimension after the original
+server/player/creative-host checks. Filtering neither retires an old operation
+nor authorizes undo; native origin and separate final-consent checks remain.
+These changes do not claim installed-game dimension-switch acceptance.
+
+The separate final page starts one read-only whole preparation. Only explicit
+risk acknowledgement and the later final click submit one apply confirmation;
+closing or resizing cancels unsubmitted preparation, not an already-confirmed
+operation. The progress page queries the live original server and dimension and
+never recovers writer authority from disk. Protected undo has its own preparation,
+acknowledgement, 45-second final confirmation and explicit cancellation.
+
+Pure candidate and paired HTTP tests use a complete synthetic 224-metre Ultra
+fixture, seven original parts and 54,406 original writes. Static wiring tests are
+not compiler, world, rendering, save/undo or performance proof. Whole coupled
+block states, physics, exact-JAR normal/Iris/IME/performance, real joint-model
+quality and release gates remain open. Full joint SEND is still disabled.

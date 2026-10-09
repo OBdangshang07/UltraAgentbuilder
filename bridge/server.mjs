@@ -2,6 +2,8 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {isDirectEntrypoint} from './main-entry.mjs';
+import {resolveBridgeDataRoot} from './data-root.mjs';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { CodexAdapter, findCodex } from './codex-adapter.mjs';
@@ -83,7 +85,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
   if (typeof referenceWorldPatchSending !== 'boolean') throw new Error('Explicit process-owned joint reference/patch SEND switch required');
   if (typeof referenceWorldAssemblyPreparation !== 'boolean') throw new Error('Explicit process-owned complete joint preparation switch required');
   if (typeof referenceWorldAssemblySending !== 'boolean') throw new Error('Explicit process-owned complete joint SEND switch required');
-  dataDir = path.resolve(dataDir);
+  dataDir = await resolveBridgeDataRoot(dataDir);
   await fs.mkdir(path.join(dataDir, 'jobs'), { recursive: true });
   const connectionFile = path.join(dataDir, 'connection.json');
   const lockFile = path.join(dataDir, 'bridge.lock');
@@ -783,10 +785,10 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
   }
   return { connection, server, close: closeService };
 }
-// Node resolves import.meta.url through Windows junctions, while argv retains
-// the launch alias. Compare actual files or a legitimate relocated install can
-// silently exit without ever starting its service.
-if (process.argv[1] && await fs.realpath(path.resolve(process.argv[1])).catch(()=>null) === fileURLToPath(import.meta.url)) {
+// Resolve BOTH spellings: module URLs can remain logical in an app container
+// even while the native realpath API returns a redirected physical directory.
+// This is not permission to change an existing task's runtime or data root.
+if (await isDirectEntrypoint(process.argv[1],import.meta.url)) {
   const at = process.argv.indexOf('--data-dir');
   const dataDir = at >= 0 ? process.argv[at + 1] : path.join(here, '../.studio-data');
   let config = {}; try { config = await readJson(path.join(dataDir, 'config.json')); } catch {}

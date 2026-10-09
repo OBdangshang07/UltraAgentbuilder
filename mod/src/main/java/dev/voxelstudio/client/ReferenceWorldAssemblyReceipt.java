@@ -129,7 +129,7 @@ final class ReferenceWorldAssemblyReceipt {
         String details=base+"\n\n原状态："+text(state,"state")+"\n已记录预留："+reserved+" / "+number(p,"maximumCalls")+"。预留和本地回执不是独立提供方审计或成功次数。";
         if(state.has("stageEventsObserved"))details+="\n观察到阶段事件："+number(state,"stageEventsObserved")+"（不是调用或成功次数）。";
         if(state.has("pendingCalls"))details+="\n历史待核实预留："+number(state,"pendingCalls")+"；本地响应："+number(state,"responseCalls")+"；本地失败："+number(state,"failedCalls")+"。重启只读取原记录，不接管或恢复派发。";
-        if(text(state,"state").equals("preview-ready"))details+="\n\n原完成候选："+state.get("candidate")+"\n全部 parts 是一个整体，不可单片建造。整组下载重验、原坐标差异、fresh BEFORE、一次最终确认、事务日志及保护撤销尚待集成；本页不授予写入权限。";
+        if(text(state,"state").equals("preview-ready"))details+="\n\n原完成候选："+state.get("candidate")+"\n全部 parts 是一个整体，不可单片建造。可加载整组原坐标差异；应用仍须独立 fresh BEFORE 与一次最终确认，保护撤销须另行确认。这套流程仍需游戏验收；本页不授予写入权限。";
         return details+"\n\n关页后仍由客户端 tick 查询和服务当前原资产的原生渲染，不截图世界、HUD 或桌面。客户端关闭会退出观察；下次启动只读取原任务。不重新识图、不重复计费、不刷新世界基线。";
     }
     private ReferenceWorldAssemblyReceipt(){}

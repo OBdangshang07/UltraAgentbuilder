@@ -19,13 +19,33 @@ test('whole BEFORE uses the original server audit and one bounded independent co
   assert.match(source,/if\(TASKS\.get\(server\)==t\)tickAssemblyBefore\(server,t\)/);
   assert.match(source,/b\.scan\.result\(\);result\.complete\(b\.report\)/);
 });
-test('whole lease and cancellation retain exact objects without exposing a writer',async()=>{
+test('whole lease permits only a one-use original-object handoff and cancellation revokes read authority',async()=>{
   const source=await read(selection+'SelectionReadService.java');
-  const lease=source.slice(source.indexOf('static final class AssemblyNativeLease'),source.indexOf('/** No writes.'));
+  const leaseStart=source.indexOf('static final class AssemblyNativeLease');
+  const worldStart=source.indexOf('static final class AssemblyNativeWorld',leaseStart);
+  const factoryStart=source.indexOf('static AssemblyNativeLease assemblyNativeLease(',worldStart);
+  const factoryEnd=source.indexOf('/** No writes.',factoryStart);
+  assert.ok(leaseStart>=0&&worldStart>leaseStart&&factoryStart>worldStart&&factoryEnd>factoryStart);
+  const lease=source.slice(leaseStart,worldStart);
+  const factory=source.slice(factoryStart,factoryEnd);
   assert.match(lease,/private AssemblyNativeLease\(/);
   for(const pin of ['task.capture!=original','task.assemblyAudit!=audit','task.assemblyBefore!=before','audit.compiled!=compiled','before.preview!=preview'])assert.ok(lease.includes(pin));
+  assert.match(lease,/detached\|\|checkedTask\(server,player,original\.id\(\),original\.selection\(\)\.revision\(\)\)!=task/);
+  assert.match(lease,/before\.report==null\|\|before\.cancelled\|\|before\.handle\.status\.state\(\)!=AssemblyPatchBeforeCheck\.State\.MATCHED/);
+  assert.match(lease,/checkedAssemblyAudit\(task,original,player,audit\.handle\.id,compiled\.binding\(\)\)!=audit/);
   assert.match(lease,/before\.scan\.result\(\)/);
-  assert.doesNotMatch(lease,/\.setBlockState|detach\(|WorldPatchJournal|WorldPatchConsent|new WorldPatchPreview\.Binding/);
+  assert.match(lease,/boolean canAuthorizePlacement\(\)\{return false;\}/);
+  assert.match(lease,/AssemblyNativeWorld detach\(MinecraftServer server,UUID player\)\{\s*current\(server,player\);if\(!TASKS\.remove\(server,task\)\)throw new IllegalStateException\([^;]+;detached=true;task\.lifetime\.revoke\(\)/);
+  assert.match(lease,/new AssemblyNativeWorld\(task\.world,task\.player,task\.selection,task\.watch,task\.chunks,compiled,compiled\.writes\(\)\);task\.watch=null/);
+  assert.match(lease,/stopAssemblyBefore\(task,AssemblyPatchBeforeCheck\.State\.CANCELLED/);
+  assert.match(lease,/stopAssemblyAudit\(task,PatchAuditState\.CANCELLED/);
+  assert.match(lease,/if\(task\.scan!=null\)task\.scan\.cancel\(\);task\.states\.clear\(\);task\.capture=null;task\.baseline=null/);
+  assert.match(lease,/task\.handle\.status=new Status\(State\.STALE/);
+  assert.doesNotMatch(lease,/\.setBlockState|new NativeWorld\(|WorldPatchJournal|WorldPatchConsent|new WorldPatchPreview\.Binding|public AssemblyNativeWorld detach/);
+  assert.match(factory,/checkedTask\(server,player,original\.id\(\),original\.selection\(\)\.revision\(\)\)/);
+  assert.match(factory,/b\.audit!=audit\|\|b\.preview!=preview\|\|!b\.handle\.id\.equals\(beforeId\)/);
+  assert.match(factory,/b\.report==null\|\|b\.scan==null\|\|b\.handle\.status\.state\(\)!=AssemblyPatchBeforeCheck\.State\.MATCHED/);
+  assert.match(factory,/var lease=new AssemblyNativeLease\(t,preview\);lease\.current\(server,player\);return lease/);
   assert.match(source,/t\.assemblyBefore!=null&&t\.assemblyBefore\.audit==audit\)stopAssemblyBefore/);
   assert.match(source,/b\.worker\.cancel\(false\);if\(b\.scan!=null\)b\.scan\.cancel\(\);b\.report=null/);
   assert.match(source,/return t!=null&&\(t\.assemblyAudit!=null\|\|t\.assemblyBefore!=null\)/);

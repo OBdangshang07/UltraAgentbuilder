@@ -20,6 +20,8 @@ public final class StudioClient implements ClientModInitializer {
     public static final ProjectionController PROJECTION = new ProjectionController();
     static final SelectionController SELECTION = new SelectionController();
     static final WorldPatchPreviewController PATCH_PREVIEW = new WorldPatchPreviewController();
+    static final AssemblyPatchPreviewController ASSEMBLY_PREVIEW = new AssemblyPatchPreviewController();
+    static final AssemblyPatchHudState ASSEMBLY_HUD = new AssemblyPatchHudState();
     static final ReferenceWorldAssemblyObserver ASSEMBLY = new ReferenceWorldAssemblyObserver(BRIDGE::referenceAssemblyHistory,BRIDGE::readReferenceAssemblyJob,
         operation->MinecraftClient.getInstance().execute(operation),(reference,status)->StudioNativeEvidence.observeAssembly(reference.get("id").getAsString(),reference.get("requestHash").getAsString(),status));
     private static final java.util.Map<String,KeyBinding> KEYS = new java.util.HashMap<>();
@@ -48,7 +50,9 @@ public final class StudioClient implements ClientModInitializer {
             ASSEMBLY.tick();
             StudioNativeEvidence.tick(c);
             SELECTION.tick(c);
+            ASSEMBLY_HUD.scope(c.getServer(),c.player==null?null:c.player.getUuid(),c.world==null?null:c.world.getRegistryKey().getValue().toString());
             PATCH_PREVIEW.tick(c);
+            ASSEMBLY_PREVIEW.tick(c);
             SelectionSelfTest.tick(c);
             WorldPatchTransactionSelfTest.tick(c);
             if(StudioSelfTest.enabled()||SelectionSelfTest.enabled()||WorldPatchTransactionSelfTest.enabled()){
@@ -57,10 +61,10 @@ public final class StudioClient implements ClientModInitializer {
                 for(var binding:KEYS.values())while(binding.wasPressed()){}
                 PROJECTION.tick();return;
             }
-            while (open.wasPressed()) if (c.player != null && c.currentScreen == null) c.setScreen(new StudioScreen());
+            while (open.wasPressed()) if (c.player != null && c.currentScreen == null) c.setScreen(ASSEMBLY_PREVIEW.preview()!=null?new AssemblyPatchPreviewScreen(new SelectionScreen(new StudioScreen())):PATCH_PREVIEW.preview()!=null?new WorldPatchPreviewScreen(new SelectionScreen(new StudioScreen())):ASSEMBLY_HUD.hasProgress()?new AssemblyPatchOperationScreen(new SelectionScreen(new StudioScreen())):new StudioScreen());
             while (selection.wasPressed()) if (c.player != null && c.currentScreen == null) c.setScreen(new SelectionScreen(new StudioScreen()));
             PROJECTION.tick();
-            if (c.currentScreen != null || PATCH_PREVIEW.preview()!=null || !PROJECTION.visible || PROJECTION.busy || PROJECTION.restoring) {for(var entry:KEYS.entrySet())if(!entry.getKey().equals("open"))while(entry.getValue().wasPressed()){}return;}
+            if (c.currentScreen != null || PATCH_PREVIEW.preview()!=null || ASSEMBLY_PREVIEW.preview()!=null || !PROJECTION.visible || PROJECTION.busy || PROJECTION.restoring) {for(var entry:KEYS.entrySet())if(!entry.getKey().equals("open"))while(entry.getValue().wasPressed()){}return;}
             int step = net.minecraft.client.gui.screen.Screen.hasControlDown() ? 8 : 1;
             while (lock.wasPressed()) PROJECTION.toggleLock(); while (rotate.wasPressed()) PROJECTION.rotate(); while (mirror.wasPressed()) PROJECTION.mirror(); while (hide.wasPressed()) PROJECTION.visible = false;
             while (west.wasPressed()) PROJECTION.move(-step,0,0); while (east.wasPressed()) PROJECTION.move(step,0,0); while (north.wasPressed()) PROJECTION.move(0,0,-step); while (south.wasPressed()) PROJECTION.move(0,0,step); while (up.wasPressed()) PROJECTION.move(0,step,0); while (down.wasPressed()) PROJECTION.move(0,-step,0);
@@ -72,9 +76,9 @@ public final class StudioClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register((draw, delta) -> StudioHud.render(draw,KEYS));
         ResourceManagerHelper.get(ResourceType.CLIENT_RESOURCES).registerReloadListener(new SimpleSynchronousResourceReloadListener() {
             @Override public Identifier getFabricId() { return new Identifier("voxel_studio", "projection_models"); }
-            @Override public void reload(ResourceManager manager) { MinecraftClient.getInstance().execute(() -> { if (PROJECTION.asset != null) PROJECTION.renderer.rebuild(PROJECTION.placement()); PATCH_PREVIEW.reload(); }); }
+            @Override public void reload(ResourceManager manager) { MinecraftClient.getInstance().execute(() -> { if (PROJECTION.asset != null) PROJECTION.renderer.rebuild(PROJECTION.placement()); PATCH_PREVIEW.reload(); ASSEMBLY_PREVIEW.reload(); }); }
         });
-        ClientLifecycleEvents.CLIENT_STOPPING.register(c -> { StudioEvidenceShutdown.observe(c,true);ASSEMBLY.close();PATCH_PREVIEW.close();SELECTION.close();StudioNativeEvidence.clear(); BRIDGE.close(); PROJECTION.close(); });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(c -> { StudioEvidenceShutdown.observe(c,true);ASSEMBLY.close();ASSEMBLY_HUD.close();ASSEMBLY_PREVIEW.close();PATCH_PREVIEW.close();SELECTION.close();StudioNativeEvidence.clear(); BRIDGE.close(); PROJECTION.close(); });
         ClientChunkEvents.CHUNK_LOAD.register((w,c)->dev.voxelstudio.WorldChangeTracker.chunk(w,c.getPos().x,c.getPos().z));
         ClientChunkEvents.CHUNK_UNLOAD.register((w,c)->dev.voxelstudio.WorldChangeTracker.chunk(w,c.getPos().x,c.getPos().z));
     }
@@ -86,6 +90,7 @@ public final class StudioClient implements ClientModInitializer {
             MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
             try(var selectionState=new ProjectionRenderState()){SELECTION.render(worldView,worldProjection,worldCamera);}
             try(var patchState=new ProjectionRenderState()){PATCH_PREVIEW.render(worldView,worldProjection,worldCamera);}
+            try(var assemblyState=new ProjectionRenderState()){ASSEMBLY_PREVIEW.render(worldView,worldProjection,worldCamera);}
             var p = PROJECTION; if (!p.visible || p.asset == null) return;
             MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
             Vec3d camera = worldCamera;

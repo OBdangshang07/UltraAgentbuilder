@@ -52,6 +52,8 @@ final class SelectionScreen extends Screen {
             button("旧参考图局部改造历史 · 不升级确认",()->client.setScreen(new ReferenceWorldPatchHistoryScreen(this)));
             if(StudioClient.PATCH_PREVIEW.preview()!=null)button("原位差异预览 · 应用需独立最终确认",()->client.setScreen(new WorldPatchPreviewScreen(this)));
             button("原位事务进度 / 显式取消 · 不恢复写入",()->client.setScreen(new WorldPatchOperationScreen(this)));
+            if(StudioClient.ASSEMBLY_PREVIEW.preview()!=null)button("完整整组差异 · 原位置，应用需独立确认",()->client.setScreen(new AssemblyPatchPreviewScreen(this)));
+            button("整组事务进度 / 显式取消 / 保护撤销",()->client.setScreen(new AssemblyPatchOperationScreen(this)));
             button("取消读取 / 丢弃快照",tool::cancel);
             paragraph("读取额度：外层 "+SelectionLimits.contextCells()+" 格、内层 "+SelectionLimits.editCells()+" 格；持续变化最多重采 2 次后停止。",StudioTheme.MUTED);
             paragraph("本地最多保存 8 份 / 128 MiB，24 小时到期；丢弃后只移除本项目持有的快照文件。保存不等于发送。后续发送须确认模型、具体任务和摘要范围；未生成改造方案，没有建造权限。",StudioTheme.WARN);

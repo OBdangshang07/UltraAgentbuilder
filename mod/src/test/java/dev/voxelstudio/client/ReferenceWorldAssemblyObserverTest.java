@@ -61,6 +61,6 @@ class ReferenceWorldAssemblyObserverTest {
     }
     @Test void disclosureSeparatesUnreportedCallsStageEventsAndWholeCandidateAuthority()throws Exception{
         var f=fixture();var r=reference(f);var unreported=ReferenceWorldAssemblyReceipt.observationDetails(r,ReferenceWorldAssemblyReceiptTest.running(f));assertTrue(unreported.contains("不等于 0"));assertTrue(unreported.contains("不是调用或成功次数"));
-        var complete=ReferenceWorldAssemblyReceipt.observationDetails(r,ready(f));assertTrue(complete.contains("不可单片建造"));assertTrue(complete.contains("fresh BEFORE"));assertTrue(complete.contains("尚待集成"));assertTrue(ReferenceWorldAssemblyReceipt.observationDetails(r,null).contains("不证明模型未调用"));
+        var complete=ReferenceWorldAssemblyReceipt.observationDetails(r,ready(f));assertTrue(complete.contains("不可单片建造"));assertTrue(complete.contains("fresh BEFORE"));assertTrue(complete.contains("一次最终确认"));assertTrue(complete.contains("仍需游戏验收"));assertTrue(complete.contains("本页不授予写入权限"));assertTrue(ReferenceWorldAssemblyReceipt.observationDetails(r,null).contains("不证明模型未调用"));
     }
 }

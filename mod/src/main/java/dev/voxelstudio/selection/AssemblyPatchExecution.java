@@ -20,6 +20,7 @@ final class AssemblyPatchExecution {
     }
     interface Log {
         AssemblyPatchJournal.Plan plan();default Path archive(){return null;}
+        default AssemblyPatchJournal.Sealed sealed(List<WorldPatchCompiler.Write> prefix){return null;}
         CompletableFuture<AssemblyPatchJournal.Intent> intent();
         CompletableFuture<Void> applied(AssemblyPatchJournal.Intent intent,List<WorldPatchCompiler.Write> prefix,AssemblyPatchJournal.ReceiptState state);
         CompletableFuture<Void> finish(AssemblyPatchJournal.Outcome outcome);
@@ -29,6 +30,7 @@ final class AssemblyPatchExecution {
         private final AssemblyPatchJournal.Live live;private final Executor worker;
         Disk(AssemblyPatchJournal.Live live,Executor worker){this.live=Objects.requireNonNull(live);this.worker=Objects.requireNonNull(worker);}
         public AssemblyPatchJournal.Plan plan(){return live.plan();}public Path archive(){return live.directory();}
+        public AssemblyPatchJournal.Sealed sealed(List<WorldPatchCompiler.Write> prefix){return live.sealed(prefix);}
         private <T> CompletableFuture<T> submit(Callable<T> operation){
             try{return CompletableFuture.supplyAsync(()->{try{return operation.call();}catch(Exception error){throw new CompletionException(error);}},worker);}
             catch(RuntimeException error){return CompletableFuture.failedFuture(error);}
@@ -44,9 +46,10 @@ final class AssemblyPatchExecution {
     /** Same live whole-engine witness to an acknowledged sealed prefix. Not
      * final consent; no constructor from archived Review or matching hashes. */
     static final class UndoOrigin {
-        private final AssemblyPatchJournal.Plan plan;private final Path archive;private final List<WorldPatchCompiler.Write> prefix;private boolean claimed;
-        private UndoOrigin(AssemblyPatchJournal.Plan plan,Path archive,List<WorldPatchCompiler.Write> prefix){this.plan=plan;this.archive=archive;this.prefix=List.copyOf(prefix);}
+        private final AssemblyPatchJournal.Plan plan;private final Path archive;private final List<WorldPatchCompiler.Write> prefix;private final AssemblyPatchJournal.Sealed sealed;private boolean claimed;
+        private UndoOrigin(AssemblyPatchJournal.Plan plan,Path archive,List<WorldPatchCompiler.Write> prefix,AssemblyPatchJournal.Sealed sealed){this.plan=plan;this.archive=archive;this.prefix=List.copyOf(prefix);this.sealed=Objects.requireNonNull(sealed);if(!sealed.matches(plan,archive,this.prefix))throw new IllegalStateException("Whole undo witness differs from original live closure");}
         AssemblyPatchJournal.Plan plan(){return plan;}Path archive(){return archive;}List<WorldPatchCompiler.Write> prefix(){return prefix;}
+        AssemblyPatchJournal.Sealed sealed(){return sealed;}
         synchronized void claim(){if(claimed)throw new IllegalStateException("Original whole undo already claimed; no replay");claimed=true;}
         boolean canAuthorizePlacement(){return false;}
     }
@@ -68,7 +71,7 @@ final class AssemblyPatchExecution {
     private boolean terminal(){return Set.of(State.COMPLETED,State.CANCELLED,State.CONFLICT,State.REVIEW_REQUIRED).contains(state);}
     UndoOrigin undoOrigin(){
         if(!Set.of(State.COMPLETED,State.CANCELLED,State.CONFLICT).contains(state)||confirmed.isEmpty()||log.archive()==null)throw new IllegalStateException("Whole undo requires a sealed known live prefix");
-        if(undoOrigin==null)undoOrigin=new UndoOrigin(log.plan(),log.archive(),confirmed);return undoOrigin;
+        if(undoOrigin==null){var sealed=log.sealed(confirmed);if(sealed==null)throw new IllegalStateException("Whole undo requires the original closed live disk ledger, not an archive path");undoOrigin=new UndoOrigin(log.plan(),log.archive(),confirmed,sealed);}return undoOrigin;
     }
     private boolean frame(){var actual=Objects.requireNonNull(source.frame());var world=selection.world();return actual.creativeHost&&world.worldId().equals(actual.worldId)&&world.dimension().equals(actual.dimension)&&selection.revision()==actual.selectionRevision&&revision==actual.contextRevision;}
     private void review(String why){state=State.REVIEW_REQUIRED;reason=why;}

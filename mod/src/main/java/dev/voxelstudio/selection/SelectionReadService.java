@@ -142,6 +142,7 @@ public final class SelectionReadService {
         var handle=new Handle();
         handle.result.whenComplete((v,e)->{if(handle.result.isCancelled())cancel(server,handle.id);});
         server.execute(()->{Task t=null;try{
+            WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.READ);
             var world=authorize(server,player).getServerWorld();
             if(!identityNow(server,world).equals(selection.world()))throw new IllegalStateException("世界或维度身份已改变，重新选择");
             var r=selection.context();
@@ -232,6 +233,7 @@ public final class SelectionReadService {
         final byte[] proposal=originalResponse.clone();var handle=new PatchAuditHandle();
         handle.result.whenComplete((v,e)->{if(handle.result.isCancelled())cancelPatchAudit(server,handle.id);});
         server.execute(()->{try{
+            WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.SINGLE_PATCH);
             if(handle.result.isCancelled()){handle.status=new PatchAuditStatus(PatchAuditState.CANCELLED,"补丁核验已取消");return;}
             var t=checkedTask(server,player,original.id(),original.selection().revision());if(t.capture!=original||t.baseline==null)throw new IllegalStateException("不能用替代 Capture 核验补丁");
             if(t.audit!=null||t.assemblyAudit!=null||t.assemblyBefore!=null)throw new IllegalStateException("原快照已有补丁核验；先显式取消，不隐式替换");
@@ -268,6 +270,7 @@ public final class SelectionReadService {
         Objects.requireNonNull(original);Objects.requireNonNull(input);var handle=new AssemblyAuditHandle();
         handle.result.whenComplete((v,e)->{if(handle.result.isCancelled())cancelAssemblyAudit(server,handle.id);});
         server.execute(()->{try{
+            WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.WHOLE_ASSEMBLY);
             if(handle.result.isCancelled()){handle.status=new PatchAuditStatus(PatchAuditState.CANCELLED,"整组核验已取消");return;}
             var t=checkedTask(server,player,original.id(),original.selection().revision());
             if(t.capture!=original||t.baseline==null||!input.binding().selection().equals(t.selection))throw new IllegalStateException("整组核验要求原玩家仍持有的同一 Capture");
@@ -286,6 +289,7 @@ public final class SelectionReadService {
         }catch(Exception error){result.completeExceptionally(error);}});return result;
     }
     static boolean assemblyAuditActive(MinecraftServer server){onServer(server);var t=TASKS.get(server);return t!=null&&(t.assemblyAudit!=null||t.assemblyBefore!=null);}
+    public static boolean busy(MinecraftServer server){onServer(server);var t=TASKS.get(server);return t!=null&&(t.capture==null||t.audit!=null||t.before!=null||t.assemblyAudit!=null||t.assemblyBefore!=null);}
     private static void tickAssemblyAudit(MinecraftServer server,Task t){
         var audit=t.assemblyAudit;if(audit==null||audit.report!=null||!audit.worker.isDone())return;
         try{var compiled=audit.worker.join();if(checkedTask(server,t.player,t.handle.id,t.selection.revision())!=t||t.assemblyAudit!=audit||compiled.baseline()!=t.baseline||audit.cancelled)throw new IllegalStateException("原整组或服务器基线已失效");
@@ -306,6 +310,7 @@ public final class SelectionReadService {
         Objects.requireNonNull(original);Objects.requireNonNull(preview);Objects.requireNonNull(auditId);var handle=new AssemblyBeforeHandle();
         handle.result.whenComplete((v,e)->{if(handle.result.isCancelled())cancelAssemblyBeforeCheck(server,handle.id);});
         server.execute(()->{try{
+            WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.WHOLE_ASSEMBLY);
             if(handle.result.isCancelled()){handle.status=new AssemblyBeforeStatus(AssemblyPatchBeforeCheck.State.CANCELLED,"整组 BEFORE 已取消",null);return;}
             var t=checkedTask(server,player,original.id(),original.selection().revision());
             var audit=checkedAssemblyAudit(t,original,player,auditId,preview.binding());
@@ -364,20 +369,43 @@ public final class SelectionReadService {
         var progress=previous==null?null:new AssemblyPatchBeforeCheck.Progress(state,reason,previous.checked(),previous.total(),previous.reads(),previous.steps(),previous.maxStepNanos());
         b.handle.status=new AssemblyBeforeStatus(state,reason,progress);b.handle.result.completeExceptionally(new IllegalStateException(reason));
     }
-    /** Same-live-task read-only witness for the future whole transaction.
-     * This cannot detach a world, issue consent, create a journal or write. */
+    /** Same-live-task whole lease. Only the explicit final-confirmation
+     * service may detach it; reports never construct this private witness. */
     static final class AssemblyNativeLease {
         private final Task task;private final AssemblyAudit audit;private final AssemblyBefore before;
-        private final Capture original;private final AssemblyPatchPreview preview;private final AssemblyPatchCompiler.Compiled compiled;
+        private final Capture original;private final AssemblyPatchPreview preview;private final AssemblyPatchCompiler.Compiled compiled;private boolean detached;
         private AssemblyNativeLease(Task task,AssemblyPatchPreview preview){this.task=task;audit=task.assemblyAudit;before=task.assemblyBefore;original=task.capture;this.preview=preview;compiled=audit.compiled;}
         AssemblyPatchCompiler.Compiled compiled(){return compiled;}Capture original(){return original;}AssemblyPatchPreview preview(){return preview;}
+        AssemblyPatchJournal.Plan prepare(UUID player){return AssemblyPatchJournal.prepare(original,compiled,preview,player);}
         boolean canAuthorizePlacement(){return false;}
         void current(MinecraftServer server,UUID player){
-            if(checkedTask(server,player,original.id(),original.selection().revision())!=task||task.capture!=original
+            if(detached||checkedTask(server,player,original.id(),original.selection().revision())!=task||task.capture!=original
                     ||task.assemblyAudit!=audit||task.assemblyBefore!=before||audit.compiled!=compiled||before.preview!=preview
                     ||before.report==null||before.cancelled||before.handle.status.state()!=AssemblyPatchBeforeCheck.State.MATCHED
                     ||checkedAssemblyAudit(task,original,player,audit.handle.id,compiled.binding())!=audit)throw new IllegalStateException("原整组服务器审核或 BEFORE 已改变；不能重绑");
             before.scan.result();
+        }
+        AssemblyNativeWorld detach(MinecraftServer server,UUID player){
+            current(server,player);if(!TASKS.remove(server,task))throw new IllegalStateException("原整组读取任务不能移交");detached=true;task.lifetime.revoke();
+            var world=new AssemblyNativeWorld(task.world,task.player,task.selection,task.watch,task.chunks,compiled,compiled.writes());task.watch=null;
+            stopAssemblyBefore(task,AssemblyPatchBeforeCheck.State.CANCELLED,"原整组读取任务已明确移交世界事务");
+            stopAssemblyAudit(task,PatchAuditState.CANCELLED,"原整组审核已绑定最终事务，不再作为读取能力");
+            if(task.scan!=null)task.scan.cancel();task.states.clear();task.capture=null;task.baseline=null;
+            task.handle.status=new Status(State.STALE,"原整组快照已用于明确确认的事务；读取/投影能力失效",task.scan==null?null:task.scan.progress());return world;
+        }
+    }
+    /** A distinct whole native origin, never a legacy per-part lease. */
+    static final class AssemblyNativeWorld {
+        final ServerWorld world;final UUID player;final WorldSelection selection;final WorldChangeTracker.Watch watch;
+        final SelectionChunkFence chunks;final AssemblyPatchCompiler.Compiled compiled;final List<WorldPatchCompiler.Write> writes;private boolean undoDetached;
+        private AssemblyNativeWorld(ServerWorld world,UUID player,WorldSelection selection,WorldChangeTracker.Watch watch,SelectionChunkFence chunks,AssemblyPatchCompiler.Compiled compiled,List<WorldPatchCompiler.Write> writes){this.world=world;this.player=player;this.selection=selection;this.watch=watch;this.chunks=chunks;this.compiled=compiled;this.writes=List.copyOf(writes);}
+        AssemblyNativeWorld forUndo(AssemblyPatchExecution.UndoOrigin undo){
+            if(undoDetached||!player.equals(undo.plan().player())||!selection.equals(undo.plan().binding().selection())||undo.plan().compiled()!=compiled)throw new IllegalStateException("撤销不是同一原整组事务，或原撤销来源已移交");
+            undoDetached=true;
+            var reversed=new ArrayList<WorldPatchCompiler.Write>();for(int i=undo.prefix().size()-1;i>=0;i--)reversed.add(WorldPatchUndoJournal.inverse(undo.prefix().get(i)));
+            // New undo epoch only; never refresh original Capture/AFTER or
+            // retain/load any chunks. Final undo consent remains mandatory.
+            return new AssemblyNativeWorld(world,player,selection,WorldChangeTracker.watch(world,selection.context()),new SelectionChunkFence(),compiled,reversed);
         }
     }
     static AssemblyNativeLease assemblyNativeLease(MinecraftServer server,UUID player,Capture original,AssemblyPatchPreview preview,String auditId,String beforeId){
@@ -391,6 +419,7 @@ public final class SelectionReadService {
         Objects.requireNonNull(original);Objects.requireNonNull(preview);var handle=new BeforeHandle();
         handle.result.whenComplete((v,e)->{if(handle.result.isCancelled())cancelBeforeCheck(server,handle.id);});
         server.execute(()->{try{
+            WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.SINGLE_PATCH);
             if(handle.result.isCancelled()){handle.status=new BeforeStatus(WorldPatchBeforeCheck.State.CANCELLED,"BEFORE 校验已取消",null);return;}
             var t=checkedTask(server,player,original.id(),original.selection().revision());
             if(t.capture!=original||t.baseline==null)throw new IllegalStateException("不能用替代快照申请 BEFORE 校验");

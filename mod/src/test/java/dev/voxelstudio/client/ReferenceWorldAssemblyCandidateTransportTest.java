@@ -42,6 +42,12 @@ class ReferenceWorldAssemblyCandidateTransportTest {
     @Test void missingLaterPartStopsWithoutReturningEarlierPartsOrReplayingAnyGet()throws Exception{
         failPart=1;assertThrows(ExecutionException.class,()->read().get(45,TimeUnit.SECONDS));assertEquals(List.of("GET "+prefix+"/candidate?"+query,"GET "+prefix+"/parts/0?"+query,"GET "+prefix+"/parts/1?"+query),routes);
     }
+    @Test void normalWholeLoaderBuildsOneTypedCompletePreviewUsingOnlyOriginalGets()throws Exception{
+        var candidate=client.loadReferenceAssemblyCandidate(r,f.getAsJsonObject("status"),live::get).get(45,TimeUnit.SECONDS);
+        assertFalse(WorldPatchCheckedCandidate.class.isInstance(candidate));assertFalse(candidate.canAuthorizePlacement());assertFalse(candidate.currentWorldVerified());
+        assertEquals(54406,candidate.preview().totalWrites());assertEquals(7,candidate.input().parts().size());assertEquals(r.get("requestHash").getAsString(),candidate.input().binding().requestHash());
+        var expected=new ArrayList<String>();expected.add("GET "+prefix+"/candidate?"+query);for(int i=0;i<7;i++)expected.add("GET "+prefix+"/parts/"+i+"?"+query);expected.add("GET "+prefix);assertEquals(expected,routes);
+    }
     @Test void originalFinalSwapAfterAllPartsRejectsTheEntireDownload()throws Exception{
         swapFinal=true;assertThrows(ExecutionException.class,()->read().get(45,TimeUnit.SECONDS));assertEquals(f.getAsJsonArray("partFiles").size()+2,routes.size());assertEquals("GET "+prefix,routes.get(routes.size()-1));
     }

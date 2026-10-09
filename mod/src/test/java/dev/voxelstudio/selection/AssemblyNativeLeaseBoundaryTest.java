@@ -12,8 +12,20 @@ final class AssemblyNativeLeaseBoundaryTest {
         assertFalse(Modifier.isPublic(SelectionReadService.AssemblyNativeLease.class.getModifiers()));
         assertFalse(SelectionReadService.NativeLease.class.isAssignableFrom(SelectionReadService.AssemblyNativeLease.class));
         var methods=new TreeSet<String>();for(var method:SelectionReadService.AssemblyNativeLease.class.getDeclaredMethods())methods.add(method.getName());
-        assertEquals(Set.of("compiled","original","preview","canAuthorizePlacement","current"),methods);
+        assertEquals(Set.of("compiled","original","preview","prepare","detach","canAuthorizePlacement","current"),methods);
         assertTrue(Arrays.stream(SelectionReadService.class.getDeclaredMethods()).filter(m->m.getName().equals("assemblyNativeLease")).noneMatch(m->Modifier.isPublic(m.getModifiers())));
+    }
+    @Test void wholeNativeWorldAndSourceCannotAcceptLegacyOrPublicWorldLease(){
+        for(var constructor:SelectionReadService.AssemblyNativeWorld.class.getDeclaredConstructors())assertTrue(Modifier.isPrivate(constructor.getModifiers()));
+        assertFalse(Modifier.isPublic(SelectionReadService.AssemblyNativeWorld.class.getModifiers()));
+        assertFalse(SelectionReadService.NativeWorld.class.isAssignableFrom(SelectionReadService.AssemblyNativeWorld.class));
+        assertTrue(AssemblyPatchExecution.Source.class.isAssignableFrom(AssemblyPatchNativeSource.class));
+        assertFalse(WorldPatchExecution.Source.class.isAssignableFrom(AssemblyPatchNativeSource.class));
+        for(var constructor:AssemblyPatchNativeSource.class.getDeclaredConstructors()){
+            assertFalse(Modifier.isPublic(constructor.getModifiers()));
+            assertTrue(Arrays.asList(constructor.getParameterTypes()).contains(SelectionReadService.AssemblyNativeWorld.class));
+            assertFalse(Arrays.asList(constructor.getParameterTypes()).contains(SelectionReadService.NativeWorld.class));
+        }
     }
     @Test void publicWholeAuditAndBeforeReportsRemainReadOnlyEvenWhenLocallyAuthored()throws Exception{
         var fixture=AssemblyPatchFixtures.header("lite");var binding=AssemblyPatchFixtures.binding(fixture);

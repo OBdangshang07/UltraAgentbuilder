@@ -22,6 +22,7 @@ public final class PlacementService {
     private static final Map<MinecraftServer, Task> TASKS = new HashMap<>();
     private static final Map<MinecraftServer, Check> CHECKS=new HashMap<>();
     private static final Map<MinecraftServer, Audit> AUDITS=new HashMap<>();
+    public static boolean busy(MinecraftServer server){if(!server.isOnThread())throw new IllegalStateException("Building busy state requires server thread");return TASKS.containsKey(server)||CHECKS.containsKey(server)||AUDITS.containsKey(server);}
     public record AuditResult(int matchesBefore,int matchesAfter,int conflicts,int unavailable) {}
     private static final class Audit {ServerWorld world;UUID player;List<JournalRecovery.Entry> entries;int cursor,before,after,conflicts,unknown;CompletableFuture<AuditResult> result=new CompletableFuture<>();}
     public record CheckedPlacement(String token,int adds,int replaces,int clears,int skips) {}
@@ -44,6 +45,7 @@ public final class PlacementService {
     }
     public static CompletableFuture<CheckedPlacement> check(MinecraftServer server,UUID playerId,net.minecraft.util.Identifier dimension,Placement placement){
         var result=new CompletableFuture<CheckedPlacement>();server.execute(()->{try{
+            dev.voxelstudio.selection.WorldOperationExclusion.require(server,dev.voxelstudio.selection.WorldOperationExclusion.Kind.NEW_BUILDING);
             placement.asset().requireBuildable();
             var player=authorize(server,playerId);if(TASKS.containsKey(server))throw new IllegalStateException("Another world operation is running");
             var world=player.getServerWorld();if(!world.getRegistryKey().getValue().equals(dimension))throw new IllegalStateException("Dimension changed after confirmation");
@@ -76,7 +78,7 @@ public final class PlacementService {
     }
     public static void startChecked(MinecraftServer server,UUID playerId,net.minecraft.util.Identifier dimension,Placement placement,String token,boolean navigationAcknowledged,Consumer<Result> callback){
         server.execute(()->{
-            try{placement.asset().requireBuildable();NavigationReview.requireAcknowledged(placement.asset().navigationAcknowledgementRequired,navigationAcknowledged);}catch(IllegalStateException e){callback.accept(new Result(e.getMessage(),true,0,0));return;}
+            try{dev.voxelstudio.selection.WorldOperationExclusion.require(server,dev.voxelstudio.selection.WorldOperationExclusion.Kind.NEW_BUILDING);placement.asset().requireBuildable();NavigationReview.requireAcknowledged(placement.asset().navigationAcknowledgementRequired,navigationAcknowledged);}catch(IllegalStateException e){callback.accept(new Result(e.getMessage(),true,0,0));return;}
             Check c=CHECKS.get(server);
             if(c==null||!c.result.isDone()||c.result.isCompletedExceptionally()||!c.token.equals(token)||!c.player.equals(playerId)||!c.placement.equals(placement)||!c.world.getRegistryKey().getValue().equals(dimension)||c.watch.revision()!=c.epoch||System.nanoTime()>c.expires){callback.accept(new Result("Confirmation expired; check the current world again",true,0,0));return;}
             CHECKS.remove(server);c.watch.close();startInternal(server,playerId,dimension,placement,c.before,callback);
@@ -90,6 +92,7 @@ public final class PlacementService {
     private static void startInternal(MinecraftServer server, UUID playerId, net.minecraft.util.Identifier dimension, Placement placement,int[] confirmedBefore, Consumer<Result> callback) {
         server.execute(() -> {
             try {
+                dev.voxelstudio.selection.WorldOperationExclusion.require(server,dev.voxelstudio.selection.WorldOperationExclusion.Kind.NEW_BUILDING);
                 placement.asset().requireBuildable();
                 ServerPlayerEntity player = authorize(server, playerId);
                 if (TASKS.containsKey(server)) throw new IllegalStateException("Another world operation is running");
@@ -120,6 +123,7 @@ public final class PlacementService {
     public static void undo(MinecraftServer server, UUID playerId,String selectedJournal, Consumer<Result> callback) {
         server.execute(() -> {
             try {
+                dev.voxelstudio.selection.WorldOperationExclusion.require(server,dev.voxelstudio.selection.WorldOperationExclusion.Kind.NEW_BUILDING);
                 ServerPlayerEntity player = authorize(server, playerId);
                 if (TASKS.containsKey(server)) throw new IllegalStateException("Cancel/finish the current operation before undo");
                 Task t = new Task(); t.undo = true; t.player = playerId; t.world = player.getServerWorld(); t.callback = callback;
@@ -242,6 +246,7 @@ public final class PlacementService {
     }
     public static CompletableFuture<AuditResult> audit(MinecraftServer server,UUID playerId,JournalRecovery.Review review){
         var result=new CompletableFuture<AuditResult>();server.execute(()->{try{
+            dev.voxelstudio.selection.WorldOperationExclusion.require(server,dev.voxelstudio.selection.WorldOperationExclusion.Kind.NEW_BUILDING);
             var player=authorize(server,playerId);if(AUDITS.containsKey(server)||TASKS.containsKey(server))throw new IllegalStateException("Another world operation or audit is running");
             if(!review.metadata().has("player")||!playerId.toString().equals(review.metadata().get("player").getAsString())||!player.getServerWorld().getRegistryKey().getValue().toString().equals(review.metadata().get("dimension").getAsString()))throw new IllegalStateException("Journal ownership/dimension mismatch");
             Audit a=new Audit();a.world=player.getServerWorld();a.player=playerId;a.entries=review.entries();a.result=result;AUDITS.put(server,a);
