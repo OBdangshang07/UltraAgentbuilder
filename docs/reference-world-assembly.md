@@ -1,5 +1,21 @@
 # Shared reference and environment assembly (internal v2)
 
+## Exact original provider binding
+
+The full-task dispatcher now uses the verified reference binding's bindingHash,
+the same identity used by the unmodified production CodexAdapter. A hash of the
+transport referenceInput object is different and must reject before turn/start;
+it is not an alternative accepted fingerprint. The stage input is also compared
+with the exact frozen input. Native-image fingerprints, model/effort, original
+consent, budgets, unknown-call handling and world authority are unchanged.
+
+Three full synthetic stdio pipelines exercise the original adapter: legacy Lite
+(8 turns), independent Lite (8), and independent Ultra (17). The eight-file
+targeted regression closed successfully with 110 passing tests. Synthetic answers
+and native-upload fixtures do not prove real model understanding or game pixels.
+The preceding default-game failure remains a failure; the new exact full package,
+default builtin game, own CI and real architecture gates are still pending.
+
 ## Current default CLI availability
 
 Normal direct companion startup now advertises the complete v2 preparation and

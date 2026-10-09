@@ -226,11 +226,13 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     };
     const invoke = async (prompt,index,options,binding) => {
       const checked = await recheck(!binding,index);
+      if (options.referenceInput && hash(options.referenceInput) !== hash(checked.reference.input))
+        throw Error('Full-task reference input differs from original frozen image binding');
       const images = options.referenceInput ? checked.reference.manifest.references.map(r => r.sha256)
         : await Promise.all((options.images ?? []).map(async file => hash(await fs.readFile(file))));
       const expected = codexRequestFingerprint({prompt,model:p.selected.model,effort:p.selected.effort,
         outputSchema:options.outputSchema,imageHashes:images,
-        ...(options.referenceInput ? {referenceBindingHash:hash(options.referenceInput)} : {})});
+        ...(options.referenceInput ? {referenceBindingHash:checked.reference.binding.bindingHash} : {})});
       const request = {prompt,model:p.selected.model,effort:p.selected.effort,cwd:directory,signal,
         images:options.images ?? [],outputSchema:options.outputSchema,
         ...(options.referenceInput ? {referenceInput:options.referenceInput} : {})};

@@ -51,7 +51,7 @@ export async function jointResourceFixture(t,{tier='lite',images=2}={}) {
       const imageHashes=request.referenceInput?reference.manifest.references.map(r=>r.sha256):await Promise.all(request.images.map(async file=>hash(await fs.readFile(file))));
       const binding={version:1,provider:'codex',storage:'persistent-single-turn',threadId:'synthetic-resources-'+index,turnId:null,
         model:request.model,effort:request.effort,requestHash:codexRequestFingerprint({prompt:request.prompt,model:request.model,effort:request.effort,
-          outputSchema:request.outputSchema,imageHashes,...(request.referenceInput?{referenceBindingHash:hash(request.referenceInput)}:{})})};
+          outputSchema:request.outputSchema,imageHashes,...(request.referenceInput?{referenceBindingHash:reference.binding.bindingHash}:{})})};
       await request.onProviderBinding(binding);await request.onProviderBinding({...binding,turnId:'turn-'+index});
       if(request.outputSchema.properties.format.enum[0]==='ArchitectureReferenceBrief')return {spec:referenceBrief(reference)};
       return {spec:(staged?stagedResponse:v4Response)(data,{outputSchema:request.outputSchema})};

@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {Worker} from 'node:worker_threads';
+import {fileURLToPath} from 'node:url';
 import {hash} from '../../src/generation/compiler.mjs';
 import {readNativeBundle} from '../../src/generation/bundle.mjs';
 import {selectionChunks,regionCells} from '../../contracts/world-selection.mjs';
@@ -21,6 +22,7 @@ import {jointPixelFixture} from './joint-assembly-input-fixture.mjs';
 import {prepareReferenceWorldAssemblyDraft,bindReferenceWorldAssemblyDraft} from '../../bridge/reference-world-assembly-input.mjs';
 import {v4Request,v4Response} from './quality-v4-fixtures.mjs';
 import {stagedRequest,stagedResponse} from './decomposed-assembly-fixtures.mjs';
+import {CodexAdapter} from '../../bridge/codex-adapter.mjs';
 
 const sendFor=p=>({format:'ReferenceWorldAssemblySend',version:2,purpose:'reference-world-assembly',confirmed:true,
   preparationHash:p.preparationHash,maximumCalls:p.maximumCalls});
@@ -59,7 +61,7 @@ async function setup(t,{tier='lite',staged=false,images=2,protect=false,independ
     const hashes=request.referenceInput?reference.manifest.references.map(r=>r.sha256):await Promise.all(request.images.map(async file=>hash(await fs.readFile(file))));
     const binding={version:1,provider:'codex',storage:'persistent-single-turn',threadId:'synthetic-'+index,turnId:null,
       model:request.model,effort:request.effort,requestHash:codexRequestFingerprint({prompt:request.prompt,model:request.model,
-        effort:request.effort,outputSchema:schema,imageHashes:hashes,...(request.referenceInput?{referenceBindingHash:hash(request.referenceInput)}:{})})};
+        effort:request.effort,outputSchema:schema,imageHashes:hashes,...(request.referenceInput?{referenceBindingHash:reference.binding.bindingHash}:{})})};
     await request.onProviderBinding(binding);await request.onProviderBinding({...binding,turnId:'turn-'+index});
     if(schema.properties.format.enum[0]==='ArchitectureReferenceBrief') {
       assert.deepEqual(request.referenceInput,referenceInput);assert.equal(request.images.length,0);return {spec:referenceBrief(reference)};
@@ -222,7 +224,7 @@ test('unknown original turn remains reserved once; replay cannot generate a repl
   h.adapter.generate=async request=>{starts++;await request.onProviderBinding({version:1,provider:'codex',storage:'persistent-single-turn',
     threadId:'unknown-synthetic',turnId:'original-turn',model:request.model,effort:request.effort,
     requestHash:codexRequestFingerprint({prompt:request.prompt,model:request.model,effort:request.effort,outputSchema:request.outputSchema,
-      imageHashes:h.reference.manifest.references.map(r=>r.sha256),referenceBindingHash:hash(request.referenceInput)})});throw Error('Unknown upstream transport');};
+      imageHashes:h.reference.manifest.references.map(r=>r.sha256),referenceBindingHash:h.reference.binding.bindingHash})});throw Error('Unknown upstream transport');};
   await assert.rejects(runReferenceWorldAssembly(h.runOptions),/Unknown upstream/);
   await assert.rejects(runReferenceWorldAssembly(h.runOptions),/observer unavailable/);assert.equal(starts,1);
   const call=JSON.parse(await fs.readFile(path.join(h.f.jobDirectory,'assembly-journal/call-1.json')));
@@ -243,7 +245,7 @@ test('archive mutation at BEFORE-turn checkpoint rejects without sending a repla
     const value=JSON.parse(await fs.readFile(file));value.maximumCalls++;await fs.writeFile(file,JSON.stringify(value));
     await request.onProviderBinding({version:1,provider:'codex',storage:'persistent-single-turn',threadId:'mutated-synthetic',turnId:null,
       model:request.model,effort:request.effort,requestHash:codexRequestFingerprint({prompt:request.prompt,model:request.model,
-        effort:request.effort,outputSchema:request.outputSchema,imageHashes:h.reference.manifest.references.map(r=>r.sha256),referenceBindingHash:hash(request.referenceInput)})});
+        effort:request.effort,outputSchema:request.outputSchema,imageHashes:h.reference.manifest.references.map(r=>r.sha256),referenceBindingHash:h.reference.binding.bindingHash})});
     throw Error('Should never pass mutated BEFORE-turn checkpoint');
   };
   await assert.rejects(runReferenceWorldAssembly(h.runOptions),/file changed/);assert.equal(attempts,1);
@@ -257,4 +259,54 @@ test('wrong selected-model/pixel request binding cannot pass the actual provider
   await assert.rejects(runReferenceWorldAssembly(h.runOptions),/provider input differs/);
   const call=JSON.parse(await fs.readFile(path.join(h.f.jobDirectory,'assembly-journal/call-1.json')));
   assert.equal(call.value.providerBinding,undefined);assert.equal(call.value.index,1);
+});
+
+test('hash of reference transport object cannot substitute for the original frozen binding hash',async t=>{
+  const h=await setup(t,{independent:true});await freezeReferenceWorldAssembly({...h.prepareOptions,send:h.send});let turns=0;
+  assert.notEqual(hash(h.referenceInput),h.reference.binding.bindingHash);
+  h.adapter.generate=async request=>{
+    await request.onProviderBinding({version:1,provider:'codex',storage:'persistent-single-turn',threadId:'wrong-reference-object',turnId:null,
+      model:request.model,effort:request.effort,requestHash:codexRequestFingerprint({prompt:request.prompt,model:request.model,effort:request.effort,
+        outputSchema:request.outputSchema,imageHashes:h.reference.manifest.references.map(r=>r.sha256),referenceBindingHash:hash(request.referenceInput)})});
+    turns++;throw Error('Must not dispatch with transport-object hash');
+  };
+  await assert.rejects(runReferenceWorldAssembly(h.runOptions),/provider input differs/);assert.equal(turns,0);
+  const call=JSON.parse(await fs.readFile(path.join(h.f.jobDirectory,'assembly-journal/call-1.json')));
+  assert.equal(call.value.state,'error');assert.equal(call.value.providerBinding,undefined);
+});
+
+for(const mode of ['legacy-lite','independent-lite','independent-ultra'])test(mode+' joint pipeline uses original CodexAdapter stdio and exact frozen picture binding',{timeout:180000},async t=>{
+  const staged=mode==='independent-ultra',h=await setup(t,{independent:mode!=='legacy-lite',tier:staged?'ultra':'lite',staged,images:2});
+  await freezeReferenceWorldAssembly({...h.prepareOptions,send:h.send});
+  const cliRoot=path.join(h.f.dataDir,'synthetic-cli'),auditDirectory=path.join(h.f.dataDir,'synthetic-stdio');
+  await fs.mkdir(cliRoot);await fs.mkdir(auditDirectory);
+  const cli=path.join(cliRoot,'fixture.js');
+  await fs.writeFile(path.join(cliRoot,'package.json'),JSON.stringify({type:'commonjs'}),{flag:'wx'});
+  await fs.copyFile(new URL('../fixtures/joint-codex-stdio-fixture.js',import.meta.url),cli);
+  await fs.writeFile(path.join(cliRoot,'config.json'),JSON.stringify({directory:h.f.jobDirectory,referenceInput:h.referenceInput,
+    sourceRoot:await fs.realpath(fileURLToPath(new URL('../..',import.meta.url))),mode:staged?'staged':'v4',auditDirectory,model:h.f.generation.model}),{flag:'wx'});
+  const adapter=new CodexAdapter({codexPath:cli,observationIntervalMs:100});
+  try{
+    const result=await runReferenceWorldAssembly({...h.runOptions,adapter});
+    const names=await fs.readdir(auditDirectory),turns=[];
+    for(const name of names)if(/^turn-[a-f0-9-]{36}\.json$/.test(name))turns.push(JSON.parse(await fs.readFile(path.join(auditDirectory,name))));
+    assert.equal(names.some(n=>n.startsWith('failed-')),false);assert.equal(turns.length,staged?17:8);
+    assert.equal(result.records.length,turns.length);assert.equal(result.joint.sharedPipeline,true);assert.equal(result.joint.worldWrites,0);
+    for(const r of result.records){assert.equal(r.state,'accepted');assert.equal(r.responseReceived,true);}
+    const first=turns.find(v=>v.format==='ArchitectureReferenceBrief');assert.ok(first);
+    assert.equal(first.referenceBindingHash,h.reference.binding.bindingHash);assert.notEqual(first.referenceBindingHash,hash(h.referenceInput));
+    assert.deepEqual(first.imageHashes,h.reference.manifest.references.map(r=>r.sha256));
+    assert.equal(turns.filter(v=>v.nativeImages).length,result.records.filter(r=>r.imageCount>0).length);
+    assert.ok(turns.some(v=>v.nativeImages));
+    for(const record of result.records){const turn=turns.find(v=>v.index===record.index);assert.ok(turn);
+      if(record.imageCount>0){assert.equal(turn.nativeImages,true);assert.equal(turn.imageHashes.length,record.imageCount);}}
+    for(const turn of turns){assert.equal(turn.actualModelCalls,0);assert.equal(turn.originalProductionAdapter,true);
+      assert.equal(turn.params.model,h.f.generation.model);assert.equal(turn.params.effort,'max');
+      assert.equal(turn.params.approvalPolicy,'never');assert.deepEqual(turn.params.sandboxPolicy,{type:'readOnly',networkAccess:false});}
+  }finally{
+    const original=adapter.process;adapter.close();if(original&&original.exitCode===null)await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>reject(Error('Original synthetic CLI closure missing')),5000);
+      original.once('close',code=>{clearTimeout(timeout);code===0?resolve():reject(Error('Original synthetic CLI closure failed'));});
+    });if(original)assert.equal(original.exitCode,0);
+  }
 });
