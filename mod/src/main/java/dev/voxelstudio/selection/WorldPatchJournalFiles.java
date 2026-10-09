@@ -48,6 +48,19 @@ final class WorldPatchJournalFiles {
         }
         if(!Arrays.equals(bytes,read(file,maximum)))throw new IOException("Published journal bytes differ; preserved");
     }
+    /** Convert only an already-validated physical absolute Windows spelling.
+     * Java NIO supports long paths, while the native handle API needs its own
+     * extended-length spelling. This grants no alias/device/stream fallback;
+     * the caller's parent/file identity and native-handle checks remain binding. */
+    static String windowsNativePath(String file)throws IOException{
+        if(file==null||file.indexOf('/')>=0||file.chars().anyMatch(c->c<32)||file.startsWith("\\\\?\\")||file.startsWith("\\\\.\\"))throw new IOException("Canonical Windows journal spelling required");
+        String tail,prefix;
+        if(file.matches("^[A-Za-z]:\\\\.*")){tail=file.substring(3);prefix="\\\\?\\"+file.substring(0,3);}
+        else if(file.startsWith("\\\\")){tail=file.substring(2);prefix="\\\\?\\UNC\\";if(tail.split("\\\\",-1).length<3)throw new IOException("Complete UNC journal member required");}
+        else throw new IOException("Absolute Windows journal member required");
+        for(String part:tail.split("\\\\",-1))if(part.isEmpty()||part.equals(".")||part.equals("..")||part.indexOf(':')>=0)throw new IOException("Windows journal aliases/streams rejected");
+        return prefix+tail;
+    }
     private static final class Windows {
         private record Info(long bytes,long writeTime,int links){}
         private static Info info(WinNT.HANDLE h,int maximum)throws IOException{
@@ -59,8 +72,8 @@ final class WorldPatchJournalFiles {
             return new Info(size,basic.LastWriteTime.getValue(),standard.NumberOfLinks);
         }
         static byte[] read(Path file,int maximum)throws IOException{
-            var h=Kernel32.INSTANCE.CreateFile(file.toString(),WinNT.GENERIC_READ,WinNT.FILE_SHARE_READ,null,WinNT.OPEN_EXISTING,WinNT.FILE_FLAG_OPEN_REPARSE_POINT,null);
-            if(h==null||WinBase.INVALID_HANDLE_VALUE.equals(h))throw new IOException("Journal handle unavailable; no read fallback");
+            var h=Kernel32.INSTANCE.CreateFile(windowsNativePath(file.toString()),WinNT.GENERIC_READ,WinNT.FILE_SHARE_READ,null,WinNT.OPEN_EXISTING,WinNT.FILE_FLAG_OPEN_REPARSE_POINT,null);
+            if(h==null||WinBase.INVALID_HANDLE_VALUE.equals(h))throw new IOException("Journal handle unavailable (Win32="+Kernel32.INSTANCE.GetLastError()+"); no read fallback");
             try{
                 var before=info(h,maximum);var output=new ByteArrayOutputStream((int)before.bytes);var chunk=new byte[65536];
                 while(output.size()<before.bytes){int wanted=(int)Math.min(chunk.length,before.bytes-output.size());var received=new IntByReference();
