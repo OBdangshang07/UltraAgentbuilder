@@ -22,7 +22,7 @@ class NativeEvidenceTransportTest {
     static final String JOB="01234567-89ab-cdef-0123-456789abcdef",ORIGINAL="a".repeat(64);
     HttpServer server;ExecutorService handlers;BridgeClient client;
     JsonObject manifest,request,status,upload,receipt;
-    final byte[] cells={2,0};
+    byte[] cells={2,0};
     final List<String> routes=Collections.synchronizedList(new ArrayList<>());
     @BeforeAll static void bootstrap(){SharedConstants.createGameVersion();Bootstrap.initialize();}
     @BeforeEach void setup()throws Exception{
@@ -43,6 +43,10 @@ class NativeEvidenceTransportTest {
     }
     static byte[] bytes(String s){return s.getBytes(StandardCharsets.UTF_8);}
     static void bind(JsonObject o,String field)throws Exception{o.remove(field);o.addProperty(field,Asset.sha(Asset.canonical(o).getBytes(StandardCharsets.UTF_8)));}
+    void advertiseRequest(){
+        status.getAsJsonObject("nativeEvidence").add("id",request.get("requestHash"));
+        upload.add("requestHash",request.get("requestHash"));receipt.add("requestHash",request.get("requestHash"));
+    }
     NativeEvidenceTarget target(){return NativeEvidenceTarget.assembly(JOB,ORIGINAL,status);}
     void endpoint(String route,java.util.function.Function<HttpExchange,byte[]> response,String contentType){server.createContext(route,e->{
         assertEquals("Bearer "+"b".repeat(64),e.getRequestHeaders().getFirst("Authorization"));routes.add(e.getRequestMethod()+" "+e.getRequestURI());
@@ -68,6 +72,55 @@ class NativeEvidenceTransportTest {
         endpoint(t.jobRoute(),e->bytes(legacy.toString()),"application/json");var old=receipt.deepCopy();old.remove("worldCaptured");old.remove("canAuthorizePlacement");endpoint(t.memberRoute("upload"),e->bytes(old.toString()),"application/json");
         assertTrue(client.loadEvidence(JOB,NativeEvidenceRequest.parse(request)).get(5,TimeUnit.SECONDS).diagnosticOnly);
         assertEquals(old,client.uploadEvidence(t,upload).get(5,TimeUnit.SECONDS));assertTrue(routes.stream().allMatch(r->r.contains("/v1/jobs/")));
+    }
+    @Test void actualNodeRepresentativeRequestWithFramingUsesExactPairedFullTransport()throws Exception{
+        var fixture=Path.of("build/test-fixtures/native-framing-client");
+        request=JsonParser.parseString(Files.readString(fixture.resolve("request.json"))).getAsJsonObject();
+        manifest=JsonParser.parseString(Files.readString(fixture.resolve("manifest.json"))).getAsJsonObject();cells=Files.readAllBytes(fixture.resolve("cells.bin"));
+        assertEquals(224,request.getAsJsonObject("dimensions").get("height").getAsInt());assertEquals(8,request.getAsJsonArray("views").size());
+        assertTrue(request.getAsJsonArray("views").asList().stream().filter(v->v.getAsJsonObject().has("framing")).count()>=3);
+        assertTrue(request.getAsJsonArray("views").asList().stream().anyMatch(v->v.getAsJsonObject().has("framing")&&v.getAsJsonObject().get("framing").getAsString().startsWith("Saved staged representative officeZone")));
+        var originalBytes=request.toString();advertiseRequest();var t=target();reads(t);
+        var r=client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS);var asset=client.loadEvidence(t,r).get(5,TimeUnit.SECONDS);
+        assertEquals(request.get("requestHash").getAsString(),r.hash());assertEquals(manifest.get("assetHash").getAsString(),asset.hash);
+        assertTrue(asset.diagnosticOnly);assertThrows(IllegalStateException.class,asset::requireBuildable);assertEquals(originalBytes,request.toString());
+        assertEquals(r.hash(),NativeEvidenceTarget.legacy(JOB,r.hash()).parseRequest(request).hash());
+        endpoint(t.jobRoute(),e->bytes(status.toString()),"application/json");endpoint(t.memberRoute("upload"),e->bytes(receipt.toString()),"application/json");
+        assertEquals(receipt,client.uploadEvidence(t,upload).get(5,TimeUnit.SECONDS));
+        assertEquals(List.of("GET "+t.memberRoute("request"),"GET "+t.memberRoute("manifest"),"GET "+t.memberRoute("cells"),"GET "+t.jobRoute(),"POST "+t.memberRoute("upload")),routes);
+        assertEquals(0,status.get("worldWrites").getAsInt());assertFalse(receipt.get("canAuthorizePlacement").getAsBoolean());
+    }
+    @Test void malformedFramingWithValidHashIsRejectedAtPairedRequestBeforeAssetOrPost()throws Exception{
+        var original=request.deepCopy();var malformed=new ArrayList<JsonElement>(List.of(JsonNull.INSTANCE,new JsonPrimitive(true),new JsonPrimitive(7),new JsonObject(),new JsonArray(),new JsonPrimitive(""),new JsonPrimitive("  "),new JsonPrimitive("x".repeat(NativeEvidenceRequest.MAX_FRAMING_LENGTH+1))));
+        for(int c=0;c<160;c++)if(c<32||c>=127)malformed.add(new JsonPrimitive("Description"+(char)c));
+        for(var value:malformed){
+            request=original.deepCopy();request.getAsJsonArray("views").get(0).getAsJsonObject().add("framing",value);bind(request,"requestHash");advertiseRequest();var t=target();reads(t);
+            var failure=assertThrows(ExecutionException.class,()->client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS));
+            assertEquals("Invalid native framing metadata",failure.getCause().getMessage());
+        }
+        assertEquals(malformed.size(),routes.size());assertTrue(routes.stream().allMatch(r->r.startsWith("GET "+target().jobRoute()+"/native-evidence/")&&r.endsWith("/request")));
+    }
+    @Test void unknownCameraFieldRemainsRejectedEvenBesideValidFraming()throws Exception{
+        request.getAsJsonArray("views").get(0).getAsJsonObject().addProperty("framing","Synthetic section; not navigation evidence.");
+        request.getAsJsonArray("views").get(0).getAsJsonObject().addProperty("framingExtra","unknown");bind(request,"requestHash");advertiseRequest();var t=target();reads(t);
+        var failure=assertThrows(ExecutionException.class,()->client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS));
+        assertEquals("改造回执字段不一致",failure.getCause().getMessage());assertEquals(List.of("GET "+t.memberRoute("request")),routes);
+    }
+    @Test void changedFramingRequiresBothExactHashAndOriginalEvidenceTarget()throws Exception{
+        var t=target();reads(t);request.getAsJsonArray("views").get(0).getAsJsonObject().addProperty("framing","Synthetic initial framing.");
+        assertThrows(ExecutionException.class,()->client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS));
+        bind(request,"requestHash");assertThrows(ExecutionException.class,()->client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS));
+        assertEquals(List.of("GET "+t.memberRoute("request"),"GET "+t.memberRoute("request")),routes);
+        assertNotEquals(t.evidenceId(),request.get("requestHash").getAsString());
+    }
+    @Test void validFramingDoesNotRelaxCameraCoordinatesDimensionsOrPermission()throws Exception{
+        var original=request.deepCopy();original.getAsJsonArray("views").get(0).getAsJsonObject().addProperty("framing","Synthetic framing, never placement permission.");
+        for(var field:List.of("yaw","pitch","width","max","min","canAuthorizePlacement")){
+            request=original.deepCopy();var view=request.getAsJsonArray("views").get(0).getAsJsonObject();
+            switch(field){case "yaw"->view.addProperty(field,361);case "pitch"->view.addProperty(field,91);case "width"->view.addProperty(field,1024);case "max"->view.getAsJsonArray(field).set(1,new JsonPrimitive(2));case "min"->view.getAsJsonArray(field).set(0,new JsonPrimitive(.5));default->request.addProperty(field,true);}
+            bind(request,"requestHash");advertiseRequest();var t=target();reads(t);assertThrows(ExecutionException.class,()->client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS),field);
+        }
+        assertEquals(6,routes.size());assertTrue(routes.stream().allMatch(r->r.startsWith("GET ")&&r.endsWith("/request")));
     }
     @Test void changedOriginalJobRequestOrPermissionCannotBecomeNativeTarget(){
         for(var key:List.of("id","requestHash","canAuthorizePlacement","allowsNewModelCall","serverBaselineVerified","worldWrites","version","maximumCalls","originalLiveExecutionOnly")){

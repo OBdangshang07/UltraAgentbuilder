@@ -6,6 +6,7 @@ import {pixelPngs,validateReviewImageFiles} from './visual-review.mjs';
 
 const digest=/^[a-f0-9]{64}$/;
 export const NATIVE_RENDERER='minecraft-1.20.1-block-models-v1';
+export const MAX_NATIVE_FRAMING_LENGTH=2048;
 export async function safeEvidenceFile(root,relative,limit){
   if(!relative||path.isAbsolute(relative)||relative.split(/[\\/]/).some(p=>!p||p==='.'||p==='..'))throw new Error('Unsafe evidence path');
   let current=path.resolve(root);
@@ -27,6 +28,7 @@ export function validateEvidenceRequest(request){
   if(!Array.isArray(request.views)||request.views.length<4||request.views.length>8)throw new Error('Invalid native view count');
   const ids=new Set();
   for(const v of request.views){
+    if(Object.hasOwn(v,'framing')&&(typeof v.framing!=='string'||!v.framing.trim()||v.framing.length>MAX_NATIVE_FRAMING_LENGTH||/[\u0000-\u001f\u007f-\u009f]/u.test(v.framing)))throw new Error('Invalid native framing metadata');
     if(!/^[a-z][a-z0-9-]{0,31}$/.test(v.id)||ids.has(v.id)||!['exterior','entry','typical-floor','special-floor','section','facade-detail'].includes(v.purpose)||v.width!==512||v.height!==512||!Number.isFinite(v.yaw)||Math.abs(v.yaw)>360||!Number.isFinite(v.pitch)||Math.abs(v.pitch)>90||!Array.isArray(v.min)||!Array.isArray(v.max)||v.min.length!==3||v.max.length!==3||v.min.some((n,i)=>!Number.isSafeInteger(n)||n<0||!Number.isSafeInteger(v.max[i])||v.max[i]<=n||v.max[i]>extent[i]))throw new Error('Invalid native view contract');
     ids.add(v.id);
   }

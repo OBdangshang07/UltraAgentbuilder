@@ -64,7 +64,13 @@ record NativeEvidenceTarget(Namespace namespace,String jobId,String evidenceId,S
     NativeEvidenceRequest parseRequest(JsonObject value)throws Exception{
         keys(value,"format","version","renderer","sourceHash","assetHash","cellsHash","dimensions","views","canAuthorizePlacement","requestHash");
         keys(value.getAsJsonObject("dimensions"),"width","height","length");
-        for(var view:value.getAsJsonArray("views"))keys(view.getAsJsonObject(),"id","purpose","yaw","pitch","min","max","width","height");
+        // Versioned production cameras may describe their framing. Keep that
+        // metadata in the original hash; it is not a camera or write authority.
+        for(var item:value.getAsJsonArray("views")){
+            var view=item.getAsJsonObject();
+            if(view.has("framing"))keys(view,"id","purpose","yaw","pitch","min","max","width","height","framing");
+            else keys(view,"id","purpose","yaw","pitch","min","max","width","height");
+        }
         no(value,"canAuthorizePlacement");var request=NativeEvidenceRequest.parse(value);
         if(!request.hash().equals(evidenceId))throw new IllegalStateException("Original native request changed");return request;
     }
