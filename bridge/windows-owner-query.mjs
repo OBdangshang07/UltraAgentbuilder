@@ -1,7 +1,11 @@
 // Collect ONLY our already-spawned diagnostic helper. There is no queried PID
 // here: a timeout may stop this helper, never an owner/provider/game process.
 // A closed helper is not proof the observed owner exited or permission to retry.
-export const WINDOWS_OWNER_QUERY_LIMITS = Object.freeze({timeoutMs: 15000, stdoutBytes: 8192, stderrBytes: 8192});
+// Cold Windows/CIM startup can outlast 15 seconds on a hosted or loaded system.
+// Allow one bounded 30-second observation, without another query or SEND. Data
+// is still accepted only after the original helper closes successfully; a
+// timeout remains a failure even if that helper eventually exits with code 0.
+export const WINDOWS_OWNER_QUERY_LIMITS = Object.freeze({timeoutMs: 30000, stdoutBytes: 8192, stderrBytes: 8192});
 const phases = new Set(['machine', 'boot-before', 'process', 'boot-after', 'serialize']);
 const spawnCodes = new Set(['ENOENT', 'EACCES', 'EPERM']);
 const failureReasons = new Set(['spawn-error', 'stdout-limit', 'stderr-limit', 'stream-error', 'timeout', 'query-failed']);

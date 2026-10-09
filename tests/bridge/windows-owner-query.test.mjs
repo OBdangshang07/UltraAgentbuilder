@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import {spawn} from 'node:child_process';
 import {collectWindowsOwnerQuery, publicWindowsOwnerQueryFailure, WINDOWS_OWNER_QUERY_LIMITS} from '../../bridge/windows-owner-query.mjs';
 import * as bridgeObservation from '../../bridge/world-patch-owner-observation.mjs';
 import * as scriptObservation from '../../scripts/world-patch-owner-observation.mjs';
@@ -12,7 +13,7 @@ function fixture() {
   child.kill = () => { kills++; return true; };
   const pending = collectWindowsOwnerQuery(child, {
     setTimer(callback, milliseconds) {
-      assert.equal(milliseconds, 15000); timerCallback = callback;
+      assert.equal(milliseconds, 30000); timerCallback = callback;
       return {unref() { timerUnref = true; }};
     },
     clearTimer() { timerCleared = true; }
@@ -35,8 +36,8 @@ async function failure(f, reason, phase = null) {
   assert.ok(f.timerCleared()); assert.ok(f.timerUnref());
   return error;
 }
-test('owner query retains the original fixed bounds and only stdout as data', async () => {
-  assert.deepEqual(WINDOWS_OWNER_QUERY_LIMITS, {timeoutMs: 15000, stdoutBytes: 8192, stderrBytes: 8192});
+test('owner query has bounded cold-start headroom and retains byte limits and stdout-only data', async () => {
+  assert.deepEqual(WINDOWS_OWNER_QUERY_LIMITS, {timeoutMs: 30000, stdoutBytes: 8192, stderrBytes: 8192});
   assert.ok(Object.isFrozen(WINDOWS_OWNER_QUERY_LIMITS));
   const f = fixture(); f.child.emit('spawn');
   f.child.stderr.emit('data', Buffer.from('private-query-text\nVOXEL_OWNER_STAGE:serialize\n'));
@@ -57,6 +58,28 @@ test('timeout waits for the exact helper close, not exit or kill return', async 
   const error = await failure(f, 'timeout', 'boot-before');
   assert.equal(error.observationDiagnostic.helperStarted, true);
   assert.equal(error.observationDiagnostic.helperExitSignal, 'SIGTERM');
+});
+test('a timeout with complete stdout and later zero exit remains rejected, not recovered', async () => {
+  const f = fixture(); f.child.emit('spawn');
+  f.child.stderr.emit('data', Buffer.from('VOXEL_OWNER_STAGE:serialize\n'));
+  f.child.stdout.emit('data', Buffer.from('{"synthetic":"complete but expired"}\n'));
+  f.timeout(); f.child.emit('exit', 0); f.child.emit('close', 0, null);
+  const error = await failure(f, 'timeout', 'serialize');
+  assert.equal(error.observationDiagnostic.helperExitCode, 0);
+  assert.equal(error.observationDiagnostic.ownershipRecovered, false);
+  assert.equal(f.kills(), 1);
+});
+test('one real synthetic helper can close after the former 15-second bound without acquiring authority', {timeout: 45000}, async () => {
+  const data = {synthetic: true, ownerObserved: false, ownershipRecovered: false, canAuthorizePlacement: false};
+  const child = spawn(process.execPath, ['-e',
+    `process.stderr.write('VOXEL_OWNER_STAGE:serialize\\n');setTimeout(()=>process.stdout.write(${JSON.stringify(JSON.stringify(data)+'\n')}),16000);`],
+  {windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe']});
+  const started = process.hrtime.bigint(), output = await collectWindowsOwnerQuery(child);
+  assert.equal(child.exitCode, 0); assert.equal(child.signalCode, null);
+  assert.ok(Number(process.hrtime.bigint() - started) / 1e6 >= 16000);
+  const value = JSON.parse(output); assert.deepEqual(value, data);
+  assert.throws(() => bridgeObservation.validateWindowsOwnerObservation(value));
+  assert.throws(() => scriptObservation.validateWindowsOwnerObservation(value));
 });
 test('stdout over limit fails even with zero helper exit and valid prefix', async () => {
   const f = fixture(); f.child.stdout.emit('data', Buffer.alloc(8193, 32));
