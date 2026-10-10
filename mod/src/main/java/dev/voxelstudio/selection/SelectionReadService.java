@@ -376,7 +376,7 @@ public final class SelectionReadService {
         private final Capture original;private final AssemblyPatchPreview preview;private final AssemblyPatchCompiler.Compiled compiled;private boolean detached;
         private AssemblyNativeLease(Task task,AssemblyPatchPreview preview){this.task=task;audit=task.assemblyAudit;before=task.assemblyBefore;original=task.capture;this.preview=preview;compiled=audit.compiled;}
         AssemblyPatchCompiler.Compiled compiled(){return compiled;}Capture original(){return original;}AssemblyPatchPreview preview(){return preview;}
-        AssemblyPatchJournal.Plan prepare(UUID player){return AssemblyPatchJournal.prepare(original,compiled,preview,player);}
+        AssemblyPatchJournal.Plan prepare(UUID player,java.util.function.BooleanSupplier cancelled){return AssemblyPatchJournal.prepare(original,compiled,preview,player,cancelled);}
         boolean canAuthorizePlacement(){return false;}
         void current(MinecraftServer server,UUID player){
             if(detached||checkedTask(server,player,original.id(),original.selection().revision())!=task||task.capture!=original

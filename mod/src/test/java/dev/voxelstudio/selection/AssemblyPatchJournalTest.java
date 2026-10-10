@@ -21,6 +21,19 @@ final class AssemblyPatchJournalTest {
         return new Fixture(header,input,compiled,AssemblyPatchPreview.from(input),capture);
     }
     private AssemblyPatchJournal.Plan plan(Fixture f){return AssemblyPatchJournal.prepare(f.capture,f.compiled,f.preview,UUID.randomUUID());}
+    @Test void wholeReadOnlyPlanCancellationPreservesOriginalInputAndCreatesNoJournal()throws Exception{
+        var f=fixture("lite");var payload=f.capture.payload();var proposal=f.input.parts().get(0).proposal();
+        var fullChecks=new java.util.concurrent.atomic.AtomicInteger();
+        var p=AssemblyPatchJournal.prepare(f.capture,f.compiled,f.preview,UUID.randomUUID(),()->{fullChecks.incrementAndGet();return false;});
+        assertTrue(fullChecks.get()>2,"Complete original plan must expose its actual cancellation checkpoints");
+        for(int stop:new int[]{1,2,fullChecks.get()/2,fullChecks.get()}){
+            var checks=new java.util.concurrent.atomic.AtomicInteger();
+            assertThrows(java.util.concurrent.CancellationException.class,()->AssemblyPatchJournal.prepare(f.capture,f.compiled,f.preview,UUID.randomUUID(),()->checks.incrementAndGet()>=stop));
+            assertEquals(payload,f.capture.payload());assertArrayEquals(proposal,f.input.parts().get(0).proposal());
+            try(var files=Files.list(temp)){assertEquals(0,files.count());}
+        }
+        assertSame(f.compiled,p.compiled());assertFalse(p.canAuthorizePlacement());
+    }
     private AssemblyPatchJournal.Live live()throws Exception{return AssemblyPatchJournal.create(temp,plan(fixture("lite")));}
     private byte[] bytes(JsonElement value){return value.toString().getBytes(StandardCharsets.UTF_8);}
     private JsonObject read(Path file)throws Exception{return JsonParser.parseString(Files.readString(file)).getAsJsonObject();}

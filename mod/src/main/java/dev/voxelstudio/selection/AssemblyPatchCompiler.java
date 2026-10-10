@@ -40,7 +40,8 @@ final class AssemblyPatchCompiler {
                 if(!points.add(write.position())||previous!=null&&ORDER.compare(previous,write.position())>=0)throw new IllegalArgumentException("Whole operation set repeats or reorders original native coordinates");
                 writes.add(write);previous=write.position();
             }
-            for(var guard:rebuilt.guards()){
+            int checked=0;for(var guard:rebuilt.guards()){
+                if((checked++&1023)==0)WorldPatchJson.cancelled(cancelled);
                 var prior=guards.get(guard.position());
                 if(prior==null)guards.put(guard.position(),guard);
                 else{

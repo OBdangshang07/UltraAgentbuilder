@@ -5,6 +5,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 /** Independent WHOLE v2 write-ahead ledger. All disk methods are worker-only.
  * Original source and EVERY proposal/patch/preview are immutable plan members.
@@ -34,33 +35,40 @@ final class AssemblyPatchJournal {
         }
     }
     static Plan prepare(SelectionReadService.Capture original,AssemblyPatchCompiler.Compiled compiled,AssemblyPatchPreview preview,UUID player){
+        return prepare(original,compiled,preview,player,()->false);
+    }
+    static Plan prepare(SelectionReadService.Capture original,AssemblyPatchCompiler.Compiled compiled,AssemblyPatchPreview preview,UUID player,BooleanSupplier cancelled){
         Objects.requireNonNull(original);Objects.requireNonNull(compiled);Objects.requireNonNull(preview);Objects.requireNonNull(player);
+        Objects.requireNonNull(cancelled);WorldPatchJson.cancelled(cancelled);
         var binding=compiled.binding();var baseline=compiled.baseline();
         if(!original.id().equals(binding.captureId())||!original.selection().equals(binding.selection())||original.contextRevision()!=binding.contextRevision()
                 ||!preview.binding().equals(binding)||preview.totalWrites()!=binding.totalWrites())throw new IllegalArgumentException("Whole journal requires the same original Capture and complete candidate");
-        var source=original.payload().getBytes(StandardCharsets.UTF_8);var value=WorldPatchJson.parse(source,()->false);WorldPatchJson.keys(value,"selection","capture");
+        var source=original.payload().getBytes(StandardCharsets.UTF_8);var value=WorldPatchJson.parse(source,cancelled);WorldPatchJson.keys(value,"selection","capture");
         if(!value.get("selection").equals(binding.selection().json()))throw new IllegalArgumentException("Whole source selection differs");
-        var rebuilt=SelectionBaseline.fromSealedCapture(original.selection(),value.getAsJsonObject("capture"));
+        var rebuilt=SelectionBaseline.fromSealedCapture(original.selection(),value.getAsJsonObject("capture"),cancelled);
         if(!rebuilt.snapshotHash.equals(baseline.snapshotHash)||!rebuilt.selectionHash.equals(baseline.selectionHash)||rebuilt.contextRevision!=binding.contextRevision())throw new IllegalArgumentException("Whole archived source differs from original server baseline");
-        var again=AssemblyPatchCompiler.compile(rebuilt,compiled.original(),()->false);
+        var again=AssemblyPatchCompiler.compile(rebuilt,compiled.original(),cancelled);WorldPatchJson.cancelled(cancelled);
         if(!again.writes().equals(compiled.writes())||!again.guards().equals(compiled.guards()))throw new IllegalArgumentException("Whole archive cannot replace original server reconstruction");
-        for(var write:compiled.writes()){
+        int checked=0;for(var write:compiled.writes()){
+            if((checked++&1023)==0)WorldPatchJson.cancelled(cancelled);
             var row=preview.at(write.position());if(row==null||!write.before().equals(row.before())||!write.after().equals(row.after())||!write.difference().equals(row.difference().name().toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Whole confirmed display differs from original writes");
         }
         var members=new LinkedHashMap<String,byte[]>();members.put("source.json",source);
         for(var part:compiled.original().parts()){
+            WorldPatchJson.cancelled(cancelled);
             if(part.originalPreview()==null)throw new IllegalArgumentException("Original complete preview bytes required; no synthesized archive substitute");
             members.put(partName(part.index(),"proposal"),part.originalProposal());members.put(partName(part.index(),"patch"),part.originalPatch());members.put(partName(part.index(),"preview"),part.originalPreview());
         }
         var id=UUID.randomUUID();var plan=new JsonObject();plan.addProperty("format","AssemblyPatchTransactionPlan");plan.addProperty("version",2);
         plan.addProperty("id",id.toString());plan.addProperty("player",player.toString());plan.addProperty("originalCaptureId",original.id());plan.add("binding",binding.json());
         var files=new JsonArray();for(var entry:members.entrySet()){
+            WorldPatchJson.cancelled(cancelled);
             if(entry.getValue().length>maximum(entry.getKey()))throw new IllegalArgumentException("Whole journal member quota exceeded");
             var pin=new JsonObject();pin.addProperty("path",entry.getKey());pin.addProperty("bytes",entry.getValue().length);pin.addProperty("sha256",sha(entry.getValue()));files.add(pin);
         }
         plan.add("files",files);for(var flag:List.of("canAuthorizePlacement","serverBaselineVerified","worldDurabilityVerified","crashAtomicPublication"))plan.addProperty(flag,false);
         var hash=SelectionBaseline.hash(plan);plan.addProperty("planHash",hash);var raw=bytes(plan);if(raw.length>METADATA)throw new IllegalArgumentException("Whole plan metadata quota exceeded");members.put("plan.json",raw);
-        return new Plan(id,player,compiled,members,hash);
+        WorldPatchJson.cancelled(cancelled);return new Plan(id,player,compiled,members,hash);
     }
     static final class Intent {
         private final Live owner;private final int index,offset;private final List<WorldPatchCompiler.Write> writes;

@@ -44,23 +44,28 @@ final class SelectionBaseline {
         return value.substring(0,at)+"["+properties.entrySet().stream().map(e->e.getKey()+"="+e.getValue()).collect(java.util.stream.Collectors.joining(","))+"]";
     }
     static SelectionBaseline fromSealedCapture(WorldSelection selection,JsonObject capture){
+        return fromSealedCapture(selection,capture,()->false);
+    }
+    static SelectionBaseline fromSealedCapture(WorldSelection selection,JsonObject capture,java.util.function.BooleanSupplier cancelled){
+        Objects.requireNonNull(cancelled);WorldPatchJson.cancelled(cancelled);
         Objects.requireNonNull(selection);keys(capture,"fence","chunks");var fence=capture.getAsJsonObject("fence");keys(fence,"start","end");
         long revision=integer(fence.get("start"),0,9007199254740991L);if(integer(fence.get("end"),0,9007199254740991L)!=revision)throw new IllegalArgumentException("Mixed server baseline");
         var expected=selection.chunks();var source=capture.getAsJsonArray("chunks");if(source.size()!=expected.size())throw new IllegalArgumentException("Incomplete server baseline coverage");
         var chunks=new HashMap<Long,Chunk>();var normalized=new JsonArray();
         for(int i=0;i<expected.size();i++){
-            if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException("Baseline preparation cancelled");
+            WorldPatchJson.cancelled(cancelled);
             var e=expected.get(i);var raw=source.get(i).getAsJsonObject();keys(raw,"x","z","coverage","palette","runs");
             if(integer(raw.get("x"),-1875000,1874999)!=e.x()||integer(raw.get("z"),-1875000,1874999)!=e.z())throw new IllegalArgumentException("Server chunk order changed");
             String coverage=text(raw.get("coverage"));boolean known=coverage.equals("known");if(!known&&!coverage.equals("unknown"))throw new IllegalArgumentException("Invalid server coverage");
             var palette=new ArrayList<SelectionScan.BlockFact>();var jsonPalette=new JsonArray();var rawPalette=raw.getAsJsonArray("palette");var runs=raw.getAsJsonArray("runs");
             if(known?(rawPalette.isEmpty()||rawPalette.size()>SelectionLimits.paletteStates()||runs.isEmpty()||runs.size()>e.region().cells()):(!rawPalette.isEmpty()||!runs.isEmpty()))throw new IllegalArgumentException("Invalid server compressed coverage");
-            var states=new HashSet<String>();for(var item:rawPalette){var fact=item.getAsJsonObject();keys(fact,"state","blockEntity");String state=canonicalState(text(fact.get("state")));var entity=fact.get("blockEntity");
+            var states=new HashSet<String>();for(var item:rawPalette){WorldPatchJson.cancelled(cancelled);var fact=item.getAsJsonObject();keys(fact,"state","blockEntity");String state=canonicalState(text(fact.get("state")));var entity=fact.get("blockEntity");
                 if(!entity.isJsonPrimitive()||!entity.getAsJsonPrimitive().isBoolean()||!states.add(state))throw new IllegalArgumentException("Contradictory server palette");
                 palette.add(new SelectionScan.BlockFact(state,entity.getAsBoolean()));var normalizedFact=new JsonObject();normalizedFact.addProperty("state",state);normalizedFact.addProperty("blockEntity",entity.getAsBoolean());jsonPalette.add(normalizedFact);
             }
             int[] ids=new int[runs.size()];long[] ends=new long[runs.size()];long total=0;int previous=-1;var used=new HashSet<Integer>();var jsonRuns=new JsonArray();
             for(int j=0;j<runs.size();j++){var run=runs.get(j).getAsJsonArray();if(run.size()!=2)throw new IllegalArgumentException("Invalid server run");
+                if((j&1023)==0)WorldPatchJson.cancelled(cancelled);
                 int id=(int)integer(run.get(0),0,palette.size()-1);long count=integer(run.get(1),1,e.region().cells());total+=count;
                 if(id==previous||total>e.region().cells())throw new IllegalArgumentException("Noncanonical/overflow server runs");ids[j]=id;ends[j]=total;used.add(id);previous=id;
                 var pair=new JsonArray();pair.add(id);pair.add(count);jsonRuns.add(pair);
@@ -71,7 +76,7 @@ final class SelectionBaseline {
         }
         String selectionHash=hash(selection.json());var snapshot=new JsonObject();snapshot.addProperty("format","WorldContextSnapshot");snapshot.addProperty("version",1);snapshot.add("selection",selection.json());snapshot.addProperty("selectionHash",selectionHash);
         snapshot.add("fence",fence.deepCopy());snapshot.add("chunks",normalized);snapshot.addProperty("cellOrder","y-z-x");snapshot.addProperty("privacy","block-states-only");snapshot.addProperty("canAuthorizePlacement",false);
-        return new SelectionBaseline(selection,revision,hash(snapshot),selectionHash,chunks);
+        WorldPatchJson.cancelled(cancelled);var result=new SelectionBaseline(selection,revision,hash(snapshot),selectionHash,chunks);WorldPatchJson.cancelled(cancelled);return result;
     }
     SelectionScan.BlockFact at(SelectionRegion.Point point){
         if(!selection.context().contains(point))throw new IllegalArgumentException("Baseline read outside C");

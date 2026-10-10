@@ -36,11 +36,13 @@ public final class AssemblyPatchPlacementService {
         public String id(){return id;}public Status status(){return status;}public CompletableFuture<Result> result(){return result;}
     }
     private static final Map<MinecraftServer,Preparation> PREPARATIONS=new HashMap<>();
+    private static final Map<MinecraftServer,AssemblyPlanPreparation<?>> RETIRING_PLANS=new HashMap<>();
     private static final Map<MinecraftServer,Task> TASKS=new HashMap<>();
+    private static final ExecutorService PLAN=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new SynchronousQueue<>(),r->{var t=new Thread(r,"voxel-assembly-plan-preparation");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
     private static final ExecutorService DISK=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(1),r->{var t=new Thread(r,"voxel-assembly-patch-journal");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
     private static final class Preparation {
         UUID player;PrepareHandle handle;SelectionReadService.Capture original;AssemblyPatchPreview preview;SelectionReadService.AssemblyAuditHandle audit;SelectionReadService.AssemblyBeforeHandle before;
-        SelectionReadService.AssemblyNativeLease lease;CompletableFuture<Prepared> worker;Prepared prepared;Confirmation confirmation;long workerStarted;
+        SelectionReadService.AssemblyNativeLease lease;AssemblyPlanPreparation<Prepared> worker;Prepared prepared;Confirmation confirmation;
     }
     private record Prepared(AssemblyPatchJournal.Plan plan,Summary summary){}
     private static final class Task {
@@ -49,8 +51,9 @@ public final class AssemblyPatchPlacementService {
     }
     private static void thread(MinecraftServer server){if(!server.isOnThread())throw new IllegalStateException("Native placement gateway requires server thread");}
     private static boolean terminal(State state){return Set.of(State.COMPLETED,State.CANCELLED,State.CONFLICT,State.REVIEW_REQUIRED,State.FAILED).contains(state);}
-    public static boolean busy(MinecraftServer server){thread(server);var task=TASKS.get(server);return PREPARATIONS.containsKey(server)||task!=null&&!terminal(task.handle.status.state)||AssemblyPatchUndoService.busy(server);}
-    private static void idle(MinecraftServer server){WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.WHOLE_ASSEMBLY);var task=TASKS.get(server);if(task!=null&&!terminal(task.handle.status.state)||AssemblyPatchUndoService.busy(server))throw new IllegalStateException("已有原位改造/撤销事务或撤销准备；先等待或显式取消");}
+    private static void reapPlans(){RETIRING_PLANS.entrySet().removeIf(entry->entry.getValue().closed());}
+    public static boolean busy(MinecraftServer server){thread(server);reapPlans();var task=TASKS.get(server);return RETIRING_PLANS.containsKey(server)||PREPARATIONS.containsKey(server)||task!=null&&!terminal(task.handle.status.state)||AssemblyPatchUndoService.busy(server);}
+    private static void idle(MinecraftServer server){WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.WHOLE_ASSEMBLY);var task=TASKS.get(server);if(RETIRING_PLANS.containsKey(server)||task!=null&&!terminal(task.handle.status.state)||AssemblyPatchUndoService.busy(server))throw new IllegalStateException("已有原位事务、撤销准备或取消中的原 CPU 准备；等待原 worker 封闭，不隐式接管");}
     /** Private same-live-task witness. Neither a public operation ID nor a
      * disk archive can create this object. Only the latest retained apply is
      * eligible, and preparation does not consume the undo origin. */
@@ -73,10 +76,11 @@ public final class AssemblyPatchPlacementService {
     private static void discard(MinecraftServer server,Preparation p,PrepareState state,String reason){
         if(PREPARATIONS.get(server)!=p)return;PREPARATIONS.remove(server);if(p.confirmation!=null)AssemblyPatchConsent.revoke(p.confirmation.ticket,p);
         if(p.audit!=null)SelectionReadService.cancelAssemblyAudit(server,p.audit.id());if(p.before!=null)SelectionReadService.cancelAssemblyBeforeCheck(server,p.before.id());
+        if(p.worker!=null){p.worker.cancel();if(!p.worker.closed())RETIRING_PLANS.put(server,p.worker);}
         p.lease=null;p.original=null;p.preview=null;p.prepared=null;p.worker=null;p.handle.status=new PrepareStatus(state,reason);p.handle.result.completeExceptionally(new IllegalStateException(reason));
     }
-    private static Prepared prepared(SelectionReadService.AssemblyNativeLease lease,UUID player){
-        var plan=lease.prepare(player);int adds=0,replaces=0,clears=0;for(var w:plan.compiled().writes())switch(w.difference()){case "added"->adds++;case "removed"->clears++;case "replaced"->replaces++;default->throw new IllegalArgumentException("Original difference category invalid");}
+    private static Prepared prepared(SelectionReadService.AssemblyNativeLease lease,UUID player,java.util.function.BooleanSupplier cancelled){
+        var plan=lease.prepare(player,cancelled);int adds=0,replaces=0,clears=0;int count=0;for(var w:plan.compiled().writes()){if((count++&1023)==0)WorldPatchJson.cancelled(cancelled);switch(w.difference()){case "added"->adds++;case "removed"->clears++;case "replaced"->replaces++;default->throw new IllegalArgumentException("Original difference category invalid");}}
         return new Prepared(plan,new Summary(plan.binding(),plan.compiled().writes().size(),adds,replaces,clears,plan.compiled().guards().size()));
     }
     private static void prepareTick(MinecraftServer server,Preparation p){
@@ -84,8 +88,8 @@ public final class AssemblyPatchPlacementService {
             if(p.handle.result.isCancelled()){discard(server,p,PrepareState.CANCELLED,"准备已取消");return;}
             switch(p.handle.status.state){
                 case AUDIT->{if(!p.audit.result().isDone()){p.handle.status=new PrepareStatus(PrepareState.AUDIT,p.audit.status().reason());return;}p.audit.result().getNow(null);p.before=SelectionReadService.startAssemblyBeforeCheck(server,p.player,p.original,p.preview,p.audit.id());p.handle.status=new PrepareStatus(PrepareState.BEFORE,"规则已核验；逐 tick 对比当前原始 BEFORE");}
-                case BEFORE->{if(!p.before.result().isDone()){p.handle.status=new PrepareStatus(PrepareState.BEFORE,p.before.status().reason());return;}p.before.result().getNow(null);p.lease=SelectionReadService.assemblyNativeLease(server,p.player,p.original,p.preview,p.audit.id(),p.before.id());var lease=p.lease;var player=p.player;p.worker=CompletableFuture.supplyAsync(()->prepared(lease,player),DISK);p.workerStarted=System.nanoTime();p.handle.status=new PrepareStatus(PrepareState.PREPARING_PLAN,"后台绑定原始日志方案；仍无世界写入");}
-                case PREPARING_PLAN->{if(!p.worker.isDone()){if(System.nanoTime()-p.workerStarted>AssemblyPatchExecution.WAIT_TIMEOUT_NANOS)throw new IllegalStateException("原始方案准备回执超时；不重发");return;}var value=p.worker.getNow(null);p.lease.current(server,p.player);p.prepared=value;var ticket=AssemblyPatchConsent.issue(p,p.player,value.plan.binding(),System.nanoTime());p.confirmation=new Confirmation(p,value.summary,ticket);p.handle.status=new PrepareStatus(PrepareState.READY,"原规则和 fresh BEFORE 一致；45 秒内独立确认原位应用");p.handle.result.complete(p.confirmation);p.worker=null;}
+                case BEFORE->{if(!p.before.result().isDone()){p.handle.status=new PrepareStatus(PrepareState.BEFORE,p.before.status().reason());return;}p.before.result().getNow(null);p.lease=SelectionReadService.assemblyNativeLease(server,p.player,p.original,p.preview,p.audit.id(),p.before.id());var lease=p.lease;var player=p.player;p.worker=AssemblyPlanPreparation.start(PLAN,System::nanoTime,cancelled->prepared(lease,player,cancelled));p.handle.status=new PrepareStatus(PrepareState.PREPARING_PLAN,"后台核验完整原始日志方案（CPU 准备最多 180 秒）；仍无世界写入");}
+                case PREPARING_PLAN->{p.worker.check();if(!p.worker.closed())return;var value=p.worker.value();p.lease.current(server,p.player);p.prepared=value;var ticket=AssemblyPatchConsent.issue(p,p.player,value.plan.binding(),System.nanoTime());p.confirmation=new Confirmation(p,value.summary,ticket);p.handle.status=new PrepareStatus(PrepareState.READY,"原规则和 fresh BEFORE 一致；45 秒内独立确认原位应用");p.handle.result.complete(p.confirmation);p.worker=null;}
                 case READY->{p.lease.current(server,p.player);if(!AssemblyPatchConsent.available(p.confirmation.ticket,p,p.player,p.prepared.plan.binding(),System.nanoTime()))throw new IllegalStateException("最终确认已过期；原响应保留，可显式重新准备");}
                 default->{}
             }
@@ -120,7 +124,7 @@ public final class AssemblyPatchPlacementService {
             if(terminal(mapped))finish(t,mapped,p.confirmedWrites(),p.reason());else t.handle.status=new Status(mapped,p.confirmedWrites(),p.totalWrites(),p.reason());
         }catch(Exception e){finish(t,State.REVIEW_REQUIRED,t.engine==null?0:t.engine.progress().confirmedWrites(),"原事务无法继续；不自动重放："+root(e));}
     }
-    public static void tick(MinecraftServer server){thread(server);var p=PREPARATIONS.get(server);if(p!=null)prepareTick(server,p);var t=TASKS.get(server);if(t!=null)tickTask(server,t);}
+    public static void tick(MinecraftServer server){thread(server);reapPlans();var p=PREPARATIONS.get(server);if(p!=null)prepareTick(server,p);var t=TASKS.get(server);if(t!=null)tickTask(server,t);}
     public static void stopping(MinecraftServer server){
         thread(server);var p=PREPARATIONS.get(server);if(p!=null)discard(server,p,PrepareState.CANCELLED,"服务器正在关闭；未确认准备作废");var t=TASKS.remove(server);if(t==null)return;
         if(!terminal(t.handle.status.state)){if(t.engine!=null){t.engine.cancel();t.engine.step();}finish(t,State.REVIEW_REQUIRED,t.engine==null?0:t.engine.progress().confirmedWrites(),"服务器关闭时事务未完全封闭；原磁盘操作不取消、不重发，日志需审查");}else close(t);
