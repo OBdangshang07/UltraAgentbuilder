@@ -2,6 +2,7 @@ package dev.voxelstudio.client;
 
 import com.google.gson.*;
 import dev.voxelstudio.selection.SelectionReadService;
+import dev.voxelstudio.selection.SelectionLimits;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import static dev.voxelstudio.client.WorldPatchTaskReceipt.*;
@@ -109,7 +110,7 @@ final class ReferenceWorldAssemblyReceipt {
         }
         var candidate=s.get("candidate");if(text(s,"state").equals("preview-ready")){
             var c=candidate.getAsJsonObject();keys(c,"candidateHash","patchSetHash","partCount","operationCount","canAuthorizePlacement","partIsApplyScope");digest(c,"candidateHash");digest(c,"patchSetHash");no(c,"canAuthorizePlacement","partIsApplyScope");
-            if(number(c,"partCount")<1||number(c,"partCount")>32||number(c,"operationCount")<1||number(c,"operationCount")>8192*number(c,"partCount"))throw new IllegalStateException("原整组候选超额/不完整");
+            if(number(c,"partCount")<1||number(c,"partCount")>SelectionLimits.assemblyParts()||number(c,"operationCount")<1||number(c,"operationCount")>SelectionLimits.editCells()||number(c,"partCount")!=(number(c,"operationCount")+8191)/8192)throw new IllegalStateException("原整组候选超额/不完整");
         }else if(!candidate.isJsonNull())throw new IllegalStateException("未完成原完整任务不能授予候选");return s;
     }
     static JsonObject capabilities(JsonObject c){

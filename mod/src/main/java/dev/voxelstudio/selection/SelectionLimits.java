@@ -15,6 +15,8 @@ public final class SelectionLimits {
     public static int axis(int axis){return DATA.getAsJsonArray("axes").get(axis).getAsInt();}
     public static long contextCells(){return DATA.get("contextCells").getAsLong();}
     public static long editCells(){return DATA.get("editCells").getAsLong();}
+    /** Count quota only: aggregate/per-part byte and transaction guards remain independent. */
+    public static int assemblyParts(){return Math.toIntExact((editCells()+8191)/8192);}
     public static int protectedRegions(){return DATA.get("protectedRegions").getAsInt();}
     public static int chunks(){return DATA.get("chunks").getAsInt();}
     public static int snapshotBytes(){return DATA.get("snapshotBytes").getAsInt();}

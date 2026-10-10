@@ -25,7 +25,7 @@ public record AssemblyPatchBinding(String captureId,WorldSelection selection,lon
         if(!SelectionBaseline.hash(patchSet(worldContextHash,snapshotHash,selectionHash,assetHash,cellsHash,origin,partHashes,totalWrites)).equals(patchSetHash))fail("Whole original patch-set content hash changed");
     }
     private static List<String> checked(List<String> values){
-        Objects.requireNonNull(values);if(values.isEmpty()||values.size()>32)fail("Whole part quota exceeded");
+        Objects.requireNonNull(values);if(values.isEmpty()||values.size()>SelectionLimits.assemblyParts())fail("Whole part quota exceeded");
         for(var value:values)digest(value);if(new HashSet<>(values).size()!=values.size())fail("Whole hash list repeated");return List.copyOf(values);
     }
     private static void digest(String value){if(value==null||!value.matches("[a-f0-9]{64}"))fail("Whole SHA256 required");}

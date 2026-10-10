@@ -105,7 +105,7 @@ final class ReferenceWorldAssemblyCandidateReceipt {
         if(number(c,"reservedCalls")<1||number(c,"reservedCalls")>number(p,"maximumCalls"))throw new IllegalStateException("原整组调用计数改变");
         if(!s.get("reservedCalls").isJsonNull())same(c.get("reservedCalls"),s.get("reservedCalls"));
         int count=(int)number(c,"partCount");long operations=number(c,"operationCount");
-        if(count<1||count>32||operations<1||operations>SelectionLimits.editCells()||count!=(operations+8191)/8192)throw new IllegalStateException("原整组分片数或操作数量不完整");
+        if(count<1||count>SelectionLimits.assemblyParts()||operations<1||operations>SelectionLimits.editCells()||count!=(operations+8191)/8192)throw new IllegalStateException("原整组分片数或操作数量不完整");
         var previews=c.getAsJsonArray("previewHashes");if(previews.size()!=count)throw new IllegalStateException("原整组预览遗漏");for(var v:previews)if(!v.isJsonPrimitive()||!v.getAsJsonPrimitive().isString()||!v.getAsString().matches("[a-f0-9]{64}"))throw new IllegalStateException("原预览hash无效");
         var set=envelope.getAsJsonObject("patchSet");keys(set,"format","version","worldContextHash","snapshotHash","selectionHash","assetHash","cellsHash","origin","coordinateTransform","omittedCells","operationCount","partCount","partHashes","fullAssetProcessed","partialPublicationAllowed","serverBaselineVerified","physicsVerified","canAuthorizePlacement","worldWrites","patchSetHash");
         if(!text(set,"format").equals("AssemblyWorldPatchSet")||number(set,"version")!=2||!text(set,"coordinateTransform").equals("translate-only-original-W-min")||!text(set,"omittedCells").equals("keep"))throw new IllegalStateException("原整组不能旋转、缩放或移动");hash(set,"patchSetHash");

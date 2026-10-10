@@ -37,7 +37,7 @@ for (const [name, mutate] of [
   ['untrusted limits override', s => s.limits = {contextCells: Infinity}], ['negative revision', s => s.revision = -1],
   ['outside protection', s => s.protected[0].min[0] = -18], ['duplicate protection', s => s.protected.push(structuredClone(s.protected[0]))],
   ['context volume', s => {s.context = {min: [0, 0, 0], max: [256, 128, 256]}; s.edit = {min: [0, 0, 0], max: [1, 1, 1]}; s.protected = [];}],
-  ['edit volume', s => {s.context = {min: [0, 0, 0], max: [128, 32, 128]}; s.edit = structuredClone(s.context); s.protected = [];}],
+  ['edit volume', s => {s.context = {min: [0, 0, 0], max: [128, 65, 128]}; s.edit = structuredClone(s.context); s.protected = [];}],
 ]) test('selection rejects ' + name, () => { const s = selection(); mutate(s); assert.throws(() => validateWorldSelection(s)); });
 
 test('snapshot binds selection, exact runs, chunk digests and full-region change fence', () => {
@@ -139,7 +139,7 @@ test('resource quotas reject palette/run amplification and oversized serialized 
   assert.throws(() => validateContextSnapshot({payload: 'x'.repeat(16777217)}), /byte quota/);
 });
 
-test('a maximum-volume uniform context remains compressed; no omitted interior baseline', () => {
+test('the original one-million-cell uniform context remains compressed; no omitted interior baseline', () => {
   const s = selection(); s.context = {min: [-128, 0, -128], max: [128, 16, 128]};
   s.edit = {min: [-64, 0, -64], max: [64, 16, 64]}; s.protected = [];
   const v = createContextSnapshot(s, capture(s));

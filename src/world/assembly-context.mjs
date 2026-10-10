@@ -2,10 +2,13 @@ import {hash, LIMITS} from '../generation/compiler.mjs';
 import {validateContextSnapshot, readSnapshotCell, contextHash} from './context-snapshot.mjs';
 import {prepareWorldPatchDesignInput} from './world-patch-design-input.mjs';
 import {compileWorldPatch} from './world-patch.mjs';
+import {WORLD_SELECTION_LIMITS} from '../../contracts/world-selection.mjs';
 
 const originals = new WeakMap();
 // A separately versioned aggregate, not a larger legacy v1 patch or consent.
-export const WORLD_ASSEMBLY_PATCH_LIMITS = Object.freeze({operationsPerPart:8192,parts:32,bytes:64*1024**2});
+const operationsPerPart = 8192;
+export const WORLD_ASSEMBLY_PATCH_LIMITS = Object.freeze({operationsPerPart,
+  parts:Math.ceil(WORLD_SELECTION_LIMITS.editCells/operationsPerPart),bytes:64*1024**2});
 const freeze = value => {
   if (value && typeof value === 'object') {for (const child of Object.values(value)) freeze(child); Object.freeze(value);}
   return value;
@@ -54,7 +57,7 @@ export function compileAssemblyWorldPatch(context, compiled, {signal} = {}) {
     throw Error('Native asset exceeds original W; no clipping, axis swap or relocation');
   const palette = manifest.palette;
   if (!Array.isArray(palette) || palette[0] !== '@keep' || palette[1] !== 'minecraft:air') throw Error('Exact native keep/clear palette required');
-  const bytes = Buffer.from(binary), operations = []; let sets = 0, clears = 0;
+  const bytes = Buffer.from(binary), operations = []; let sets = 0, clears = 0, proposalBytes = 4096;
   for (let i = 0; i < w*h*d; i++) {
     if (!(i % 1024)) signal?.throwIfAborted();
     const n = bytes.readUInt16LE(i*2);
@@ -66,7 +69,10 @@ export function compileAssemblyWorldPatch(context, compiled, {signal} = {}) {
     if (before.coverage !== 'known') throw Error('Native change refers to UNKNOWN original W, not air');
     const after = palette[n];
     if (before.state === after || n === 1 && ['minecraft:air','minecraft:cave_air','minecraft:void_air'].includes(before.state)) continue;
-    operations.push(n === 1 ? {op:'clear',position,before:before.state} : {op:'set',position,before:before.state,after});
+    const operation = n === 1 ? {op:'clear',position,before:before.state} : {op:'set',position,before:before.state,after};
+    proposalBytes += Buffer.byteLength(JSON.stringify(operation)) + 1;
+    if (proposalBytes > WORLD_ASSEMBLY_PATCH_LIMITS.bytes) throw Error('Full native world patch proposal working byte quota; no partial publication');
+    operations.push(operation);
   }
   if (sets !== manifest.setCount || clears !== manifest.clearCount) throw Error('Native set/clear counts differ from original asset');
   if (!operations.length) throw Error('Full assembled asset has no world changes; no incomplete/no-op patch published');
