@@ -16,11 +16,12 @@ finalization runs on the bounded background worker. Synthetic clock tests prove
 work-count boundaries, not real-world frame times or preemption of a slow read.
 
 Complete assembly patch transport derives its part-count ceiling from edit
-capacity: at most 128 parts of 8,192 operations. The 64 MiB aggregate patch and
-100 MiB client download quotas remain unchanged; per-part byte limits also
-remain. A dense result can hit these independent limits before the count quota.
-There is no partial adoption, byte-quota override or permission to build parts
-individually. This capacity step is not full large-asset transaction acceptance.
+capacity: at most 128 parts of 8,192 operations. The streaming successor uses
+the fixed shared resource contract described in `STREAMING_ASSEMBLY_RESOURCES.md`.
+Per-part, snapshot, proposal and preview bounds remain independent; a dense
+result can still hit byte limits before the count quota. There is no partial
+adoption, caller byte-quota override or permission to build parts individually.
+This capacity step is not full large-asset transaction acceptance.
 
 Selection, source/asset hashes, exact BEFORE facts, six captured neighbors,
 protection, fresh server checks and explicit final world confirmation are still

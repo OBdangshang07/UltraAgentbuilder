@@ -157,7 +157,11 @@ test('completed joint candidate rereads original files/ledger/render evidence, n
     const candidate=JSON.parse(candidateBytes),pin=candidate.files.find(f=>f.path==='part-000.json');pin.bytes=changedPart.length;pin.sha256=hash(changedPart);
     const {candidateHash,...content}=candidate,changedCandidate={...content,candidateHash:hash(content)};
     await fs.writeFile(partFile,changedPart);await fs.writeFile(candidateFile,JSON.stringify(changedCandidate));
-    await assert.rejects(readReferenceWorldAssemblyCandidate({...options,candidateHash:changedCandidate.candidateHash}),/original task/);
+    for(const retainParts of [true,false]){
+      await assert.rejects(readReferenceWorldAssemblyCandidate({...options,candidateHash:changedCandidate.candidateHash,retainParts}),
+        error=>error.statusCode===409&&/original task/.test(error.message));
+      assert.equal(h.calls.length,calls);
+    }
   } finally {await fs.writeFile(partFile,partBytes);await fs.writeFile(candidateFile,candidateBytes);}
   await mutate(REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY+'/preview-000.json',bytes=>{const value=JSON.parse(bytes);value.movable=true;return JSON.stringify(value);});
   await mutate('assembly-journal/call-1.json',bytes=>{const value=JSON.parse(bytes);value.value.state='pending';return JSON.stringify({value:value.value,sha256:hash(value.value)});});

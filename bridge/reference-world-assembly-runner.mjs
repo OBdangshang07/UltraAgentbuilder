@@ -41,7 +41,7 @@ export function createReferenceWorldAssemblyRunner(options) {
       task.done=(async()=>{
         try {
           const result=await runReferenceWorldAssembly({directory:packet.directory,referenceInput:packet.referenceInput,
-            preparationHash:packet.prepared.preparationHash,adapter,signal:task.controller.signal,execution,
+            preparationHash:packet.prepared.preparationHash,adapter,signal:task.controller.signal,execution,retainCandidateParts:false,
             nativeEvidence:options=>nativeEvidence({...options,jobDirectory:packet.directory,onWaiting:async status=>{
               task.controller.signal.throwIfAborted();
               if(!/^[a-f0-9]{64}$/.test(status?.id??'')||!['waiting','complete'].includes(status.state))throw Error('Exact original native status required');

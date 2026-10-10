@@ -56,7 +56,7 @@ try {
     await physical(directory);
     if(operation==='part')result=await readReferenceWorldAssemblyCandidatePart({...input,directory});
     else {
-      const original=await readReferenceWorldAssemblyCandidate({...input,directory});
+      const original=await readReferenceWorldAssemblyCandidate({...input,directory,retainParts:false});
       result={candidate:original.candidate,patchSet:original.patchSet,originalCompleteSetReverified:true,
         additionalModelCalls:0,worldWrites:0,canAuthorizePlacement:false};
     }

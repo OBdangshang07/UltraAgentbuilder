@@ -2,9 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {exactKeys} from '../contracts/world-selection.mjs';
+import {WORLD_ASSEMBLY_LIMITS} from '../contracts/world-assembly-limits.mjs';
 import {hash} from '../src/generation/compiler.mjs';
 import {readNativeBundle} from '../src/generation/bundle.mjs';
-import {assemblyWorldContextData,compileAssemblyWorldPatch,WORLD_ASSEMBLY_PATCH_LIMITS} from '../src/world/assembly-context.mjs';
+import {assemblyWorldContextData,streamAssemblyWorldPatch,WORLD_ASSEMBLY_PATCH_LIMITS} from '../src/world/assembly-context.mjs';
 import {prepareWorldPatchPreview} from '../src/world/world-patch-preview-data.mjs';
 import {readNativeEvidence,readNativeRevisionComparison} from './native-evidence.mjs';
 import {assemblyCorrectionInput} from '../src/design/correction-feedback.mjs';
@@ -16,8 +17,8 @@ import {readReferenceWorldAssemblyExecutionStart} from './reference-world-assemb
 export const REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY = 'reference-world-assembly-candidate-v2';
 export const REFERENCE_ASSEMBLY_CANDIDATE_CLAIM = 'reference-world-assembly-candidate-publication.json';
 export const REFERENCE_ASSEMBLY_CANDIDATE_LIMITS = Object.freeze({
-  metadataBytes:2*1024**2, recordsBytes:2*1024**2, partBytes:16*1024**2,
-  candidateBytes:96*1024**2, proofFileBytes:64*1024**2, proofBytes:512*1024**2, proofFiles:4096,
+  metadataBytes:WORLD_ASSEMBLY_LIMITS.metadataBytes, recordsBytes:WORLD_ASSEMBLY_LIMITS.recordsBytes, partBytes:WORLD_ASSEMBLY_LIMITS.partBytes,
+  candidateBytes:WORLD_ASSEMBLY_LIMITS.candidateBytes, proofFileBytes:64*1024**2, proofBytes:512*1024**2, proofFiles:4096,
 });
 const digest = /^[a-f0-9]{64}$/, branchName = /^assembly-run-[A-Za-z0-9_-]{6,32}$/;
 const raw = value => Buffer.from(JSON.stringify(value));
@@ -169,7 +170,9 @@ async function terminalEvidence(directory,original,branch,records,signal) {
   return {summary,evidence};
 }
 
-async function prepare(directory,original,branch,records,signal) {
+async function prepare(directory,original,branch,records,signal,{retainParts=true,partIndex=null,onMember,expectedCandidateHash}={}) {
+  if (typeof retainParts!=='boolean' || partIndex!==null && (!Number.isSafeInteger(partIndex)
+    || partIndex<0 || partIndex>=WORLD_ASSEMBLY_PATCH_LIMITS.parts)) fail('Exact retained result mode/part index required');
   await physical(directory);signal?.throwIfAborted();
   const {summary,evidence}=await terminalEvidence(directory,original,branch,records,signal);
   const finalDirectory=path.join(directory,'reference-world-assembly-final');
@@ -197,15 +200,28 @@ async function prepare(directory,original,branch,records,signal) {
     || diagnostic.scene?.sourceHash!==summary.sourceHash || diagnostic.assetHash!==evidence.assetHash
     || hash(diagnosticCells)!==diagnostic.cellsHash || diagnostic.cellsHash!==native.manifest.cellsHash
     || !diagnosticCells.equals(native.binary)) fail('Final original native asset differs from reviewed geometry');
-  const lowered=compileAssemblyWorldPatch(original.worldContext,native,{signal});
-  const previews=lowered.patches.map(p=>prepareWorldPatchPreview(original.saved.snapshot,p,{signal}));
-  const buffers={'records.json':raw(records),'patch-set.json':raw(lowered.patchSet)};
-  lowered.patches.forEach((p,i)=>{buffers[partName('part',i)]=raw(p);buffers[partName('preview',i)]=raw(previews[i]);});
-  let total=0;
-  for (const [name,bytes] of Object.entries(buffers)) {
+  // Production retains one current part/preview, never all patch trees and
+  // serialized copies. The legacy data API deliberately retains its arrays.
+  const buffers=retainParts?{}:null,patches=retainParts?[]:null,previews=retainParts?[]:null;
+  const previewHashes=[],partFiles=[];let total=0,selectedPart=null;
+  const emit=async(name,bytes)=>{
     const maximum=name==='records.json'?REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.recordsBytes:REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.partBytes;
     total+=bytes.length;if (!bytes.length || bytes.length>maximum || total>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.candidateBytes) fail('Complete joint candidate quota; no clipping or partial candidate');
-  }
+    const pin={path:name,bytes:bytes.length,sha256:hash(bytes)};
+    if(retainParts)buffers[name]=bytes;
+    await onMember?.(name,bytes,maximum);signal?.throwIfAborted();return pin;
+  };
+  const recordsFile=await emit('records.json',raw(records));
+  const lowered=await streamAssemblyWorldPatch(original.worldContext,native,{signal,onPart:async({index,patch})=>{
+    const preview=prepareWorldPatchPreview(original.saved.snapshot,patch,{signal});
+    if(retainParts){patches.push(patch);previews.push(preview);}
+    if(index===partIndex)selectedPart={index,patch,preview};
+    previewHashes.push(preview.previewHash);
+    partFiles.push(await emit(partName('part',index),raw(patch)));
+    partFiles.push(await emit(partName('preview',index),raw(preview)));
+  }});
+  if(partIndex!==null && selectedPart===null)fail('Exact complete-set part index required');
+  const setFile=await emit('patch-set.json',raw(lowered.patchSet));
   const content={format:'ReferenceWorldAssemblyCandidate',version:2,purpose:'reference-world-assembly',
     jobId:p.jobId,preparationHash:p.preparationHash,archiveHash:original.manifest.manifestHash,runtimeHash:p.runtimeHash,
     referenceBindingHash:p.referenceBindingHash,referenceSetHash:p.referenceSetHash,worldContextHash:p.worldContextHash,
@@ -213,65 +229,91 @@ async function prepare(directory,original,branch,records,signal) {
     assetHash:native.manifest.assetHash,cellsHash:native.manifest.cellsHash,origin:[...p.origin],
     branch,recordsHash:hash(records),summaryHash:hash(summary),reservedCalls:records.length,maximumCalls:p.maximumCalls,tier:p.tier,
     patchSetHash:lowered.patchSet.patchSetHash,partCount:lowered.patchSet.partCount,operationCount:lowered.patchSet.operationCount,
-    previewHashes:previews.map(v=>v.previewHash),currentNativeEvidenceHash:evidence.evidenceHash,
-    files:Object.entries(buffers).map(([name,bytes])=>({path:name,bytes:bytes.length,sha256:hash(bytes)})),proofFiles,
+    previewHashes,currentNativeEvidenceHash:evidence.evidenceHash,
+    // Preserve the v2 byte identity/order of previously complete candidates.
+    files:[recordsFile,setFile,...partFiles],proofFiles,
     coordinateSpace:'original-world-absolute',movable:false,omittedCells:'keep',completeSetVerified:true,
     partialPublicationAllowed:false,originalScopeAndNativeCellsVerified:true,
     finalReviewAccepted:summary.finalTextReviewAccepted,realImageUnderstandingVerified:false,
     providerReceiptAuditVerified:false,worldRendered:false,serverBaselineVerified:false,physicsVerified:false,
     canAuthorizePlacement:false,crashAtomicPublication:false,additionalModelCalls:0,worldWrites:0};
-  const candidate=freeze({...content,candidateHash:hash(content)});buffers['candidate.json']=raw(candidate);
-  if (buffers['candidate.json'].length>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes) fail('Complete joint evidence metadata quota');
-  return {candidate,buffers,summary,records,native,finalDirectory,previews,...lowered};
+  const candidate=freeze({...content,candidateHash:hash(content)}),metadataBytes=raw(candidate);
+  if(metadataBytes.length>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes)fail('Complete joint evidence metadata quota');
+  if(expectedCandidateHash!==undefined && candidate.candidateHash!==expectedCandidateHash)
+    fail('Candidate differs from complete original task/asset/proofs');
+  if(hash(await evidencePins(directory,branch,signal))!==hash(proofFiles))fail('Original joint proof changed during result preparation');
+  // All provisional members and original proofs have been checked before the
+  // final metadata callback; a callback failure never returns a complete set.
+  if(retainParts)buffers['candidate.json']=metadataBytes;
+  await onMember?.('candidate.json',metadataBytes,REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes);
+  signal?.throwIfAborted();
+  return {candidate,summary,records,native,finalDirectory,...lowered,
+    ...(retainParts?{buffers,patches,previews,patch:patches.length===1?patches[0]:null}:{}),
+    ...(selectedPart?{selectedPart}:{}),retainedAllParts:retainParts};
 }
 
 /** Caller retains the ORIGINAL candidateHash in its independently bound job
  * receipt. A self-rehashed file cannot pick a new asset, branch, or partial set. */
-export async function readReferenceWorldAssemblyCandidateData({directory,original,expectedCandidateHash,signal}) {
+export async function readReferenceWorldAssemblyCandidateData({directory,original,expectedCandidateHash,signal,retainParts=true,partIndex=null}) {
   if (!digest.test(expectedCandidateHash??'')) fail('Original complete joint candidate hash required');
   const root=path.join(directory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY);
   const candidate=await json(root,'candidate.json',REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes);
   if (candidate.candidateHash!==expectedCandidateHash) fail('Original candidate identity changed');
   const records=await json(root,'records.json',REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.recordsBytes);
-  const rebuilt=await prepare(directory,original,candidate.branch,records,signal);
-  if (rebuilt.candidate.candidateHash!==expectedCandidateHash) fail('Candidate differs from complete original task/asset/proofs');
+  // Rebuild/compare EVERY member against the complete original asset even
+  // when metadata or one part is requested. Do not trust self-rehashed pins.
+  const rebuilt=await prepare(directory,original,candidate.branch,records,signal,{retainParts,partIndex,expectedCandidateHash,
+    onMember:async(name,bytes,maximum)=>{
+      if(!(await member(root,name,maximum)).equals(bytes))fail('Joint candidate member differs from complete original task/native result');
+    }});
   const names=(await fs.readdir(root)).sort();
-  if (hash(names)!==hash(Object.keys(rebuilt.buffers).sort())) fail('Joint candidate incomplete or contains unknown members');
-  for (const [name,bytes] of Object.entries(rebuilt.buffers)) {
-    const maximum=name==='candidate.json'?REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes:name==='records.json'?REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.recordsBytes:REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.partBytes;
-    if (!(await member(root,name,maximum)).equals(bytes)) fail('Joint candidate member differs from complete original native result');
-  }
+  if(hash(names)!==hash([...rebuilt.candidate.files.map(f=>f.path),'candidate.json'].sort()))fail('Joint candidate incomplete or contains unknown members');
   if (hash(await evidencePins(directory,candidate.branch,signal))!==hash(rebuilt.candidate.proofFiles)) fail('Original joint proof changed during candidate read');
   return rebuilt;
 }
 
 /** Metadata commits LAST. Failed/unknown publication claims and partial
  * directories stay preserved; no timeout/PID permits ownership takeover. */
-export async function saveReferenceWorldAssemblyCandidate({directory,original,result,signal}) {
+export async function saveReferenceWorldAssemblyCandidate({directory,original,result,signal,retainParts=true}) {
   const relative=path.relative(directory,path.resolve(result.summary.lastAcceptedDirectory)).replaceAll('\\','/'),branch=relative.split('/')[0];
-  const prepared=await prepare(directory,original,branch,result.records,signal);
+  // Dry complete-source verification is bounded, before claiming publication.
+  // A second streaming pass writes provisional members with metadata LAST.
+  const prepared=await prepare(directory,original,branch,result.records,signal,{retainParts:false});
   if (hash(result.scene)!==prepared.candidate.sourceHash || hash(result.summary)!==prepared.candidate.summaryHash) fail('Live joint result changed from original final evidence');
   const root=path.join(directory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY),claimFile=path.join(directory,REFERENCE_ASSEMBLY_CANDIDATE_CLAIM);
   const claim=raw({format:'ReferenceWorldAssemblyCandidatePublication',version:2,id:randomUUID(),candidateHash:prepared.candidate.candidateHash});
   await immutable(claimFile,claim);
+  let succeeded=false;
   try {
     signal?.throwIfAborted();
-    try {await fs.lstat(root);return await readReferenceWorldAssemblyCandidateData({directory,original,expectedCandidateHash:prepared.candidate.candidateHash,signal});}
-    catch (error) {if (error.code!=='ENOENT') throw error;}
-    await fs.mkdir(root,{mode:0o700});await physical(root);
-    for (const [name,bytes] of Object.entries(prepared.buffers)) {signal?.throwIfAborted();await immutable(path.join(root,name),bytes);}
-    return await readReferenceWorldAssemblyCandidateData({directory,original,expectedCandidateHash:prepared.candidate.candidateHash,signal});
+    let exists=true;try{await fs.lstat(root);}catch(error){if(error.code!=='ENOENT')throw error;exists=false;}
+    if(!exists){
+      await fs.mkdir(root,{mode:0o700});await physical(root);
+      await prepare(directory,original,branch,result.records,signal,{retainParts:false,expectedCandidateHash:prepared.candidate.candidateHash,
+        onMember:async(name,bytes)=>{signal?.throwIfAborted();await immutable(path.join(root,name),bytes);}});
+    }
+    const verified=await readReferenceWorldAssemblyCandidateData({directory,original,
+      expectedCandidateHash:prepared.candidate.candidateHash,signal,retainParts});
+    succeeded=true;return verified;
   } finally {
-    if (!(await member(directory,path.basename(claimFile),2048)).equals(claim)) fail('Joint candidate publication claim changed; preserved');
-    await fs.unlink(claimFile); // exact successfully written OWN claim only
+    // A failed/cancelled/unknown write keeps both the OWN claim and exact
+    // provisional files. Neither retries nor read-only access can take over.
+    if(succeeded){
+      if (!(await member(directory,path.basename(claimFile),2048)).equals(claim)) fail('Joint candidate publication claim changed; preserved');
+      await fs.unlink(claimFile); // exact successfully verified OWN claim only
+    }
   }
 }
 
 export function referenceWorldAssemblyCandidatePart(result,index) {
   if (!Number.isSafeInteger(index) || index<0 || index>=result.candidate.partCount || index>=WORLD_ASSEMBLY_PATCH_LIMITS.parts) fail('Exact complete-set part index required');
+  const selected=result.selectedPart?.index===index?result.selectedPart:null;
+  const patch=selected?.patch??result.patches?.[index],preview=selected?.preview??result.previews?.[index];
+  if(!patch || !preview || patch.patchHash!==result.patchSet.partHashes[index]
+    || preview.previewHash!==result.candidate.previewHashes[index])fail('Exact original verified part required');
   return freeze({format:'ReferenceWorldAssemblyCandidatePart',version:2,purpose:'reference-world-assembly',
     preparationHash:result.candidate.preparationHash,candidateHash:result.candidate.candidateHash,
-    patchSet:result.patchSet,index,patch:result.patches[index],preview:result.previews[index],
+    patchSet:result.patchSet,index,patch,preview,
     completeSetVerified:true,partIsApplyScope:false,canAuthorizePlacement:false,serverBaselineVerified:false,
     additionalModelCalls:0,worldWrites:0});
 }

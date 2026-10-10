@@ -3,12 +3,13 @@ import {validateContextSnapshot, readSnapshotCell, contextHash} from './context-
 import {prepareWorldPatchDesignInput} from './world-patch-design-input.mjs';
 import {compileWorldPatch} from './world-patch.mjs';
 import {WORLD_SELECTION_LIMITS} from '../../contracts/world-selection.mjs';
+import {WORLD_ASSEMBLY_LIMITS} from '../../contracts/world-assembly-limits.mjs';
 
 const originals = new WeakMap();
 // A separately versioned aggregate, not a larger legacy v1 patch or consent.
-const operationsPerPart = 8192;
+const operationsPerPart = WORLD_ASSEMBLY_LIMITS.operationsPerPart;
 export const WORLD_ASSEMBLY_PATCH_LIMITS = Object.freeze({operationsPerPart,
-  parts:Math.ceil(WORLD_SELECTION_LIMITS.editCells/operationsPerPart),bytes:64*1024**2});
+  parts:Math.ceil(WORLD_SELECTION_LIMITS.editCells/operationsPerPart),bytes:WORLD_ASSEMBLY_LIMITS.patchBytes});
 const freeze = value => {
   if (value && typeof value === 'object') {for (const child of Object.values(value)) freeze(child); Object.freeze(value);}
   return value;
@@ -46,23 +47,43 @@ export function assemblyWorldContextData(value) {
 
 /** Translate the EXACT non-diagnostic native cells, never recompile a baseline
  * or infer excavation from empty space. All original patch checks still run. */
-export function compileAssemblyWorldPatch(context, compiled, {signal} = {}) {
+function* assemblyWorldPatchParts(context, compiled, {signal} = {}) {
   const data = assemblyWorldContextData(context), snapshot = originals.get(context);
-  const {manifest, binary} = compiled ?? {}, {assetHash, ...metadata} = manifest ?? {};
+  const {binary} = compiled ?? {}, manifest = compiled?.manifest ? structuredClone(compiled.manifest) : null;
+  const {assetHash, ...metadata} = manifest ?? {}, bytes = binary instanceof Uint8Array ? Buffer.from(binary) : null;
   if (!manifest || manifest.diagnosticOnly || hash(metadata) !== assetHash || !(binary instanceof Uint8Array)
-    || hash(binary) !== manifest.cellsHash) throw Error('Exact eligible native asset required; diagnostic assets cannot become world patches');
+    || hash(bytes) !== manifest.cellsHash) throw Error('Exact eligible native asset required; diagnostic assets cannot become world patches');
   const {width:w,height:h,length:d} = manifest.dimensions ?? {};
   if (![w,h,d].every(n => Number.isSafeInteger(n) && n > 0) || w > data.maximumBounds.width
     || h > data.maximumBounds.height || d > data.maximumBounds.length || binary.length !== w*h*d*2)
     throw Error('Native asset exceeds original W; no clipping, axis swap or relocation');
   const palette = manifest.palette;
   if (!Array.isArray(palette) || palette[0] !== '@keep' || palette[1] !== 'minecraft:air') throw Error('Exact native keep/clear palette required');
-  const bytes = Buffer.from(binary), operations = []; let sets = 0, clears = 0, proposalBytes = 4096;
+  // Owned bytes and metadata cannot change while an awaited sink is working.
+  let sets = 0, clears = 0;
+  // Check every original index/count before exposing even a provisional part.
+  // No source recompilation, baseline refresh or byte/token-limit override.
   for (let i = 0; i < w*h*d; i++) {
     if (!(i % 1024)) signal?.throwIfAborted();
     const n = bytes.readUInt16LE(i*2);
     if (n >= palette.length) throw Error('Native palette index outside original asset');
     if (n >= 2) sets++; else if (n === 1) clears++;
+  }
+  if (sets !== manifest.setCount || clears !== manifest.clearCount) throw Error('Native set/clear counts differ from original asset');
+  let operations = [], operationCount = 0, accounted = 4096;
+  const partHashes = [];
+  function flush() {
+    if (partHashes.length >= WORLD_ASSEMBLY_PATCH_LIMITS.parts) throw Error('Full native world patch part quota; no partial publication');
+    const patch = compileWorldPatch(snapshot, {format:'WorldPatchProposal',version:1,
+      snapshotHash:data.snapshotHash,selectionHash:data.selectionHash,operations}, {signal});
+    accounted += Buffer.byteLength(JSON.stringify(patch));
+    if (accounted > WORLD_ASSEMBLY_PATCH_LIMITS.bytes) throw Error('Full native world patch aggregate byte quota; no partial publication');
+    const index = partHashes.length;partHashes.push(patch.patchHash);operations = [];
+    return {index,patch};
+  }
+  for (let i = 0; i < w*h*d; i++) {
+    if (!(i % 1024)) signal?.throwIfAborted();
+    const n = bytes.readUInt16LE(i*2);
     if (!n) continue;
     const local = [i % w, Math.floor(i/(w*d)), Math.floor(i/w) % d], position = local.map((v, axis) => v + data.origin[axis]);
     const before = readSnapshotCell(snapshot, position);
@@ -70,34 +91,52 @@ export function compileAssemblyWorldPatch(context, compiled, {signal} = {}) {
     const after = palette[n];
     if (before.state === after || n === 1 && ['minecraft:air','minecraft:cave_air','minecraft:void_air'].includes(before.state)) continue;
     const operation = n === 1 ? {op:'clear',position,before:before.state} : {op:'set',position,before:before.state,after};
-    proposalBytes += Buffer.byteLength(JSON.stringify(operation)) + 1;
-    if (proposalBytes > WORLD_ASSEMBLY_PATCH_LIMITS.bytes) throw Error('Full native world patch proposal working byte quota; no partial publication');
-    operations.push(operation);
+    operations.push(operation);operationCount++;
+    if (operations.length === WORLD_ASSEMBLY_PATCH_LIMITS.operationsPerPart) yield flush();
   }
-  if (sets !== manifest.setCount || clears !== manifest.clearCount) throw Error('Native set/clear counts differ from original asset');
-  if (!operations.length) throw Error('Full assembled asset has no world changes; no incomplete/no-op patch published');
-  const patches = [];let accounted = 4096;
-  for (let offset=0; offset<operations.length; offset+=WORLD_ASSEMBLY_PATCH_LIMITS.operationsPerPart) {
-    if (patches.length >= WORLD_ASSEMBLY_PATCH_LIMITS.parts) throw Error('Full native world patch part quota; no partial publication');
-    const part = compileWorldPatch(snapshot, {format:'WorldPatchProposal',version:1,
-      snapshotHash:data.snapshotHash,selectionHash:data.selectionHash,
-      operations:operations.slice(offset,offset+WORLD_ASSEMBLY_PATCH_LIMITS.operationsPerPart)}, {signal});
-    accounted+=Buffer.byteLength(JSON.stringify(part));
-    if (accounted>WORLD_ASSEMBLY_PATCH_LIMITS.bytes) throw Error('Full native world patch aggregate byte quota; no partial publication');
-    patches.push(part);
-  }
+  if (!operationCount) throw Error('Full assembled asset has no world changes; no incomplete/no-op patch published');
+  if (operations.length) yield flush();
+  signal?.throwIfAborted();
   const setContent={format:'AssemblyWorldPatchSet',version:2,worldContextHash:data.worldContextHash,
     snapshotHash:data.snapshotHash,selectionHash:data.selectionHash,assetHash,cellsHash:manifest.cellsHash,
     origin:[...data.origin],coordinateTransform:'translate-only-original-W-min',omittedCells:'keep',
-    operationCount:operations.length,partCount:patches.length,partHashes:patches.map(p=>p.patchHash),
+    operationCount,partCount:partHashes.length,partHashes,
     fullAssetProcessed:true,partialPublicationAllowed:false,serverBaselineVerified:false,
     physicsVerified:false,canAuthorizePlacement:false,worldWrites:0};
   const patchSet=freeze({...setContent,patchSetHash:contextHash(setContent)});
-  return {patch:patches.length===1?patches[0]:null, patches, patchSet, binding:freeze({format:'AssemblyWorldPatchBinding',version:2,
+  return {patchSet, binding:freeze({format:'AssemblyWorldPatchBinding',version:2,
     worldContextHash:data.worldContextHash,snapshotHash:data.snapshotHash,selectionHash:data.selectionHash,
     assetHash, cellsHash:manifest.cellsHash, sourceHash:manifest.scene?.sourceHash ?? null,
-    patchHash:patches.length===1?patches[0].patchHash:null,patchSetHash:patchSet.patchSetHash,
+    patchHash:partHashes.length===1?partHashes[0]:null,patchSetHash:patchSet.patchSetHash,
     origin:[...data.origin], transform:'translate-only-original-W-min',
     omittedCells:'keep', originalBeforeVerified:true, serverBaselineVerified:false,
     physicsVerified:false, canAuthorizePlacement:false, additionalModelCalls:0, worldWrites:0})};
+}
+
+/** Compatibility result, built by the same bounded-part lowering path. */
+export function compileAssemblyWorldPatch(context, compiled, options = {}) {
+  const iterator = assemblyWorldPatchParts(context,compiled,options), patches = [];
+  for (;;) {
+    const next = iterator.next();
+    if (next.done) return {...next.value,patch:patches.length===1?patches[0]:null,patches};
+    patches.push(next.value.patch);
+  }
+}
+
+/** Background streaming sink. Each callback receives a PROVISIONAL part, not
+ * a candidate, COMPLETE set, SEND or placement capability. The caller must
+ * retain failed provisional evidence, await every sink, and publish metadata
+ * ONLY after this function returns and independent complete-source checks pass.
+ * This does not raise aggregate bytes or authorize individual-part adoption. */
+export async function streamAssemblyWorldPatch(context, compiled, {signal,onPart} = {}) {
+  if (typeof onPart !== 'function') throw Error('Original provisional-part sink required');
+  const iterator = assemblyWorldPatchParts(context,compiled,{signal});
+  try {
+    for (;;) {
+      signal?.throwIfAborted();const next=iterator.next();
+      if (next.done) return next.value;
+      await onPart(Object.freeze({...next.value,provisional:true,partIsApplyScope:false,canAuthorizePlacement:false}));
+      signal?.throwIfAborted();
+    }
+  } finally {iterator.return();}
 }

@@ -198,7 +198,8 @@ async function compileFinal(directory, scene, policy, signal) {
  * sees references ONLY in the existing prelude and exact native pictures in
  * review. Every stage receives the SAME original environment and scope.
  * This function is internal until normal HTTP/UI and game gates are complete. */
-export async function runReferenceWorldAssembly({directory,referenceInput,preparationHash,adapter,nativeEvidence,signal,onStage,onRecovery,execution=null}) {
+export async function runReferenceWorldAssembly({directory,referenceInput,preparationHash,adapter,nativeEvidence,signal,onStage,onRecovery,execution=null,retainCandidateParts=true}) {
+  if(typeof retainCandidateParts!=='boolean')throw Error('Exact internal candidate retention mode required');
   directory = await fs.realpath(path.resolve(directory));
   if (active.has(directory)) throw Error('Original full joint task already running; no concurrent dispatch');
   active.add(directory);
@@ -269,8 +270,9 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     if (diagnostic.scene?.sourceHash !== result.summary.sourceHash || hash(diagnosticCells) !== diagnostic.cellsHash
       || diagnostic.cellsHash !== final.compiled.manifest.cellsHash || !diagnosticCells.equals(final.compiled.binary))
       throw Error('Final native cells differ from original reviewed geometry; no substitute/rebase');
-    const saved = await saveReferenceWorldAssemblyCandidate({directory,original,result,signal});
-    const lowered = {patch:saved.patch,patches:saved.patches,patchSet:saved.patchSet,binding:saved.binding};
+    const saved = await saveReferenceWorldAssemblyCandidate({directory,original,result,signal,retainParts:retainCandidateParts});
+    const lowered = {patchSet:saved.patchSet,binding:saved.binding,
+      ...(retainCandidateParts?{patch:saved.patch,patches:saved.patches}:{}),retainedAllParts:saved.retainedAllParts};
     return {...result,...lowered,finalDirectory:final.directory,
       candidate:saved.candidate,
       joint:{version:2,preparationHash:p.preparationHash,maximumCalls:p.maximumCalls,reservedCalls:result.records.length,
@@ -281,14 +283,14 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
 
 /** Completed original data only. This cannot run/replay a pipeline, reserve a
  * call, contact an adapter, refresh a snapshot, compile or render a replacement. */
-export async function readReferenceWorldAssemblyCandidate({directory,referenceInput,preparationHash,candidateHash,signal}) {
+export async function readReferenceWorldAssemblyCandidate({directory,referenceInput,preparationHash,candidateHash,signal,retainParts=true,partIndex=null}) {
   directory=path.resolve(directory);
   const original=await readFrozenReferenceWorldAssembly({directory,referenceInput});
   if (original.prepared.preparationHash!==preparationHash) throw Error('Original complete joint preparation required for result read');
-  return readReferenceWorldAssemblyCandidateData({directory,original,expectedCandidateHash:candidateHash,signal});
+  return readReferenceWorldAssemblyCandidateData({directory,original,expectedCandidateHash:candidateHash,signal,retainParts,partIndex});
 }
 
 export async function readReferenceWorldAssemblyCandidatePart({partIndex,...options}) {
-  const result=await readReferenceWorldAssemblyCandidate(options);
+  const result=await readReferenceWorldAssemblyCandidate({...options,retainParts:false,partIndex});
   return referenceWorldAssemblyCandidatePart(result,partIndex);
 }

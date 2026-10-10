@@ -4,6 +4,7 @@ import {WORLD_SELECTION_LIMITS,validateWorldSelection,selectionChunks,regionCell
 import {createContextSnapshot,readSnapshotCell} from '../../src/world/context-snapshot.mjs';
 import {createContextReadSession} from '../../src/world/context-reader.mjs';
 import {prepareAssemblyWorldContext,assemblyWorldContextData,WORLD_ASSEMBLY_PATCH_LIMITS} from '../../src/world/assembly-context.mjs';
+import {WORLD_ASSEMBLY_LIMITS} from '../../contracts/world-assembly-limits.mjs';
 
 // Capacity probes, not architectural designs or live-world performance claims.
 const cbd = () => ({format:'WorldSelection',version:1,
@@ -90,6 +91,9 @@ test('high-entropy large scans retain the original byte guard and never publish 
 });
 test('part count follows bounded edit capacity; byte limits do not become unlimited',()=>{
   assert.equal(WORLD_ASSEMBLY_PATCH_LIMITS.parts,128);assert.equal(WORLD_ASSEMBLY_PATCH_LIMITS.operationsPerPart,8192);
-  assert.equal(WORLD_ASSEMBLY_PATCH_LIMITS.bytes,64*1024**2);assert.equal(WORLD_SELECTION_LIMITS.snapshotBytes,16*1024**2);
+  assert.equal(WORLD_ASSEMBLY_PATCH_LIMITS.bytes,WORLD_ASSEMBLY_LIMITS.patchBytes);
+  assert.equal(WORLD_ASSEMBLY_PATCH_LIMITS.bytes,192*1024**2);
+  assert.equal(WORLD_ASSEMBLY_LIMITS.proposalBytes,64*1024**2);assert.equal(WORLD_ASSEMBLY_LIMITS.previewBytes,64*1024**2);
+  assert.equal(WORLD_SELECTION_LIMITS.snapshotBytes,16*1024**2);
   assert.equal(WORLD_SELECTION_LIMITS.chunks,1024);assert.equal(WORLD_SELECTION_LIMITS.paletteStates,4096);
 });

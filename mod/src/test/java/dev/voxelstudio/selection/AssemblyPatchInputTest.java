@@ -40,7 +40,8 @@ final class AssemblyPatchInputTest {
         }
         for(int index:new int[]{-1,128})assertThrows(IllegalArgumentException.class,()->new AssemblyPatchInput.Part(index,original.proposal(),original.patch(),original.preview()));
         assertThrows(IllegalArgumentException.class,()->new AssemblyPatchInput.Part(32,new byte[SelectionLimits.snapshotBytes()+1],original.patch(),original.preview()));
-        assertEquals(64L*1024*1024,AssemblyPatchInput.PATCH_BYTES);
+        assertEquals(AssemblyLimits.patchBytes(),AssemblyPatchInput.PATCH_BYTES);
+        assertEquals(64L*1024*1024,AssemblyLimits.proposalBytes());assertEquals(64L*1024*1024,AssemblyLimits.previewBytes());
     }
     @Test void metadataOnlyLargerHashListsRetainExactCountsAndNoWriteAuthority()throws Exception{
         var original=AssemblyPatchFixtures.binding(AssemblyPatchFixtures.header("lite"));

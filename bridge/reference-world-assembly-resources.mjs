@@ -2,9 +2,10 @@ import path from 'node:path';
 import {Worker} from 'node:worker_threads';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {REFERENCE_OWNER} from '../contracts/reference-attachments.mjs';
+import {WORLD_ASSEMBLY_LIMITS} from '../contracts/world-assembly-limits.mjs';
 
 export const JOINT_ASSEMBLY_RESOURCE_LIMITS=Object.freeze({queue:2,inputBytes:65536,nativeUploadBytes:12000000,
-  outputBytes:40*1024**2,operationMs:120000,oldGenerationMb:512,stackMb:4});
+  outputBytes:WORLD_ASSEMBLY_LIMITS.partEnvelopeBytes,operationMs:120000,oldGenerationMb:512,stackMb:4});
 const operations=['prepare','bind','metadata','part','job-record','job-status','job-list','native-read','native-upload'];
 const failure=(message,statusCode=409)=>Object.assign(Error(message),{statusCode});
 const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};

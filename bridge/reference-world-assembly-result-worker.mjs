@@ -10,7 +10,7 @@ try {
   exactKeys(input,['directory','referenceInput','preparationHash','candidateHash',...(operation==='part'?['partIndex']:[])],'internal original joint result read');
   if (operation==='part') parentPort.postMessage({ok:true,result:await readReferenceWorldAssemblyCandidatePart(input)});
   else {
-    const result=await readReferenceWorldAssemblyCandidate(input);
+    const result=await readReferenceWorldAssemblyCandidate({...input,retainParts:false});
     parentPort.postMessage({ok:true,result:{candidate:result.candidate,patchSet:result.patchSet,
       originalCompleteSetReverified:true,additionalModelCalls:0,worldWrites:0,canAuthorizePlacement:false}});
   }
