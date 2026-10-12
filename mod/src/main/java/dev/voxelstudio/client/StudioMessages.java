@@ -4,6 +4,33 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 final class StudioMessages {
+    /** Display ONLY the server's fixed query diagnostic, never raw stderr,
+     * paths, account data or an authority-bearing/unrecognized object. */
+    static String ownerQueryDiagnostic(JsonObject response) {
+        try {
+            if(response==null||!response.has("diagnostic")||!response.get("diagnostic").isJsonObject())return "";
+            var d=response.getAsJsonObject("diagnostic");
+            if(!d.keySet().equals(java.util.Set.of("format","version","reason","phase","helperStarted","helperClosed","helperExitCode","helperExitSignal","spawnCode","ownershipRecovered","canAuthorizePlacement")))return "";
+            for(String k:java.util.List.of("helperStarted","helperClosed","ownershipRecovered","canAuthorizePlacement"))if(!d.get(k).isJsonPrimitive()||!d.get(k).getAsJsonPrimitive().isBoolean())return "";
+            if(!d.get("helperClosed").getAsBoolean()||d.get("ownershipRecovered").getAsBoolean()||d.get("canAuthorizePlacement").getAsBoolean())return "";
+            if(!d.get("format").isJsonPrimitive()||!d.get("format").getAsJsonPrimitive().isString()||!d.get("format").getAsString().equals("WindowsOwnerQueryFailure"))return "";
+            if(!d.get("version").isJsonPrimitive()||!d.get("version").getAsJsonPrimitive().isNumber()||d.get("version").getAsBigDecimal().compareTo(java.math.BigDecimal.ONE)!=0)return "";
+            var exit=d.get("helperExitCode");if(!exit.isJsonNull()&&(!exit.isJsonPrimitive()||!exit.getAsJsonPrimitive().isNumber()||exit.getAsBigDecimal().stripTrailingZeros().scale()>0))return "";
+            String signal=diagnosticChoice(d.get("helperExitSignal"),java.util.Set.of("SIGTERM","SIGKILL"),true);
+            String spawn=diagnosticChoice(d.get("spawnCode"),java.util.Set.of("ENOENT","EACCES","EPERM","OTHER"),true);
+            String reason=diagnosticChoice(d.get("reason"),java.util.Set.of("spawn-error","stdout-limit","stderr-limit","stream-error","timeout","query-failed"),false);
+            String phase=diagnosticChoice(d.get("phase"),java.util.Set.of("machine","boot-before","process","boot-after","serialize"),true);
+            if(signal==null||spawn==null||reason==null||phase==null)return "";
+            String why=switch(reason){case "timeout"->"超时";case "spawn-error"->"无法启动";case "stdout-limit","stderr-limit"->"输出超额";case "stream-error"->"读取失败";default->"查询失败";};
+            String where=switch(phase){case "machine"->"本机身份";case "boot-before"->"启动时间初检";case "process"->"进程身份";case "boot-after"->"启动时间复核";case "serialize"->"回执序列化";default->"阶段未报告";};
+            return "；Windows 身份核验助手"+why+" · "+where+"。助手已关闭，不代表 Agent 已退出；没有获得恢复所有权或建造权限";
+        }catch(RuntimeException rejected){return "";}
+    }
+    private static String diagnosticChoice(JsonElement value,java.util.Set<String> choices,boolean nullable){
+        if(value==null)return null;if(value.isJsonNull())return nullable?"":null;
+        if(!value.isJsonPrimitive()||!value.getAsJsonPrimitive().isString())return null;
+        String text=value.getAsString();return choices.contains(text)?text:null;
+    }
     /** Presentation only. Static feedback never changes placement authority. */
     static String constructionFeedback(JsonObject owner) {
         if(owner==null||!owner.has("constructionFeedback")||!owner.get("constructionFeedback").isJsonObject())return "";

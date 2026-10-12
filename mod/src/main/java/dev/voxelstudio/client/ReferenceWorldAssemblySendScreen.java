@@ -46,7 +46,7 @@ final class ReferenceWorldAssemblySendScreen extends Screen {
             .whenComplete((status,error)->client.execute(()->{
                 // Even a closed/ resized panel must retain the original outcome
                 // and service its next asset-only native request in client ticks.
-                if(error==null)StudioClient.ASSEMBLY.watch(reference,status);else StudioClient.ASSEMBLY.refresh(reference);
+                if(error==null)StudioClient.ASSEMBLY.watch(reference,status);else StudioClient.ASSEMBLY.originalSendFailure(reference,error);
                 if(!page.finish(ticket)||client.currentScreen!=this)return;
                 client.setScreen(new ReferenceWorldAssemblyResultScreen(parent,reference));
             }));

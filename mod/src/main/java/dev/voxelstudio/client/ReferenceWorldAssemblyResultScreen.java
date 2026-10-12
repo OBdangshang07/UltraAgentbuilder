@@ -17,7 +17,7 @@ final class ReferenceWorldAssemblyResultScreen extends Screen {
         preview=addDrawableChild(new StudioTheme.Button(x+12,height-74,w-24,22,"加载全部原坐标差异 · 不写入，不能单片建造",StudioTheme.Kind.PRIMARY,this::preview));
         var back=addDrawableChild(new StudioTheme.Button(x+12,height-38,part,24,"返回 · 生成继续",StudioTheme.Kind.NORMAL,this::close));setInitialFocus(back);
         addDrawableChild(new StudioTheme.Button(x+18+part,height-38,part,24,"只 GET 原任务",StudioTheme.Kind.NORMAL,()->StudioClient.ASSEMBLY.refresh(reference)));displayed="";rebuild();}
-    private void rebuild(){var view=StudioClient.ASSEMBLY.view(reference);String details=ReferenceWorldAssemblyReceipt.observationDetails(reference,view.status());message=view.message();
+    private void rebuild(){var view=StudioClient.ASSEMBLY.view(reference);message=view.message();String details=ReferenceWorldAssemblyReceipt.observationDetails(reference,view.status())+"\n\n原任务观察说明：\n"+message;
         if(!details.equals(displayed)){displayed=details;lines=textRenderer.wrapLines(Text.literal(details),w-28);scroll=StudioLayout.clampScroll(scroll,lines.size()*14,height-157);}
         if(preview!=null)preview.active=page.available()&&view.status()!=null&&view.status().get("state").getAsString().equals("preview-ready")&&!StudioClient.SELECTION.contextBusy()&&StudioClient.SELECTION.matchesAssemblyReference(reference);}
     private void preview(){var view=StudioClient.ASSEMBLY.view(reference);if(preview==null||!preview.active||view.status()==null)return;loading=true;StudioClient.SELECTION.loadAssemblyPreview(this,reference,view.status(),page.publication());rebuild();}

@@ -17,7 +17,7 @@ final class ReferenceWorldAssemblyObserver {
     }
     private static final int MAXIMUM=8,INTERVAL=40,MAX_DELAY=200;
     private static final class Entry {
-        final JsonObject reference;JsonObject status;String message="只查询原任务；尚无已核验回执，不代表没有调用";
+        final JsonObject reference;JsonObject status;String message="只查询原任务；尚无已核验回执，不代表没有调用",sendFailure="";
         boolean needsRead=true;int failures;long next;
         Entry(JsonObject reference){this.reference=reference;}
     }
@@ -49,7 +49,7 @@ final class ReferenceWorldAssemblyObserver {
             if(!text(status,"state").equals("preview-ready")||!entry.status.get("candidate").equals(status.get("candidate")))
                 throw new IllegalStateException("原完整成品不能被迟到状态回退或替换");
         }
-        entry.status=status.deepCopy();entry.failures=0;entry.next=ticks+INTERVAL;
+        entry.status=status.deepCopy();entry.failures=0;entry.next=ticks+INTERVAL;entry.sendFailure="";
         entry.needsRead=text(status,"format").equals("ReferenceWorldAssemblyRunnerStatus")&&text(status,"state").equals("running");
         entry.message="原回执已核验；关闭面板继续，未知只查询原任务，不重新生成";
         evidence.accept(entry.reference.deepCopy(),status.deepCopy());
@@ -58,6 +58,17 @@ final class ReferenceWorldAssemblyObserver {
         var reference=ReferenceWorldAssemblyReceipt.verifyReference(input.deepCopy());var entry=entries.get(text(reference,"id"));
         if(entry==null||!entry.reference.equals(reference))throw new IllegalStateException("没有匹配的原完整观察引用");
         return new View(entry.reference,entry.status,entry.message,reading&&entry==active);
+    }
+    synchronized void originalSendFailure(JsonObject reference,Throwable error){
+        if(closed)return;watch(reference,null);var entry=entries.get(text(reference,"id"));
+        // A late failed response must not roll back an independently verified
+        // original status. This is diagnostic text, never a terminal receipt.
+        if(entry.status!=null)return;
+        String detail=StudioMessages.error(error).replaceAll("[\\p{Cntrl}]"," ");
+        if(detail.length()>1000)detail=detail.substring(0,1000)+"…";
+        entry.sendFailure="原 SEND 回执未确认："+detail+"；这不证明模型未调用。";
+        entry.message=entry.sendFailure+"仅继续 GET 原任务，不重发或更换模型";
+        entry.needsRead=true;entry.next=ticks;
     }
     private Entry active;
     synchronized void refresh(JsonObject reference){watch(reference,null);if(closed)return;var entry=entries.get(text(reference,"id"));entry.needsRead=true;entry.next=ticks;}
@@ -99,7 +110,7 @@ final class ReferenceWorldAssemblyObserver {
         if(closed||ticket!=epoch||active!=entry)return;reading=false;active=null;
         try{if(error!=null)throw new IllegalStateException("原 GET 回执未确认",error);accept(entry,ReferenceWorldAssemblyReceipt.status(entry.reference,status.deepCopy()));}
         catch(Exception rejected){entry.failures=Math.min(entry.failures+1,4);entry.next=ticks+Math.min(MAX_DELAY,INTERVAL*(1<<entry.failures));entry.needsRead=true;
-            entry.message="原回执读取失败或身份不符；保留最后已核验状态，仅继续 GET 原任务，不重发或更换模型";}
+            entry.message=entry.sendFailure+"原回执读取失败或身份不符；保留最后已核验状态，仅继续 GET 原任务，不重发或更换模型";}
     }
     synchronized void close(){closed=true;epoch++;reading=false;active=null;historyReading=false;}
 }

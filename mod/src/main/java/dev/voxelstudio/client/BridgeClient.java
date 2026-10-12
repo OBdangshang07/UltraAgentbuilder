@@ -372,7 +372,7 @@ public final class BridgeClient implements AutoCloseable {
             String json=java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
                 .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(response.body())).toString();
             var value=WorldPatchCandidateReceipt.strictJson(json,()->Thread.currentThread().isInterrupted()).getAsJsonObject();
-            if(!Set.of(200,202).contains(response.statusCode()))throw new IllegalStateException("联合原操作不可读取，HTTP "+response.statusCode()+"；保留原记录，不补发");
+            if(!Set.of(200,202).contains(response.statusCode()))throw new IllegalStateException("联合原操作不可读取，HTTP "+response.statusCode()+"；保留原记录，不补发"+StudioMessages.ownerQueryDiagnostic(value));
             var checked=verify.apply(value);current(c);return checked.deepCopy();
         });
     }

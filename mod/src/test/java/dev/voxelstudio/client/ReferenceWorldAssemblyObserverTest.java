@@ -34,6 +34,23 @@ class ReferenceWorldAssemblyObserverTest {
         var observer=new ReferenceWorldAssemblyObserver(()->CompletableFuture.completedFuture(List.of(r)),original->{assertEquals(r,original);return calls.incrementAndGet()==1?CompletableFuture.failedFuture(new IllegalStateException("synthetic lost GET")):CompletableFuture.completedFuture(waiting(f));},Runnable::run,(a,b)->hooks.incrementAndGet());
         observer.tick();assertNull(observer.view(r).status());assertTrue(observer.view(r).message().contains("不重发"));tick(observer,79);assertEquals(1,calls.get());observer.tick();assertEquals(2,calls.get());assertEquals(1,hooks.get());
     }
+    @Test void originalSendDiagnosticSurvivesFailedGetWithoutClaimingAZeroCallOutcome()throws Exception{
+        var f=fixture();var r=reference(f);var calls=new AtomicInteger();var verified=new AtomicInteger();
+        var observer=new ReferenceWorldAssemblyObserver(()->CompletableFuture.completedFuture(List.of()),input->{assertEquals(r,input);calls.incrementAndGet();return CompletableFuture.failedFuture(new IllegalStateException("later generic GET failure"));},Runnable::run,(a,b)->verified.incrementAndGet());
+        observer.originalSendFailure(r,new CompletionException(new IllegalStateException("specific original SEND diagnostic")));
+        assertTrue(observer.view(r).message().contains("specific original SEND diagnostic"));observer.tick();
+        assertNull(observer.view(r).status());assertEquals(0,verified.get());assertEquals(1,calls.get());
+        assertTrue(observer.view(r).message().contains("specific original SEND diagnostic"));assertTrue(observer.view(r).message().contains("不证明模型未调用"));
+        assertTrue(observer.view(r).message().contains("不重发"));
+    }
+    @Test void verifiedOriginalReceiptClearsOldSendUncertaintyAndIgnoresLateSendFailure()throws Exception{
+        var f=fixture();var r=reference(f);
+        var observer=new ReferenceWorldAssemblyObserver(()->CompletableFuture.completedFuture(List.of()),input->CompletableFuture.completedFuture(waiting(f)),Runnable::run,(a,b)->{});
+        observer.originalSendFailure(r,new IllegalStateException("old uncertainty"));observer.tick();
+        assertEquals(waiting(f),observer.view(r).status());assertFalse(observer.view(r).message().contains("old uncertainty"));
+        var message=observer.view(r).message();observer.originalSendFailure(r,new IllegalStateException("late uncertainty"));
+        assertEquals(message,observer.view(r).message());assertEquals(waiting(f),observer.view(r).status());
+    }
     @Test void singleFlightCompletionRunsOnClientExecutorAndKeepsOtherOriginals()throws Exception{
         var fs=ReferenceWorldAssemblyReceiptTest.fixtures();var refs=fs.stream().map(ReferenceWorldAssemblyObserverTest::reference).toList();var pending=new CompletableFuture<JsonObject>();var callbacks=new ArrayDeque<Runnable>();var calls=new ArrayList<JsonObject>();var hooks=new AtomicInteger();
         var observer=new ReferenceWorldAssemblyObserver(()->CompletableFuture.completedFuture(List.of()),r->{calls.add(r);return pending;},callbacks::add,(a,b)->hooks.incrementAndGet());

@@ -6,6 +6,22 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class StudioMessagesTest {
+ private static JsonObject queryFailure(){return JsonParser.parseString("""
+  {"diagnostic":{"format":"WindowsOwnerQueryFailure","version":1,"reason":"timeout","phase":"boot-after","helperStarted":true,"helperClosed":true,"helperExitCode":null,"helperExitSignal":"SIGTERM","spawnCode":null,"ownershipRecovered":false,"canAuthorizePlacement":false}}
+  """).getAsJsonObject();}
+ @Test void ownerQueryFailureShowsFixedOriginalPhaseWithoutClaimingOwnerDeath(){
+  String message=StudioMessages.ownerQueryDiagnostic(queryFailure());
+  assertTrue(message.contains("超时"));assertTrue(message.contains("启动时间复核"));assertTrue(message.contains("不代表 Agent 已退出"));assertTrue(message.contains("没有获得"));
+ }
+ @Test void unrecognizedPrivateOrAuthorityBearingQueryDiagnosticsAreNotDisplayed(){
+  for(String key:new String[]{"format","version","reason","phase","helperStarted","helperClosed","helperExitCode","helperExitSignal","spawnCode","ownershipRecovered","canAuthorizePlacement","path"}){
+   var response=queryFailure();response.getAsJsonObject("diagnostic").addProperty(key,"synthetic-private-value");
+   assertEquals("",StudioMessages.ownerQueryDiagnostic(response),key);
+  }
+  for(String key:new String[]{"ownershipRecovered","canAuthorizePlacement"}){var response=queryFailure();response.getAsJsonObject("diagnostic").addProperty(key,true);assertEquals("",StudioMessages.ownerQueryDiagnostic(response));}
+  var open=queryFailure();open.getAsJsonObject("diagnostic").addProperty("helperClosed",false);assertEquals("",StudioMessages.ownerQueryDiagnostic(open));
+  assertEquals("",StudioMessages.ownerQueryDiagnostic(null));assertEquals("",StudioMessages.ownerQueryDiagnostic(new JsonObject()));
+ }
  @Test void assemblyFailuresExplainPreservedProgressWithoutPromisingFreeRetries(){
   assertTrue(StudioMessages.errorSummary("Required package facade failed").contains("半成品不会发布"));
   assertTrue(StudioMessages.errorSummary("Codex app-server disconnected").contains("不会自动重发"));
