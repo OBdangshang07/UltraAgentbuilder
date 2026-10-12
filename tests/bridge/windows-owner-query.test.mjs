@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {spawn} from 'node:child_process';
+import fs from 'node:fs/promises';
 import {collectWindowsOwnerQuery, publicWindowsOwnerQueryFailure, WINDOWS_OWNER_QUERY_LIMITS} from '../../bridge/windows-owner-query.mjs';
 import * as bridgeObservation from '../../bridge/world-patch-owner-observation.mjs';
 import * as scriptObservation from '../../scripts/world-patch-owner-observation.mjs';
@@ -24,6 +25,15 @@ function fixture() {
   return {child, pending, timeout: () => timerCallback(), kills: () => kills,
     timerCleared: () => timerCleared, timerUnref: () => timerUnref};
 }
+test('both owner implementations select only identity properties without removing either boot check', async () => {
+  for (const file of ['bridge/world-patch-owner-observation.mjs','scripts/world-patch-owner-observation.mjs']) {
+    const source = await fs.readFile(new URL('../../'+file,import.meta.url),'utf8');
+    assert.equal((source.match(/Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop/g)??[]).length,2);
+    assert.equal((source.match(/Get-CimInstance Win32_Process -Property ProcessId,CreationDate,ExecutablePath -Filter/g)??[]).length,1);
+    assert.ok(source.includes("if ($voxelBoot -cne $voxelBootAfter) { throw 'Boot changed during observation' }"));
+    assert.doesNotMatch(source,/Get-CimInstance Win32_OperatingSystem -ErrorAction Stop/);
+  }
+});
 async function failure(f, reason, phase = null) {
   const error = await f.pending.catch(value => value);
   assert.ok(error instanceof Error);

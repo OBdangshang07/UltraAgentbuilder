@@ -97,9 +97,11 @@ Write-VoxelStage 'machine'
 $voxelMachine = (Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Cryptography' -Name MachineGuid -ErrorAction Stop).MachineGuid
 if ([string]::IsNullOrWhiteSpace($voxelMachine)) { throw 'Missing local machine identity' }
 Write-VoxelStage 'boot-before'
-$voxelBoot = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
+# Request only the immutable boot field, not every OS property (including
+# expensive memory/licensing fields). Keep BOTH independent boot observations.
+$voxelBoot = (Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
 Write-VoxelStage 'process'
-$voxelProcesses = @(Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $voxelOwnerPid) -ErrorAction Stop)
+$voxelProcesses = @(Get-CimInstance Win32_Process -Property ProcessId,CreationDate,ExecutablePath -Filter ('ProcessId = ' + $voxelOwnerPid) -ErrorAction Stop)
 if ($voxelProcesses.Count -gt 1) { throw 'Ambiguous process query' }
 $voxelFoundJson = 'null'
 if ($voxelProcesses.Count -eq 1) {
@@ -110,7 +112,7 @@ if ($voxelProcesses.Count -eq 1) {
   $voxelFoundJson = '{"pid":' + ([long]$voxelProcess.ProcessId).ToString([Globalization.CultureInfo]::InvariantCulture) + ',"startedUtc":"' + $voxelStarted + '","executablePathHash":"' + $voxelPathHash + '"}'
 }
 Write-VoxelStage 'boot-after'
-$voxelBootAfter = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
+$voxelBootAfter = (Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
 if ($voxelBoot -cne $voxelBootAfter) { throw 'Boot changed during observation' }
 Write-VoxelStage 'serialize'
 # All interpolated strings are OUR SHA256 hex or UTC DateTime round-trip

@@ -97,9 +97,11 @@ Write-VoxelStage 'machine'
 $voxelMachine = (Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Cryptography' -Name MachineGuid -ErrorAction Stop).MachineGuid
 if ([string]::IsNullOrWhiteSpace($voxelMachine)) { throw 'Missing local machine identity' }
 Write-VoxelStage 'boot-before'
-$voxelBoot = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
+# Request only the immutable boot field, not every OS property (including
+# expensive memory/licensing fields). Keep BOTH independent boot observations.
+$voxelBoot = (Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
 Write-VoxelStage 'process'
-$voxelProcesses = @(Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $voxelOwnerPid) -ErrorAction Stop)
+$voxelProcesses = @(Get-CimInstance Win32_Process -Property ProcessId,CreationDate,ExecutablePath -Filter ('ProcessId = ' + $voxelOwnerPid) -ErrorAction Stop)
 if ($voxelProcesses.Count -gt 1) { throw 'Ambiguous process query' }
 $voxelFound = $null
 if ($voxelProcesses.Count -eq 1) {
@@ -108,7 +110,7 @@ if ($voxelProcesses.Count -eq 1) {
   $voxelFound = @{ pid = [long]$voxelProcess.ProcessId; startedUtc = $voxelProcess.CreationDate.ToUniversalTime().ToString('o'); executablePathHash = (Get-VoxelDigest ([IO.Path]::GetFullPath($voxelProcess.ExecutablePath).ToLowerInvariant())) }
 }
 Write-VoxelStage 'boot-after'
-$voxelBootAfter = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
+$voxelBootAfter = (Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
 if ($voxelBoot -cne $voxelBootAfter) { throw 'Boot changed during observation' }
 Write-VoxelStage 'serialize'
 @{ format = 'WindowsOwnerObservation'; version = 1; machineHash = (Get-VoxelDigest $voxelMachine.Trim().ToLowerInvariant()); bootUtc = $voxelBoot; observedUtc = [DateTime]::UtcNow.ToString('o'); queriedPid = $voxelOwnerPid; process = $voxelFound } | ConvertTo-Json -Compress -Depth 4
