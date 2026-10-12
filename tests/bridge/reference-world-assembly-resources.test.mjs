@@ -31,7 +31,8 @@ for(const tier of ['lite','pro','max','ultra'])test(tier+' resource reads verify
   assert.equal(Object.isFrozen(part.patch.writes[0]),true);assert.equal(h.calls.length,tier==='ultra'?17:8);
   assert.doesNotMatch(JSON.stringify(metadata),new RegExp(h.f.dataDir.replaceAll('\\','\\\\')));
   for(const wrong of [{...read,candidateHash:'a'.repeat(64)},{...read,preparationHash:'b'.repeat(64)},
-    {...read,referenceInput:{...read.referenceInput,ownerId:randomUUID()}},{...read,directory:h.f.jobDirectory}])await assert.rejects(h.operation('metadata',wrong));
+    {...read,referenceInput:{...read.referenceInput,ownerId:randomUUID()}},{...read,directory:h.f.jobDirectory},
+    {...read,cohort:metadata},{...read,verification:{kind:'original-complete-rebuild',candidate:metadata.candidate}}])await assert.rejects(h.operation('metadata',wrong));
   for(const partIndex of [-1,'0',0.5,32])await assert.rejects(h.operation('part',{...read,partIndex}));
   if(tier==='ultra') {
     assert.equal(result.scene.bounds.height,224);assert.equal(result.patches.length>1,true);
@@ -42,6 +43,43 @@ for(const tier of ['lite','pro','max','ultra'])test(tier+' resource reads verify
   const root=path.join(h.f.dataDir,'reference-drafts',h.f.ownerId),retained=path.join(h.f.dataDir,'retained-original-draft');await fs.rename(root,retained);
   assert.equal((await h.operation('metadata',read)).candidate.candidateHash,read.candidateHash);
   await assert.rejects(h.operation('prepare'));assert.equal(h.calls.length,result.records.length);
+});
+
+test('cold part then warm metadata/parts retain exact full original output, with no private cohort in public results',async t=>{
+  const h=await jointResourceFixture(t,{tier:'lite',images:1}),bound=await h.bind(),result=await h.run(bound);
+  const read={referenceInput:bound.referenceInput,preparationHash:h.prepared.preparationHash,candidateHash:result.candidate.candidateHash};
+  const receipts=[];
+  async function observed(operation,input){
+    const work=h.operation(operation,input),item=h.resources.active;
+    item.worker.on('message',message=>receipts.push(message));
+    try{return await work;}
+    finally{assert.equal(item.settled,true);assert.equal(item.worker.threadId,-1);}
+  }
+  const first=await observed('part',{...read,partIndex:0});
+  const metadata=await observed('metadata',read),second=await observed('part',{...read,partIndex:0});
+  assert.equal(receipts.length,3);assert.equal(receipts[0].verification.kind,'original-complete-rebuild');
+  assert.equal(receipts[1].verification,null);assert.equal(receipts[2].verification,null);
+  assert.deepEqual(second,first);assert.deepEqual(second.patch,result.patches[0]);assert.deepEqual(metadata.patchSet,result.patchSet);
+  for(const value of [first,metadata,second])for(const key of ['cohort','verification','proofFiles','directory','original'])
+    assert.equal(Object.hasOwn(value,key),false);
+  const record=path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY,'records.json'),original=await fs.readFile(record);
+  try{
+    const changed=Buffer.from(original);changed[changed.length-1]^=1;await fs.writeFile(record,changed);
+    await assert.rejects(observed('part',{...read,partIndex:0}));
+  }finally{await fs.writeFile(record,original);}
+  assert.equal(receipts[3].ok,false);
+  assert.deepEqual(await observed('part',{...read,partIndex:0}),first);
+  assert.equal(receipts[4].verification.kind,'original-complete-rebuild','Rejected warm read must retire its cohort before next request');
+  await h.resources.cancel(h.f.ownerId); // Explicitly retire only this read cache.
+  let cancelled;
+  const late=observed('metadata',read),lateRejected=assert.rejects(late,/cancelled/);
+  h.resources.active.worker.on('message',message=>{
+    if(message.ok)cancelled=h.resources.cancel(h.f.ownerId); // Receipt arrived, original exit has not.
+  });
+  await lateRejected;assert.ok(cancelled);await cancelled;
+  assert.deepEqual(await observed('part',{...read,partIndex:0}),first);
+  assert.equal(receipts[6].verification.kind,'original-complete-rebuild','Late cancelled original receipt cannot seed a warm cohort');
+  assert.equal(h.calls.length,result.records.length);assert.equal(second.worldWrites,0);
 });
 
 test('strict resource operation/UUID/bytes/UTF-8/keys reject caller paths, authority and model actions',async t=>{

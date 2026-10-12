@@ -272,6 +272,48 @@ export async function readReferenceWorldAssemblyCandidateData({directory,origina
   return rebuilt;
 }
 
+/** PRIVATE warm worker path. The parent owns this in-memory receipt from a
+ * normally-closed full reconstruction, not caller/disk hashes. Reuse only the
+ * proven semantic equality; read every byte and check every physical member
+ * again. Keep at most the selected patch/preview, with no geometry regeneration,
+ * compilation, model/world action or partial-set authority. */
+export async function readCohortReferenceWorldAssemblyCandidate({directory,cohort,expectedCandidateHash,signal,partIndex=null}) {
+  if(!digest.test(expectedCandidateHash??'')||cohort?.kind!=='original-complete-rebuild'
+    ||cohort.candidate?.candidateHash!==expectedCandidateHash
+    ||partIndex!==null&&(!Number.isSafeInteger(partIndex)||partIndex<0||partIndex>=cohort.candidate.partCount))
+    fail('Exact previously fully verified complete candidate required');
+  const {candidate,patchSet}=cohort,root=path.join(directory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY);
+  await physical(directory);signal?.throwIfAborted();
+  // The full verifier pinned the complete frozen context, original calls,
+  // reference pixels, native geometry, ownership and current render evidence.
+  // Re-enumeration detects added/removed files; hashing detects same-size edits
+  // and self-rehashed on-disk manifests, without trusting filesystem metadata.
+  if(hash(await evidencePins(directory,candidate.branch,signal))!==hash(candidate.proofFiles))
+    fail('Original joint proof changed since full reconstruction');
+  let patch=null,preview=null,total=0;
+  for(const pin of candidate.files){
+    signal?.throwIfAborted();
+    const maximum=pin.path==='records.json'?REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.recordsBytes:REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.partBytes;
+    const bytes=await member(root,pin.path,maximum);total+=bytes.length;
+    if(total>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.candidateBytes||bytes.length!==pin.bytes||hash(bytes)!==pin.sha256)
+      fail('Joint candidate member differs from original complete reconstruction');
+    if(partIndex!==null&&(pin.path===partName('part',partIndex)||pin.path===partName('preview',partIndex))){
+      const value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+      if(pin.path===partName('part',partIndex))patch=value;else preview=value;
+    }
+  }
+  if(!(await member(root,'candidate.json',REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes)).equals(raw(candidate)))
+    fail('Original fully verified candidate metadata changed');
+  const names=(await fs.readdir(root)).sort();
+  if(hash(names)!==hash([...candidate.files.map(f=>f.path),'candidate.json'].sort()))
+    fail('Joint candidate incomplete or contains unknown members');
+  if(hash(await evidencePins(directory,candidate.branch,signal))!==hash(candidate.proofFiles))
+    fail('Original joint proof changed during cohort read');
+  signal?.throwIfAborted();
+  return {candidate,patchSet,retainedAllParts:false,
+    ...(partIndex===null?{}:{selectedPart:{index:partIndex,patch,preview}})};
+}
+
 /** Metadata commits LAST. Failed/unknown publication claims and partial
  * directories stay preserved; no timeout/PID permits ownership takeover. */
 export async function saveReferenceWorldAssemblyCandidate({directory,original,result,signal,retainParts=true}) {

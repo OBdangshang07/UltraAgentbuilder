@@ -3,6 +3,7 @@ import {Worker} from 'node:worker_threads';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {REFERENCE_OWNER} from '../contracts/reference-attachments.mjs';
 import {WORLD_ASSEMBLY_LIMITS} from '../contracts/world-assembly-limits.mjs';
+import {JointReadCohort,jointReadCohortKey} from './reference-world-assembly-read-cohort.mjs';
 
 export const JOINT_ASSEMBLY_RESOURCE_LIMITS=Object.freeze({queue:2,inputBytes:65536,nativeUploadBytes:12000000,
   outputBytes:WORLD_ASSEMBLY_LIMITS.partEnvelopeBytes,operationMs:120000,oldGenerationMb:512,stackMb:4});
@@ -15,6 +16,7 @@ const freeze=value=>{if(value&&typeof value==='object'){for(const child of Objec
  * owner must create/claim a NEW job directory before bind; this lane cannot
  * create one, adopt partial records, invoke a model or refresh world facts. */
 export class ReferenceWorldAssemblyResources {
+  #readCohort=new JointReadCohort();
   constructor(options) {
     exactKeys(options,['dataDir'],'joint resource owner');
     if(typeof options.dataDir!=='string'||!options.dataDir)throw Error('Private joint data root required');
@@ -43,25 +45,36 @@ export class ReferenceWorldAssemblyResources {
   pump() {
     if(this.closed||this.active||!this.queue.length)return;
     const item=this.active=this.queue.shift();
+    item.cohortKey=jointReadCohortKey(item.operation,item.id,item.payload);
+    if(['prepare','bind','native-upload'].includes(item.operation))this.#readCohort.clear();
+    const cohort=this.#readCohort.acquire(item.cohortKey);
     try {
       item.worker=new Worker(new URL('./reference-world-assembly-resource-worker.mjs',import.meta.url),{
-        workerData:{dataDir:this.dataDir,operation:item.operation,id:item.id,payload:item.payload},
+        workerData:{dataDir:this.dataDir,operation:item.operation,id:item.id,payload:item.payload,cohort},
         resourceLimits:{maxOldGenerationSizeMb:JOINT_ASSEMBLY_RESOURCE_LIMITS.oldGenerationMb,
           stackSizeMb:JOINT_ASSEMBLY_RESOURCE_LIMITS.stackMb}});
     }catch{this.finish(item,failure('Joint resource worker unavailable; original evidence retained',503));return;}
     item.timer=setTimeout(()=>this.finish(item,failure('Joint resource time quota; original evidence retained',503)),JOINT_ASSEMBLY_RESOURCE_LIMITS.operationMs);
-    item.worker.once('message',message=>{if(item.message){this.finish(item,failure('Joint worker returned multiple receipts'));return;}item.message=message;});
+    item.worker.on('message',message=>{if(item.settled)return;if(item.message){this.finish(item,failure('Joint worker returned multiple receipts'));return;}item.message=message;});
     item.worker.once('error',()=>this.finish(item,failure('Joint resource worker failed; original evidence retained',503)));
     item.worker.once('exit',code=>{
+      // A quota/cancel/close may have settled the request before a late normal
+      // exit. That retired worker must never seed state for another request.
+      if(item.settled||this.closed)return;
       const message=item.message;
       if(code!==0||!message||message.operation!==item.operation||message.id!==item.id)
         return this.finish(item,failure('Joint worker exited without an exact complete receipt',503));
+      if(message.ok===true&&message.verification){
+        try{this.#readCohort.accept(item.cohortKey,message.verification);}
+        catch{return this.finish(item,failure('Joint worker complete-read cohort rejected',503));}
+      }
       this.finish(item,message.ok===true?null:failure('Original joint resource verification rejected; no automatic retry',
         [400,409,413].includes(message.statusCode)?message.statusCode:409),message.result);
     });
   }
   finish(item,error,result) {
     if(item.settled)return;item.settled=true;clearTimeout(item.timer);item.signal?.removeEventListener('abort',item.abort);
+    if(error)this.#readCohort.clear();
     this.queue=this.queue.filter(other=>other!==item);
     // Do not declare the lane idle or start a second writer until the original
     // worker has actually stopped, including cancellation and quota failures.
@@ -71,6 +84,7 @@ export class ReferenceWorldAssemblyResources {
     },()=>{
       // An unverified retirement is not permission to start another writer.
       this.closed=true;if(this.active===item)this.active=null;
+      this.#readCohort.clear();
       item.reject(failure('Joint worker retirement unverified; original evidence retained',503));
       for(const queued of [...this.queue])this.finish(queued,failure('Joint resources closed after unverified retirement',503));
     });
@@ -78,6 +92,7 @@ export class ReferenceWorldAssemblyResources {
   }
   async cancel(id) {
     if(typeof id!=='string'||!REFERENCE_OWNER.test(id))throw failure('Exact original joint UUID required',400);
+    this.#readCohort.clear();
     const selected=[...this.queue,...(this.active?[this.active]:[])].filter(item=>item.id===id);
     for(const item of selected)this.finish(item,failure('Joint resource operation explicitly cancelled; original evidence retained'));
     await Promise.allSettled([...this.cleanups]);
@@ -86,6 +101,7 @@ export class ReferenceWorldAssemblyResources {
   }
   async close() {
     this.closed=true;
+    this.#readCohort.clear();
     for(const item of [...this.queue,...(this.active?[this.active]:[])])
       this.finish(item,failure('Joint resources closed; original evidence retained',503));
     await Promise.allSettled([...this.cleanups]);

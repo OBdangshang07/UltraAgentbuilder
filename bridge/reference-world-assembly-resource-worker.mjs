@@ -4,7 +4,9 @@ import {parentPort,workerData} from 'node:worker_threads';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {REFERENCE_OWNER} from '../contracts/reference-attachments.mjs';
 import {prepareReferenceWorldAssemblyDraft,bindReferenceWorldAssemblyDraft,validateJointAssemblyReferenceInput} from './reference-world-assembly-input.mjs';
-import {readReferenceWorldAssemblyCandidate,readReferenceWorldAssemblyCandidatePart} from './reference-world-assembly.mjs';
+import {readReferenceWorldAssemblyCandidate} from './reference-world-assembly.mjs';
+import {readCohortReferenceWorldAssemblyCandidate,referenceWorldAssemblyCandidatePart} from './reference-world-assembly-candidate.mjs';
+import {jointReadCohortKey} from './reference-world-assembly-read-cohort.mjs';
 import {JOINT_ASSEMBLY_RESOURCE_LIMITS} from './reference-world-assembly-resources.mjs';
 import {readReferenceWorldAssemblyJobRecord} from './reference-world-assembly-job-data.mjs';
 import {readReferenceWorldAssemblyJobStatus,listReferenceWorldAssemblyRecords} from './reference-world-assembly-history.mjs';
@@ -23,7 +25,7 @@ async function physical(root) {
 // world writer is accepted. Bind copies ONLY the new independently confirmed
 // complete task. A worker stop never grants repair/takeover or redispatch.
 try {
-  exactKeys(workerData,['dataDir','operation','id','payload'],'private joint resource worker');
+  exactKeys(workerData,['dataDir','operation','id','payload','cohort'],'private joint resource worker');
   const {operation,id,payload}=workerData;
   if(!['prepare','bind','metadata','part','job-record','job-status','job-list','native-read','native-upload'].includes(operation)
     ||(operation==='job-list'?id!==null:typeof id!=='string'||!REFERENCE_OWNER.test(id)))throw Error('Original joint operation/UUID required');
@@ -31,7 +33,7 @@ try {
     throw Object.assign(Error('Joint input byte quota'),{statusCode:413});
   const input=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(payload));
   const dataDir=await physical(workerData.dataDir),directory=id===null?null:path.join(dataDir,'reference-world-assembly-jobs',id);
-  let result;
+  let result,verification=null;
   if(operation==='job-list') {
     exactKeys(input,[],'original full-task history list');result=await listReferenceWorldAssemblyRecords({dataDir});
   }else if(operation==='job-status') {
@@ -54,15 +56,24 @@ try {
     if(input.referenceInput.ownerId!==id||input.referenceInput.preparationHash!==input.preparationHash
       ||!digest.test(input.preparationHash??'')||!digest.test(input.candidateHash??''))throw Error('Original complete joint result pins required');
     await physical(directory);
-    if(operation==='part')result=await readReferenceWorldAssemblyCandidatePart({...input,directory});
-    else {
-      const original=await readReferenceWorldAssemblyCandidate({...input,directory,retainParts:false});
-      result={candidate:original.candidate,patchSet:original.patchSet,originalCompleteSetReverified:true,
-        additionalModelCalls:0,worldWrites:0,canAuthorizePlacement:false};
-    }
+    const key=jointReadCohortKey(operation,id,payload),cohort=workerData.cohort;
+    if(cohort!==null&&cohort?.key!==key)throw Error('Private verified cohort differs from exact original read identity');
+    const original=cohort===null
+      ?await readReferenceWorldAssemblyCandidate({...input,directory,retainParts:false})
+      :await readCohortReferenceWorldAssemblyCandidate({directory,cohort,expectedCandidateHash:input.candidateHash,
+        partIndex:operation==='part'?input.partIndex:null});
+    // Cold part reads also retain just their selected part during the FULL
+    // verifier. All other parts/proofs remain mandatory and byte-checked.
+    if(operation==='part')result=referenceWorldAssemblyCandidatePart(original,input.partIndex);
+    else result={candidate:original.candidate,patchSet:original.patchSet,originalCompleteSetReverified:true,
+      additionalModelCalls:0,worldWrites:0,canAuthorizePlacement:false};
+    if(cohort===null)verification={kind:'original-complete-rebuild',key,candidate:original.candidate,patchSet:original.patchSet};
   }
-  if(Buffer.byteLength(JSON.stringify(result))>JOINT_ASSEMBLY_RESOURCE_LIMITS.outputBytes)
+  // The private full-verifier receipt shares the ORIGINAL output allowance;
+  // adding owner-memory reuse must not enlarge the worker's IPC message quota.
+  const reply={operation,id,ok:true,result,verification};
+  if(Buffer.byteLength(JSON.stringify(reply))>JOINT_ASSEMBLY_RESOURCE_LIMITS.outputBytes)
     throw Object.assign(Error('Joint output quota; no partial result'),{statusCode:413});
-  parentPort.postMessage({operation,id,ok:true,result});
+  parentPort.postMessage(reply);
 }catch(error){parentPort.postMessage({operation:workerData?.operation,id:workerData?.id,ok:false,
   statusCode:[400,409,413].includes(error.statusCode)?error.statusCode:409});}
