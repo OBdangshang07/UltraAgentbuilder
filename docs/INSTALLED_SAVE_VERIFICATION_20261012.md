@@ -49,10 +49,26 @@ real-provider unattended completion.
 
 ## Cancellation and rollback
 
-A separate new synthetic task and isolated world are being checked for a known
-nonempty partial cancellation, exact-prefix undo and closed-world comparison.
-Its result is pending; the successful full-save world is not replayed or reused
-as cancellation evidence.
+Passed on 2026-10-13 (SGT) in a separate new synthetic task and isolated world:
+
+- The same exact production candidate again produced the full original
+  274,961-operation / 34-part candidate without a substitute or clipped scope.
+- After the separate final confirmation, explicit cancellation stopped at a
+  known confirmed prefix of 512 operations, not an ambiguous in-flight batch.
+- The original apply journal closed as `CANCELLED`. The independent original
+  inverse journal evaluated and restored all 512 operations, with zero
+  preserved/conflicting operations in this no-later-edit scenario.
+- The original JVM and builtin Bridge saved and exited normally.
+- The independent closed-MCA reader compared all 1,523,200 original context
+  cells to the captured BEFORE state: zero changed cells and no residual writes.
+- This task used 17 additional simulated provider responses and zero actual
+  building-model calls. It did not replay or reuse the full-save world.
+
+The two original worlds therefore provide different evidence: the first proves
+the complete building was saved; the second proves a known partial prefix was
+cancelled and durably restored. A rollback proof is not a full-building save
+proof. Later-player-edit protection, arbitrary crash recovery and real-provider
+completion are not certified by this cancellation scenario.
 
 ## Remaining acceptance work
 
