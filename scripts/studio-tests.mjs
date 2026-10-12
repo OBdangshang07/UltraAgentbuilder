@@ -8,6 +8,7 @@ import {spawn} from 'node:child_process';
 // neither installs packages nor changes the self-contained player companion.
 try {await import('prismarine-nbt');}
 catch(error) {throw new Error('Studio test dependencies unavailable: run npm ci --ignore-scripts before regression. No tests or model calls started.',{cause:error});}
+const {boundedStudioTestOptions}=await import('./studio-test-options.mjs');
 
 // Hundreds of native-bundle tests must not accumulate on the system drive.
 // Each run owns a new workspace-local temp root; failed evidence is retained.
@@ -17,7 +18,7 @@ if(await fs.realpath(parent)!==parent)throw new Error('Test output parent must n
 const run=await fs.mkdtemp(path.join(parent,'run-')),temp=path.join(run,'tmp');await fs.mkdir(temp);
 const startedAt=new Date().toISOString();console.log('Isolated test TEMP: '+temp);
 const args=process.argv.slice(2),only=args.indexOf('--only');
-const options=only<0?args:args.slice(0,only);
+const options=boundedStudioTestOptions(only<0?args:args.slice(0,only));
 const testFiles=only<0?['tests/generation/*.test.mjs','tests/bridge/*.test.mjs','tests/design/*.test.mjs']:args.slice(only+1);
 if(only>=0){
  if(!testFiles.length||testFiles.some(file=>!/^tests\/(?:generation|bridge|design)\/[A-Za-z0-9_.-]+\.test\.mjs$/.test(file)))throw new Error('Explicit bounded Studio test files required');

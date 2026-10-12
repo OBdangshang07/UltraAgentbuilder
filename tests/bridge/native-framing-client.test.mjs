@@ -26,3 +26,24 @@ test('actual representative camera producer retains framing in the native reques
  assert.equal(validateEvidenceRequest(maximum),maximum);
 });
 
+test('repeated free fixture generation owns new immutable stages and leaves old bytes untouched',async()=>{
+ const root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'native-framing-repeat-')));
+ const first=await makeNativeEvidenceClientFixtures(root),pins=[];
+ async function collect(directory){
+  for(const name of (await fs.readdir(directory)).sort()){
+   const file=path.join(directory,name),stat=await fs.lstat(file);
+   assert.equal(stat.isSymbolicLink(),false);
+   if(stat.isDirectory())await collect(file);else{assert.equal(stat.isFile(),true);pins.push({file,bytes:await fs.readFile(file)});}
+  }
+ }
+ await collect(first.runDirectory);assert.ok(pins.length>10);
+ const second=await makeNativeEvidenceClientFixtures(root);
+ assert.notEqual(second.runDirectory,first.runDirectory);assert.equal(second.directory,first.directory);
+ assert.equal(path.dirname(first.runDirectory),first.directory);assert.equal(path.dirname(second.runDirectory),second.directory);
+ assert.deepEqual(second.request,first.request);assert.deepEqual(second.basis,first.basis);
+ assert.deepEqual(JSON.parse(await fs.readFile(path.join(second.directory,'request.json'),'utf8')),second.request);
+ for(const pin of pins)assert.deepEqual(await fs.readFile(pin.file),pin.bytes,'Old synthetic fixture changed');
+ for(const value of [first,second]){assert.equal(value.modelCalls,0);assert.equal(value.worldWrites,0);}
+ assert.equal((await fs.readdir(first.directory)).filter(n=>/^run-/.test(n)).length,2);
+});
+

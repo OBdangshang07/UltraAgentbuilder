@@ -17,10 +17,16 @@ final class WorldPatchJournalFiles {
         if(!directory.isAbsolute()||!directory.normalize().equals(directory))throw new IOException("Physical absolute journal path required");
         Path current=directory.getRoot();checkDirectory(current);
         for(var part:directory){current=current.resolve(part);checkDirectory(current);}
+        // Resolve the complete spelling once, not every growing prefix. Each
+        // component is still checked without following links, and Windows
+        // reparse directories are explicitly rejected below. No persistent
+        // metadata cache, skipped member bytes or weakened native file handle.
+        if(!directory.toRealPath().equals(directory))throw new IOException("Journal directory redirected; preserved");
     }
     private static void checkDirectory(Path path)throws IOException{
         var a=Files.readAttributes(path,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);
-        if(!a.isDirectory()||a.isSymbolicLink()||a.isOther()||!path.toRealPath().equals(path))throw new IOException("Journal directory redirected; preserved");
+        if(!a.isDirectory()||a.isSymbolicLink()||a.isOther())throw new IOException("Journal directory redirected; preserved");
+        if(System.getProperty("os.name").startsWith("Windows"))Windows.checkDirectory(path);
     }
     static byte[] read(Path file,int maximum)throws IOException{
         directory(file.getParent());var before=Files.readAttributes(file,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);
@@ -62,6 +68,16 @@ final class WorldPatchJournalFiles {
         return prefix+tail;
     }
     private static final class Windows {
+        private static void checkDirectory(Path path)throws IOException{
+            // Drive/share roots are directories, not member spellings; the
+            // strict member-path API deliberately continues to reject them.
+            String spelling=path.toString();
+            String nativePath=path.getParent()!=null?windowsNativePath(spelling):
+                spelling.startsWith("\\\\")?"\\\\?\\UNC\\"+spelling.substring(2):"\\\\?\\"+spelling;
+            int attributes=Kernel32.INSTANCE.GetFileAttributes(nativePath);
+            if(attributes==-1||(attributes&WinNT.FILE_ATTRIBUTE_DIRECTORY)==0||(attributes&WinNT.FILE_ATTRIBUTE_REPARSE_POINT)!=0)
+                throw new IOException("Native journal directory type/reparse rejected; preserved");
+        }
         private record Info(long bytes,long writeTime,int links){}
         private static Info info(WinNT.HANDLE h,int maximum)throws IOException{
             var standard=new WinBase.FILE_STANDARD_INFO();var basic=new WinBase.FILE_BASIC_INFO();
