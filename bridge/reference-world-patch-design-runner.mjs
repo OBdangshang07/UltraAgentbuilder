@@ -42,6 +42,20 @@ export async function createReferenceWorldPatchDesignRunner(options) {
     metadataReads.set(id,item);
     try {return await item.promise;} finally {if(metadataReads.get(id) === item) metadataReads.delete(id);}
   };
+  function liveProgress(saved, item) {
+    // ONLY the exact live controller's already durable journal snapshot. This
+    // is unfinished progress, not a disk/candidate/receipt certificate. Never
+    // race a strict file reader against that controller's atomic call updates.
+    const call = item.journal?.peek(1) ?? null, id = saved.value.id;
+    if (call && (call.index !== 1 || call.fingerprint !== saved.value.invocationFingerprint
+      || !['pending','response','error'].includes(call.state))) throw Error('Original live joint journal changed');
+    return {format: 'FrozenReferenceWorldPatchJobStatus', version: 1, id, capsuleId: id,
+      submissionHash: saved.value.submissionHash, manifestHash: saved.source.receipt.manifestHash, runtimeHash,
+      recipient: structuredClone(saved.source.receipt.recipient), state: call && call.state !== 'pending' ? 'checking' : 'running',
+      callsReserved: call ? 1 : 0, maximumCalls: 1, automaticRetries: 0, modelSent: call ? 'possibly-or-confirmed' : false,
+      responseCheck: null, localStop: null, canObserveOriginal: false, candidatePublished: false, candidateHash: null,
+      candidateCurrentFilesReverified: false, serverBaselineVerified: false, canAuthorizePlacement: false, worldWrites: 0};
+  }
   async function get(id) {
     const saved = await metadata(id); if (!saved) return null;
     const ledger = path.join(saved.directory, 'assembly-journal');
@@ -50,6 +64,7 @@ export async function createReferenceWorldPatchDesignRunner(options) {
       if ((await fs.readdir(ledger)).some(name => /^call-\d+\.json$/.test(name) && name !== 'call-1.json'))
         throw Error('Joint invocation exceeded original one-call budget');
     } catch (error) {if (error.code !== 'ENOENT') throw error;}
+    const live = running.get(id); if (live) return liveProgress(saved, live);
     let call = null;
     try {call = await readJointInvocationEnvelope(path.join(saved.directory, 'assembly-journal/call-1.json'), REFERENCE_PATCH_RESPONSE_BYTES + 65536);}
     catch (error) {if (error.code !== 'ENOENT') throw error;}
@@ -171,6 +186,7 @@ export async function createReferenceWorldPatchDesignRunner(options) {
         else if (typeof adapter?.recoverOriginal !== 'function') throw Error('Selected provider original-receipt observer unavailable');
         const journal = await openAssemblyJournal({directory: saved.directory, requestHash: saved.value.submissionHash,
           policy: REFERENCE_PATCH_CALL_POLICY, runtimeHash});
+        item.journal = journal;
         const response = await journal.invoke(packet.prompt, 1, {outputSchema: packet.outputSchema, stageName: packet.stageName,
           stageCount: 1, images: packet.images, referenceInput: packet.referenceInput}, async (prompt, index, callOptions) => {
           if (observing) throw Error('Original receipt observation cannot dispatch');

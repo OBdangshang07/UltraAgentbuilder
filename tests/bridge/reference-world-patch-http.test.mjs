@@ -79,7 +79,8 @@ async function images(f,p) {
   assert.deepEqual(response.value.imageHashes, f.pixels.map(hash)); assert.equal(response.value.canAuthorizePlacement,false);
 }
 async function submit(f,p) {
-  const sent = await f.request(p.route + '/send', {method:'POST',value:p.send}); assert.equal(sent.status,202);
+  const sent = await f.request(p.route + '/send', {method:'POST',value:p.send});
+  assert.equal(sent.status,202,JSON.stringify(sent.value));
   for (let i=0;i<200;i++) {
     const status = await f.request(p.route); assert.equal(status.status,200);
     if (!['running','checking'].includes(status.value.state)) return status.value;
@@ -88,6 +89,52 @@ async function submit(f,p) {
   assert.fail('Offline synthetic HTTP task did not settle');
 }
 const turns = f => f.requests.filter(r => r.method === 'turn/start');
+
+test('active joint status survives its original journal replacement without another generation', async t => {
+  let releaseGeneration, enteredResolve, pauseResolve, releaseReader, generations=0, paused=false, pending;
+  const generationWait=new Promise(resolve=>{releaseGeneration=resolve;}),entered=new Promise(resolve=>{enteredResolve=resolve;});
+  const readPaused=new Promise(resolve=>{pauseResolve=resolve;}),readerWait=new Promise(resolve=>{releaseReader=resolve;});
+  const f=await fixture(t),p=await prepare(f);await images(f,p);
+  // The one upstream reply is synthetic. The reservation, durable original
+  // journal replacement, HTTP reader and original compile workers are real.
+  f.adapter.generate=async()=>{generations++;enteredResolve();await generationWait;return {spec:patchTaskProposal(f.snapshot)};};
+  try {
+    const sent=await f.request(p.route+'/send',{method:'POST',value:p.send});assert.equal(sent.status,202,JSON.stringify(sent.value));await entered;
+    const call=path.join(f.dir,'reference-world-patch-invocations',p.receipt.capsuleId,'assembly-journal/call-1.json');
+    const originalLstat=fs.lstat;
+    t.mock.method(fs,'lstat',async function(file,...args){
+      const stat=await originalLstat.call(fs,file,...args);
+      if(file===call&&!paused){paused=true;pauseResolve();await readerWait;}
+      return stat;
+    });
+    pending=f.request(p.route);
+    const first=await Promise.race([readPaused.then(()=>'reader-paused'),pending.then(()=>'reader-complete')]);
+    if(first==='reader-paused'){
+      releaseGeneration();let replaced=false;
+      for(let i=0;i<1000;i++){
+        const envelope=JSON.parse(await fs.readFile(call,'utf8'));
+        if(envelope.value.state==='response'){replaced=true;break;}await delay(10);
+      }
+      assert.equal(replaced,true,'The SAME original writer must persist its synthetic reply before resuming the original read');
+    }
+    releaseReader();const polled=await pending;
+    assert.equal(polled.status,200,JSON.stringify(polled.value));
+    assert.ok(['running','checking','completed-checked'].includes(polled.value.state));
+    assert.equal(polled.value.callsReserved,1);assert.equal(polled.value.canAuthorizePlacement,false);
+    releaseGeneration();let completed;
+    for(let i=0;i<200;i++){
+      completed=await f.request(p.route);assert.equal(completed.status,200,JSON.stringify(completed.value));
+      if(completed.value.state==='completed-checked')break;await delay(10);
+    }
+    assert.equal(completed.value.state,'completed-checked');assert.equal(generations,1);
+    assert.equal(completed.value.callsReserved,1);assert.equal(completed.value.canAuthorizePlacement,false);
+    // The unfinished live snapshot must not survive closure as a fallback
+    // certificate: malformed terminal evidence still rejects and stays intact.
+    await fs.appendFile(call,' synthetic terminal corruption');
+    const rejected=await f.request(p.route);assert.equal(rejected.status,409);assert.equal(generations,1);
+    assert.ok((await fs.readFile(call,'utf8')).endsWith(' synthetic terminal corruption'));
+  } finally {releaseGeneration();releaseReader();await pending?.catch(()=>{});}
+});
 
 test('joint HTTP exposes only fixed owner-query diagnostics and retains rejection with zero provider turns', async t => {
   const f = await fixture(t), diagnostic = {format:'WindowsOwnerQueryFailure',version:1,reason:'query-failed',phase:'process',
