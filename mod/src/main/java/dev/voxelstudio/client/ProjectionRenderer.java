@@ -83,18 +83,30 @@ public final class ProjectionRenderer implements AutoCloseable {
                     float mx = cx + 8, my = cy + 8, mz = cz + 8;
                     // One upload at a time bounds outstanding off-heap mesh memory.
                     CompletableFuture<Void> uploaded = new CompletableFuture<>();
-                    client.execute(() -> {
-                        try {
-                            if (generation != ticket) { built.release(); return; }
-                            VertexBuffer gpu = new VertexBuffer(VertexBuffer.Usage.STATIC); gpu.bind(); gpu.upload(built); VertexBuffer.unbind();
-                            meshes.add(new Mesh(gpu, mx, my, mz));
-                        } finally { uploaded.complete(null); }
-                    });
-                    uploaded.get(30, TimeUnit.SECONDS);
+                    client.execute(() -> ProjectionMeshUpload.execute(uploaded,()->generation==ticket,new ProjectionMeshUpload.Access<VertexBuffer>() {
+                        @Override public VertexBuffer create(){return new VertexBuffer(VertexBuffer.Usage.STATIC);}
+                        @Override public void bind(VertexBuffer gpu){gpu.bind();}
+                        @Override public void upload(VertexBuffer gpu){gpu.upload(built);}
+                        @Override public void unbind(){VertexBuffer.unbind();}
+                        @Override public void publish(VertexBuffer gpu){meshes.add(new Mesh(gpu,mx,my,mz));}
+                        @Override public void dispose(VertexBuffer gpu){gpu.close();}
+                        @Override public void releaseSource(){built.release();}
+                    }));
+                    try { uploaded.get(30, TimeUnit.SECONDS); }
+                    catch (Exception error) {
+                        ProjectionMeshUpload.abandon(uploaded); // A late queued upload must not publish after timeout.
+                        if(error instanceof InterruptedException)Thread.currentThread().interrupt();
+                        throw error;
+                    }
                     faceCount=faces;
                 }
                 client.execute(() -> { if (generation == ticket) {building = false;buildMillis=(System.nanoTime()-started)/1_000_000;} });
-            } catch (Exception e) { client.execute(() -> { if (generation == ticket) { error = e.getMessage(); building = false; } }); }
+            } catch (Exception e) { client.execute(() -> {
+                if(generation!=ticket)return;
+                generation++; // Retire this failed build, including any late queued work.
+                try { release(); } catch(RuntimeException | Error cleanup) { if(cleanup!=e)e.addSuppressed(cleanup); }
+                error=ProjectionMeshUpload.describe(e);building=false;
+            }); }
         });
     }
     public void draw(Matrix4f modelView, Matrix4f projection, float opacity, boolean materials, Vec3d localCamera) {
@@ -114,7 +126,13 @@ public final class ProjectionRenderer implements AutoCloseable {
         completedDraws++;
         drawCpuMillis=(System.nanoTime()-started)/1_000_000.0;
     }
-    private void release() { for (Mesh mesh : meshes) mesh.buffer.close(); meshes.clear();sorted.clear();sortedCamera=null; }
+    private void release() {
+        Throwable failure=null;
+        try { for(Mesh mesh:meshes)try{mesh.buffer.close();}catch(RuntimeException | Error error){if(failure==null)failure=error;else if(failure!=error)failure.addSuppressed(error);} }
+        finally { meshes.clear();sorted.clear();sortedCamera=null; }
+        if(failure instanceof RuntimeException error)throw error;
+        if(failure instanceof Error error)throw error;
+    }
     public void clear() { generation++; release(); building = false; }
     @Override public void close() { clear(); worker.shutdownNow(); }
     private static class View implements BlockRenderView {
