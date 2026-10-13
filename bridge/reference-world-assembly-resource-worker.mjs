@@ -11,6 +11,7 @@ import {JOINT_ASSEMBLY_RESOURCE_LIMITS} from './reference-world-assembly-resourc
 import {readReferenceWorldAssemblyJobRecord} from './reference-world-assembly-job-data.mjs';
 import {readReferenceWorldAssemblyJobStatus,listReferenceWorldAssemblyRecords} from './reference-world-assembly-history.mjs';
 import {readReferenceWorldAssemblyNative,uploadReferenceWorldAssemblyNative} from './reference-world-assembly-native.mjs';
+import {publicAssemblyAdmissionFailure} from './reference-world-assembly-admission-failure.mjs';
 
 const digest=/^[a-f0-9]{64}$/;
 async function physical(root) {
@@ -76,4 +77,5 @@ try {
     throw Object.assign(Error('Joint output quota; no partial result'),{statusCode:413});
   parentPort.postMessage(reply);
 }catch(error){parentPort.postMessage({operation:workerData?.operation,id:workerData?.id,ok:false,
-  statusCode:[400,409,413].includes(error.statusCode)?error.statusCode:409});}
+  statusCode:[400,409,413].includes(error.statusCode)?error.statusCode:409,
+  ...(publicAssemblyAdmissionFailure(error)?{admissionDiagnostic:publicAssemblyAdmissionFailure(error)}:{})});}

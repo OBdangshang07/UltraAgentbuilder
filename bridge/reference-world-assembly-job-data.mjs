@@ -8,6 +8,7 @@ import {validateWorldPatchOwnerReference} from './world-patch-owner-observation.
 import {jointInvocationDirectory} from './reference-world-patch-invocation-data.mjs';
 import {readFrozenReferenceWorldAssembly,verifyReferenceWorldAssemblySend} from './reference-world-assembly.mjs';
 import {validateJointAssemblyReferenceInput} from './reference-world-assembly-input.mjs';
+import {REFERENCE_ASSEMBLY_ADMISSION_FAILURE_FILE,validateAssemblyAdmissionFailure,admissionFailureError} from './reference-world-assembly-admission-failure.mjs';
 
 export const REFERENCE_ASSEMBLY_DISPATCH_FILE='original-dispatch.json';
 const digest=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -62,7 +63,16 @@ export async function readReferenceWorldAssemblyJobRecord({dataDir,id,expectedRe
   try{root=await jointAssemblyJobRoot(dataDir);}catch(error){if(error.code==='ENOENT')return null;throw error;}
   const directory=path.join(root,id);
   try{await jointInvocationDirectory(directory);}catch(error){if(error.code==='ENOENT')return null;throw error;}
-  const value=await readJointAssemblyJobEnvelope(path.join(directory,'request.json'),REFERENCE_WORLD_ASSEMBLY_JOB_LIMITS.recordBytes);
+  let value;
+  try{value=await readJointAssemblyJobEnvelope(path.join(directory,'request.json'),REFERENCE_WORLD_ASSEMBLY_JOB_LIMITS.recordBytes);}
+  catch(error){
+    if(error.code!=='ENOENT')throw error;
+    let diagnostic;try{diagnostic=validateAssemblyAdmissionFailure(await readJointAssemblyJobEnvelope(path.join(directory,REFERENCE_ASSEMBLY_ADMISSION_FAILURE_FILE),8192));}
+    catch{throw error;}
+    if(diagnostic.id!==id||diagnostic.directoryHash!==hash(directory)||expectedRequestHash!==null&&diagnostic.requestHash!==expectedRequestHash)
+      throw Error('Original admission failure identity changed; no recovery');
+    throw admissionFailureError(diagnostic);
+  }
   exactKeys(value,['format','version','purpose','id','request','requestHash','prepared','referenceInput','ownerReference','ownerReferenceHash',
     'runtimeHash','createdAt','maximumCalls','state','modelSentAtReservation','callsReservedAtReservation','canAuthorizePlacement'],'original complete joint job');
   const request=validateReferenceWorldAssemblyJobRequest(value.request),input=validateJointAssemblyReferenceInput(value.referenceInput);

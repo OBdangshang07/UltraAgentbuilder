@@ -8,6 +8,8 @@ import {createReferenceWorldAssemblyJobRegistry} from './reference-world-assembl
 import {createReferenceWorldAssemblyRunner} from './reference-world-assembly-runner.mjs';
 import {requestNativeEvidence} from './native-evidence.mjs';
 import {publicWindowsOwnerQueryFailure} from './windows-owner-query.mjs';
+import {publicAssemblyAdmissionFailure} from './reference-world-assembly-admission-failure.mjs';
+import {publicOwnerCreationFailure} from './world-patch-owner-failure.mjs';
 
 const prefix='/v1/reference-world-assembly',uuid='[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const contextRoute=new RegExp(`^${prefix}/contexts/(${uuid})/prepare$`);
@@ -160,7 +162,7 @@ export async function createReferenceWorldAssemblyHttpService({dataDir,enabled=f
       }else {
         const value=await status(job[1],signal);json(value?200:404,value??{error:'Original complete joint job not found'});
       }
-    }catch(error){const diagnostic=publicWindowsOwnerQueryFailure(error);
+    }catch(error){const diagnostic=publicAssemblyAdmissionFailure(error)??publicOwnerCreationFailure(error)??publicWindowsOwnerQueryFailure(error);
       if(!res.destroyed&&!res.headersSent)json([400,404,405,409,413,429,503].includes(error.statusCode)?error.statusCode:409,
       {error:error.publicMessage??'Complete joint request rejected; original evidence retained; no automatic resubmission',
         ...(diagnostic?{diagnostic}:{})});}

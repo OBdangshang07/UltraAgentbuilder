@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {exactKeys} from '../contracts/world-selection.mjs';
 import {hash} from '../src/generation/compiler.mjs';
 import {collectWindowsOwnerQuery} from './windows-owner-query.mjs';
+import {ownerCreationError} from './world-patch-owner-failure.mjs';
 
 // Independent P4 development evidence, not a recovery controller. Issuance
 // only creates a NEW owner in an empty directory. Inspection never creates or
@@ -101,15 +102,24 @@ Write-VoxelStage 'boot-before'
 # expensive memory/licensing fields). Keep BOTH independent boot observations.
 $voxelBoot = (Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
 Write-VoxelStage 'process'
-$voxelProcesses = @(Get-CimInstance Win32_Process -Property ProcessId,CreationDate,ExecutablePath -Filter ('ProcessId = ' + $voxelOwnerPid) -ErrorAction Stop)
-if ($voxelProcesses.Count -gt 1) { throw 'Ambiguous process query' }
 $voxelFoundJson = 'null'
-if ($voxelProcesses.Count -eq 1) {
-  $voxelProcess = $voxelProcesses[0]
-  if ([string]::IsNullOrWhiteSpace($voxelProcess.ExecutablePath) -or $null -eq $voxelProcess.CreationDate) { throw 'Incomplete process identity' }
-  $voxelStarted = $voxelProcess.CreationDate.ToUniversalTime().ToString('o')
-  $voxelPathHash = Get-VoxelDigest ([IO.Path]::GetFullPath($voxelProcess.ExecutablePath).ToLowerInvariant())
-  $voxelFoundJson = '{"pid":' + ([long]$voxelProcess.ProcessId).ToString([Globalization.CultureInfo]::InvariantCulture) + ',"startedUtc":"' + $voxelStarted + '","executablePathHash":"' + $voxelPathHash + '"}'
+$voxelProcess = $null
+try { $voxelProcess = [Diagnostics.Process]::GetProcessById($voxelOwnerPid) }
+catch [ArgumentException] { } # This PID is absent, NOT access-denied or an arbitrary query failure.
+if ($null -ne $voxelProcess) {
+  try {
+    if (-not $voxelProcess.HasExited) {
+      $voxelStarted = $voxelProcess.StartTime.ToUniversalTime()
+      # Legacy Win32_Process CreationDate uses whole DMTF microseconds. Floor
+      # native FILETIME's final 100ns digit so v1 references keep EXACT identity.
+      $voxelStarted = [DateTime]::new($voxelStarted.Ticks - ($voxelStarted.Ticks % 10), [DateTimeKind]::Utc).ToString('o')
+      $voxelExecutable = $voxelProcess.MainModule.FileName
+      if ([string]::IsNullOrWhiteSpace($voxelExecutable)) { throw 'Incomplete process identity' }
+      $voxelPathHash = Get-VoxelDigest ([IO.Path]::GetFullPath($voxelExecutable).ToLowerInvariant())
+      if ($voxelProcess.HasExited) { throw 'Process exited during identity observation' }
+      $voxelFoundJson = '{"pid":' + ([long]$voxelProcess.Id).ToString([Globalization.CultureInfo]::InvariantCulture) + ',"startedUtc":"' + $voxelStarted + '","executablePathHash":"' + $voxelPathHash + '"}'
+    }
+  } finally { $voxelProcess.Dispose() }
 }
 Write-VoxelStage 'boot-after'
 $voxelBootAfter = (Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop).LastBootUpTime.ToUniversalTime().ToString('o')
@@ -126,8 +136,10 @@ $voxelObserved = [DateTime]::UtcNow.ToString('o')
   const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
     windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe']});
   const output = await collectWindowsOwnerQuery(child);
-  let value; try { value = JSON.parse(output.replace(/^\uFEFF/, '')); } catch { throw Error('Invalid exact Windows owner observation; no recovery authorized'); }
-  return validateWindowsOwnerObservation(value);
+  let value; try { value = JSON.parse(output.replace(/^\uFEFF/, '')); }
+  catch { throw Object.assign(Error('Invalid exact Windows owner observation; no recovery authorized'),{code:'WINDOWS_OWNER_INVALID_JSON'}); }
+  try { return validateWindowsOwnerObservation(value); }
+  catch { throw Object.assign(Error('Invalid exact Windows owner observation; no recovery authorized'),{code:'WINDOWS_OWNER_INVALID_OBSERVATION'}); }
 }
 async function originalLock(directoryValue) {
   const directory = path.resolve(directoryValue);
@@ -140,24 +152,32 @@ async function originalLock(directoryValue) {
   return {directory, owner: identity, ownerFileSha256: hash(raw)};
 }
 export async function createWorldPatchOwnerReference({directory: directoryValue}) {
+  let phase='directory';
+  try {
   const directory = path.resolve(directoryValue);
   if (await fs.realpath(directory) !== directory || !(await fs.lstat(directory)).isDirectory()) throw Error('Redirected new owner directory');
+  phase='empty-directory';
   if ((await fs.readdir(directory)).length) throw Error('Only a new empty owner directory may issue a process reference; legacy PID cannot be upgraded');
+  phase='process-query';
   const observation = await observeWindowsOwnerProcess(process.pid);
+  phase='self-process';
   if (!observation.process || observation.process.executablePathHash !== hash(path.resolve(process.execPath).toLowerCase())) throw Error('Original self process identity could not be verified');
   // We CREATE this owner, rather than trusting a read-back PID that may have
   // been reused. wx defeats concurrent acquisition; an incomplete creation
   // remains evidence, never permission for a subsequent issuance or retry.
   const identity = {pid: process.pid, id: randomUUID()}, file = path.join(directory, '_owner.json');
   const raw = Buffer.from(JSON.stringify({value: identity, sha256: hash(identity)}));
+  phase='owner-create';
   const handle = await fs.open(file, 'wx', 0o600);
   try { await handle.writeFile(raw); await handle.sync(); } finally { await handle.close(); }
+  phase='owner-capture';
   const before = {directory, owner: identity, ownerFileSha256: hash(raw)};
   const after = await originalLock(directory);
   if (hash(before) !== hash(after)) throw Error('Original owner changed during capture');
   const reference = {format: 'WorldPatchOwnerReference', version: 1, ...before, observation};
   return {reference, referenceHash: hash(reference), newOwnerLockCreated: true,
     originalRecordsModified: false, additionalModelCalls: 0, worldWrites: 0, canAuthorizePlacement: false};
+  }catch(error){throw ownerCreationError(error,phase);}
 }
 export async function inspectWorldPatchOwnerProcess({directory, reference: referenceValue, expectedReferenceHash}) {
   const reference = validateWorldPatchOwnerReference(referenceValue, expectedReferenceHash), before = await originalLock(directory);

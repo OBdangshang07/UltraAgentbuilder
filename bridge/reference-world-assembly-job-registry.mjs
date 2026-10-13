@@ -9,6 +9,7 @@ import {ReferenceWorldAssemblyResources} from './reference-world-assembly-resour
 import {assemblyRuntimeIdentity} from './assembly-durability.mjs';
 import {verifyReferenceWorldAssemblySend} from './reference-world-assembly.mjs';
 import {createWorldPatchOwnerReference} from './world-patch-owner-observation.mjs';
+import {REFERENCE_ASSEMBLY_ADMISSION_FAILURE_FILE,assemblyAdmissionFailure,admissionFailureError} from './reference-world-assembly-admission-failure.mjs';
 import {jointInvocationDirectory,writeJointInvocationEnvelope} from './reference-world-patch-invocation-data.mjs';
 import {jointAssemblyJobRoot,readJointAssemblyJobEnvelope,REFERENCE_ASSEMBLY_DISPATCH_FILE,validateReferenceWorldAssemblyDispatchClaim} from './reference-world-assembly-job-data.mjs';
 
@@ -88,6 +89,7 @@ export async function createReferenceWorldAssemblyJobRegistry(options) {
       throw failure('Full joint reservation in progress/unknown; no takeover');
     }
     const verifyClaim=async()=>{await jointInvocationDirectory(root);if(hash(await readJointAssemblyJobEnvelope(file,4096))!==hash(claim))throw failure('Original full joint reservation claim changed');};
+    let directoryCreated=false,committed=false,phase='new-owner';const directory=path.join(root,id);
     try {
       checkpoint(signal);await verifyClaim();const old=await metadata(id,signal);if(old)return same(old,request,selectedCapability);
       const entries=await names();for(const other of entries)await metadata(other,signal);
@@ -95,10 +97,12 @@ export async function createReferenceWorldAssemblyJobRegistry(options) {
       const fresh=await resources.operation('prepare',id,raw(input),{signal});
       if(hash(fresh)!==hash(prepared))throw failure('Original full joint source changed before claim');
       await current(signal);await verifyClaim();
-      const directory=path.join(root,id);await fs.mkdir(directory,{mode:0o700});await jointInvocationDirectory(directory);
+      await fs.mkdir(directory,{mode:0o700});directoryCreated=true;await jointInvocationDirectory(directory);
       const owner=await createWorldPatchOwnerReference({directory});checkpoint(signal);
+      phase='bind';
       const bound=await resources.operation('bind',id,raw({...input,send:request.send}),{signal});
       if(hash(bound.prepared)!==hash(prepared))throw failure('Original full task changed while freezing');
+      phase='verify';
       await current(signal);await verifyClaim();
       if(prepared.recordExpiresAt<=Date.now())throw failure('Original full task capture expired during ownership');
       const value={format:'ReferenceWorldAssemblyJobReservation',version:2,purpose:'reference-world-assembly',id,request,
@@ -106,9 +110,23 @@ export async function createReferenceWorldAssemblyJobRegistry(options) {
         ownerReferenceHash:owner.referenceHash,runtimeHash,createdAt:Date.now(),maximumCalls:prepared.maximumCalls,
         state:'send-consumed-not-dispatched',modelSentAtReservation:false,callsReservedAtReservation:0,canAuthorizePlacement:false};
       if(raw({value,sha256:hash(value)}).length>REFERENCE_WORLD_ASSEMBLY_JOB_LIMITS.recordBytes)throw failure('Full joint record byte quota',413);
-      await writeJointInvocationEnvelope(path.join(directory,'request.json'),value); // commit LAST
+      phase='commit';await writeJointInvocationEnvelope(path.join(directory,'request.json'),value);committed=true; // commit LAST
       known.set(id,value.requestHash);owned.set(id,{ownerReferenceHash:value.ownerReferenceHash,consumed:false,cancelled:false});
       const saved=await metadata(id,signal);checkpoint(signal);return publicReservation(saved);
+    }catch(error){
+      // Only this original creator may append an admission failure in its NEW
+      // directory. No reader, reopened registry or duplicate SEND repairs it.
+      // A partial/ambiguous request commit must NOT be labelled uncommitted.
+      if(directoryCreated&&!committed){
+        const diagnostic=assemblyAdmissionFailure(error,{id,requestHash:hash(request),preparationHash:prepared.preparationHash,
+          runtimeHash,claimHash:hash(claim),directoryHash:hash(directory),controllerPid:process.pid,occurredAt:Date.now(),phase});
+        try {
+          await verifyClaim();await jointInvocationDirectory(directory);
+          let absent=false;try{await fs.lstat(path.join(directory,'request.json'));}catch(check){if(check.code!=='ENOENT')throw check;absent=true;}
+          if(absent){await writeJointInvocationEnvelope(path.join(directory,REFERENCE_ASSEMBLY_ADMISSION_FAILURE_FILE),diagnostic);throw admissionFailureError(diagnostic);}
+        }catch(recordError){if(recordError.code==='REFERENCE_ASSEMBLY_ADMISSION_FAILED')throw recordError;}
+      }
+      throw error;
     }finally{await verifyClaim();await fs.unlink(file);}
   }
   async function reserve(value) {

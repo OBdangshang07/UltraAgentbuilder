@@ -4,6 +4,7 @@ import {exactKeys} from '../contracts/world-selection.mjs';
 import {REFERENCE_OWNER} from '../contracts/reference-attachments.mjs';
 import {WORLD_ASSEMBLY_LIMITS} from '../contracts/world-assembly-limits.mjs';
 import {JointReadCohort,jointReadCohortKey} from './reference-world-assembly-read-cohort.mjs';
+import {publicAssemblyAdmissionFailure,admissionFailureError} from './reference-world-assembly-admission-failure.mjs';
 
 export const JOINT_ASSEMBLY_RESOURCE_LIMITS=Object.freeze({queue:2,inputBytes:65536,nativeUploadBytes:12000000,
   outputBytes:WORLD_ASSEMBLY_LIMITS.partEnvelopeBytes,operationMs:120000,oldGenerationMb:512,stackMb:4});
@@ -68,7 +69,8 @@ export class ReferenceWorldAssemblyResources {
         try{this.#readCohort.accept(item.cohortKey,message.verification);}
         catch{return this.finish(item,failure('Joint worker complete-read cohort rejected',503));}
       }
-      this.finish(item,message.ok===true?null:failure('Original joint resource verification rejected; no automatic retry',
+      const admission=publicAssemblyAdmissionFailure({code:'REFERENCE_ASSEMBLY_ADMISSION_FAILED',admissionDiagnostic:message.admissionDiagnostic});
+      this.finish(item,message.ok===true?null:admission?admissionFailureError(admission):failure('Original joint resource verification rejected; no automatic retry',
         [400,409,413].includes(message.statusCode)?message.statusCode:409),message.result);
     });
   }

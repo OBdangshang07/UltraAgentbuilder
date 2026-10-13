@@ -25,14 +25,22 @@ function fixture() {
   return {child, pending, timeout: () => timerCallback(), kills: () => kills,
     timerCleared: () => timerCleared, timerUnref: () => timerUnref};
 }
-test('both owner implementations select only identity properties without removing either boot check', async () => {
-  for (const file of ['bridge/world-patch-owner-observation.mjs','scripts/world-patch-owner-observation.mjs']) {
+test('both owner implementations retain exact identity and both independent boot checks', async () => {
+  for (const file of ['bridge/world-patch-owner-observation.mjs']) {
     const source = await fs.readFile(new URL('../../'+file,import.meta.url),'utf8');
     assert.equal((source.match(/Get-CimInstance Win32_OperatingSystem -Property LastBootUpTime -ErrorAction Stop/g)??[]).length,2);
-    assert.equal((source.match(/Get-CimInstance Win32_Process -Property ProcessId,CreationDate,ExecutablePath -Filter/g)??[]).length,1);
+    {
+      assert.doesNotMatch(source,/Get-CimInstance Win32_Process/);
+      for(const exact of ['[Diagnostics.Process]::GetProcessById($voxelOwnerPid)','$voxelProcess.StartTime.ToUniversalTime()',
+        '$voxelProcess.MainModule.FileName','$voxelStarted.Ticks % 10','$voxelProcess.Dispose()'])assert.ok(source.includes(exact));
+      assert.ok(source.includes('catch [ArgumentException]'));
+    }
     assert.ok(source.includes("if ($voxelBoot -cne $voxelBootAfter) { throw 'Boot changed during observation' }"));
     assert.doesNotMatch(source,/Get-CimInstance Win32_OperatingSystem -ErrorAction Stop/);
   }
+  const wrapper=await fs.readFile(new URL('../../scripts/world-patch-owner-observation.mjs',import.meta.url),'utf8');
+  assert.ok(wrapper.includes("from '../bridge/world-patch-owner-observation.mjs'"));
+  for(const key of ['observeWindowsOwnerProcess','createWorldPatchOwnerReference','inspectWorldPatchOwnerProcess'])assert.equal(scriptObservation[key],bridgeObservation[key]);
 });
 async function failure(f, reason, phase = null) {
   const error = await f.pending.catch(value => value);
