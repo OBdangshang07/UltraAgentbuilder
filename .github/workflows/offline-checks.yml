@@ -56,3 +56,6 @@ jobs:
           TEMP: ${{ github.workspace }}/build/java-temp
           TMP: ${{ github.workspace }}/build/java-temp
         run: .\gradlew.bat --no-daemon test build
+      - name: Print sanitized Java failure diagnostics
+        if: failure()
+        run: node scripts/ci-java-failure-summary.mjs
