@@ -19,6 +19,10 @@ import java.util.function.*;
 
 /** Independent bounded lanes: discovery/downloads must never queue ahead of cancel. */
 public final class BridgeClient implements AutoCloseable {
+    // Cold Windows HTTP/JDK startup can exceed two seconds even on loopback.
+    // This bounded, read-only identity probe never retries an application SEND
+    // or grants permission to restart a still-live foreign Bridge.
+    private static final int HEALTH_PROBE_SECONDS=10;
     private record Connection(String base, String token, long pid, long epoch) {}
     private final Path root, data;
     private final boolean builtin;
@@ -645,7 +649,7 @@ public final class BridgeClient implements AutoCloseable {
         if(builtin)BuiltinCompanion.directory(data);else Files.createDirectories(data);Path file=data.resolve("connection.json");
         if(Files.exists(file)){
             Connection c=readConnection(file,ticket);
-            try{var r=exchange(builder(c,"/v1/health",2).build(),65536);if(r.statusCode()==200){validateHealth(r.body());return c;}
+            try{var r=exchange(builder(c,"/v1/health",HEALTH_PROBE_SECONDS).build(),65536);if(r.statusCode()==200){validateHealth(r.body());return c;}
                 if(ProcessHandle.of(c.pid).map(ProcessHandle::isAlive).orElse(false))throw new IllegalStateException("Existing Bridge rejected authentication; close/restart that instance before reconnecting");
             }catch(java.io.IOException e){if(ProcessHandle.of(c.pid).map(ProcessHandle::isAlive).orElse(false))throw new IllegalStateException("Existing Bridge is unresponsive; task state is unknown",e);}
         }
@@ -657,7 +661,7 @@ public final class BridgeClient implements AutoCloseable {
         for(int i=0;i<100;i++){
             if(closed||ticket!=epoch.get()){started.destroy();throw new CancellationException("Connection superseded");}
             if(!started.isAlive())throw new IllegalStateException("Bridge exited; inspect voxel-studio/data/bridge.log");
-            if(Files.exists(file))try{Connection c=readConnection(file,ticket);if(c.pid==started.pid()){var r=exchange(builder(c,"/v1/health",2).build(),65536);if(r.statusCode()!=200)throw new IllegalStateException("New Bridge health check failed");validateHealth(r.body());return c;}}
+            if(Files.exists(file))try{Connection c=readConnection(file,ticket);if(c.pid==started.pid()){var r=exchange(builder(c,"/v1/health",HEALTH_PROBE_SECONDS).build(),65536);if(r.statusCode()!=200)throw new IllegalStateException("New Bridge health check failed");validateHealth(r.body());return c;}}
                 catch(java.nio.file.NoSuchFileException|JsonParseException ignored){}
             Thread.sleep(100);
         }throw new IllegalStateException("Bridge startup timed out");

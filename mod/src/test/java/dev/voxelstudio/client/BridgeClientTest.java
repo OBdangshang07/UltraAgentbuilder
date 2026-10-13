@@ -39,6 +39,45 @@ class BridgeClientTest {
         server.removeContext("/v1/health");server.createContext("/v1/health",e->reply(e,"{\"protocol\":1,\"version\":\"0.4.10-alpha\",\"builtinBundleHash\":\""+"a".repeat(64)+"\"}"));
         assertTrue(client.request("GET","/v1/identity-probe",null).get(5,TimeUnit.SECONDS).get("ok").getAsBoolean());assertEquals(1,applicationReads.get());
     }
+    @Test void liveOriginalHealthProbeCanFinishAfterTwoSecondsWithoutRestartOrApplicationReplay()throws Exception{
+        server.removeContext("/v1/health");
+        var healthReads=new java.util.concurrent.atomic.AtomicInteger();var applicationReads=new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext("/v1/health",e->{healthReads.incrementAndGet();slowStarted.countDown();
+            try{releaseSlow.await(15,TimeUnit.SECONDS);}catch(InterruptedException error){Thread.currentThread().interrupt();}
+            reply(e,"{\"protocol\":1}");});
+        server.createContext("/v1/health-probe-application",e->{applicationReads.incrementAndGet();reply(e,"{\"ok\":true}");});
+        Path originalFile=dir.resolve("data/connection.json");byte[] original=Files.readAllBytes(originalFile);
+        var pending=client.request("GET","/v1/health-probe-application",null);
+        try{
+            assertTrue(slowStarted.await(10,TimeUnit.SECONDS));Thread.sleep(2500);
+            assertFalse(pending.isDone(),"A still-live original health probe must not be declared unavailable after only two seconds");
+            assertEquals(0,applicationReads.get());releaseSlow.countDown();
+            assertTrue(pending.get(15,TimeUnit.SECONDS).get("ok").getAsBoolean());
+            assertEquals(1,healthReads.get());assertEquals(1,applicationReads.get());
+            assertArrayEquals(original,Files.readAllBytes(originalFile));assertTrue(ProcessHandle.current().isAlive());
+            assertFalse(Files.exists(dir.resolve("data/bridge.log")));
+        }finally{releaseSlow.countDown();}
+    }
+    @Test void expiredLiveOriginalHealthProbeIsStillUnknownAndNeverRestartsOrRequestsApplication()throws Exception{
+        server.removeContext("/v1/health");
+        var healthReads=new java.util.concurrent.atomic.AtomicInteger();var applicationReads=new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext("/v1/health",e->{healthReads.incrementAndGet();slowStarted.countDown();
+            try{releaseSlow.await(20,TimeUnit.SECONDS);}catch(InterruptedException error){Thread.currentThread().interrupt();}
+            reply(e,"{\"protocol\":1}");});
+        server.createContext("/v1/health-probe-application",e->{applicationReads.incrementAndGet();reply(e,"{\"ok\":true}");});
+        Path originalFile=dir.resolve("data/connection.json");byte[] original=Files.readAllBytes(originalFile);
+        var pending=client.request("GET","/v1/health-probe-application",null);
+        try{
+            assertTrue(slowStarted.await(10,TimeUnit.SECONDS));
+            var failure=assertThrows(ExecutionException.class,()->pending.get(15,TimeUnit.SECONDS));
+            assertInstanceOf(IllegalStateException.class,failure.getCause());
+            assertEquals("Existing Bridge is unresponsive; task state is unknown",failure.getCause().getMessage());
+            assertInstanceOf(java.net.http.HttpTimeoutException.class,failure.getCause().getCause());
+            assertEquals(1,healthReads.get());assertEquals(0,applicationReads.get());
+            assertArrayEquals(original,Files.readAllBytes(originalFile));assertTrue(ProcessHandle.current().isAlive());
+            assertFalse(Files.exists(dir.resolve("data/bridge.log")));
+        }finally{releaseSlow.countDown();}
+    }
     @Test void cancelBypassesBlockedDiscovery()throws Exception{
         var slow=client.request("GET","/v1/agents",null);assertTrue(slowStarted.await(5,TimeUnit.SECONDS));
         assertEquals("cancelled",client.request("POST","/v1/jobs/test/cancel",null).get(1,TimeUnit.SECONDS).get("state").getAsString());assertFalse(slow.isDone());
@@ -185,9 +224,9 @@ class BridgeClientTest {
     private String capabilities(boolean enabled){return "{\"format\":\"WorldContextAnalysisCapabilities\",\"version\":1,\"requestVersion\":2,\"enabled\":"+enabled+",\"maximumCalls\":1,\"automaticRetries\":0,\"canAuthorizePlacement\":false}";}
     @Test void unavailableAndMalformedCapabilitiesCannotSend()throws Exception{
         var reply=new java.util.concurrent.atomic.AtomicReference<>(capabilities(false));server.createContext("/v1/context-analysis/capabilities",e->{assertEquals("GET",e.getRequestMethod());reply(e,reply.get());});
-        assertFalse(client.contextAnalysisEnabled().get(2,TimeUnit.SECONDS));
+        assertFalse(client.contextAnalysisEnabled().get(15,TimeUnit.SECONDS));
         for(var invalid:new String[]{capabilities(true).replace("\"version\":1","\"version\":\"1\""),capabilities(true).replace("\"enabled\":true","\"enabled\":\"true\""),capabilities(true).replace("\"canAuthorizePlacement\":false","\"canAuthorizePlacement\":true")}){
-            reply.set(invalid);assertThrows(ExecutionException.class,()->client.contextAnalysisEnabled().get(2,TimeUnit.SECONDS));
+            reply.set(invalid);assertThrows(ExecutionException.class,()->client.contextAnalysisEnabled().get(15,TimeUnit.SECONDS));
         }
     }
     @Test void explicitAnalysisSendPersistsBeforePostAndRestartOnlyQueries()throws Exception{
@@ -235,11 +274,11 @@ class BridgeClientTest {
         server.createContext("/v1/reference-",e->{if(!e.getRequestMethod().equals("GET")){forbidden.incrementAndGet();reply(e,"{}");return;}
             assertEquals(0,e.getRequestBody().readAllBytes().length);assertNull(e.getRequestURI().getQuery());reads.incrementAndGet();String r=responses.get(e.getRequestURI().getPath());assertNotNull(r);reply(e,r);});
         server.createContext("/v1/jobs",e->{forbidden.incrementAndGet();reply(e,"{}");});
-        assertEquals(fixtures.get("archiveCapability"),client.referenceArchiveCapabilities().get(3,TimeUnit.SECONDS));
-        assertEquals(fixtures.get("archiveListing"),client.referenceDraftArchives().get(3,TimeUnit.SECONDS));
-        assertEquals(snapshot,client.referenceArchiveSnapshot(owner).get(3,TimeUnit.SECONDS));
-        var record=client.referenceArchiveRecord(owner,action,hash).get(3,TimeUnit.SECONDS);assertEquals(f.get("recordArchived"),record);
-        assertEquals(f.get("maintenanceSnapshot"),client.referenceArchiveMaintenanceSnapshot(record,"restore").get(3,TimeUnit.SECONDS));assertEquals(5,reads.get());assertEquals(0,forbidden.get());
+        assertEquals(fixtures.get("archiveCapability"),client.referenceArchiveCapabilities().get(15,TimeUnit.SECONDS));
+        assertEquals(fixtures.get("archiveListing"),client.referenceDraftArchives().get(15,TimeUnit.SECONDS));
+        assertEquals(snapshot,client.referenceArchiveSnapshot(owner).get(15,TimeUnit.SECONDS));
+        var record=client.referenceArchiveRecord(owner,action,hash).get(15,TimeUnit.SECONDS);assertEquals(f.get("recordArchived"),record);
+        assertEquals(f.get("maintenanceSnapshot"),client.referenceArchiveMaintenanceSnapshot(record,"restore").get(15,TimeUnit.SECONDS));assertEquals(5,reads.get());assertEquals(0,forbidden.get());
         for(String invalid:new String[]{"../../world",owner+"?key=other",null})assertThrows(ExecutionException.class,()->client.referenceArchiveSnapshot(invalid).get(2,TimeUnit.SECONDS));
         assertThrows(ExecutionException.class,()->client.referenceArchiveRecord(owner,"../../action",hash).get(2,TimeUnit.SECONDS));
         assertThrows(ExecutionException.class,()->client.referenceArchiveRecord(owner,action,"bad-hash").get(2,TimeUnit.SECONDS));
