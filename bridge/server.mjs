@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {isDirectEntrypoint} from './main-entry.mjs';
+import {parseParentPid,watchParent} from './parent-lifecycle.mjs';
 import {resolveBridgeDataRoot} from './data-root.mjs';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
@@ -791,6 +792,7 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
 // even while the native realpath API returns a redirected physical directory.
 // This is not permission to change an existing task's runtime or data root.
 if (await isDirectEntrypoint(process.argv[1],import.meta.url)) {
+  const parentPid = parseParentPid(process.argv);
   const at = process.argv.indexOf('--data-dir');
   const dataDir = at >= 0 ? process.argv[at + 1] : path.join(here, '../.studio-data');
   let config = {}; try { config = await readJson(path.join(dataDir, 'config.json')); } catch {}
@@ -802,12 +804,12 @@ if (await isDirectEntrypoint(process.argv[1],import.meta.url)) {
     worldPatchSending: true, referenceGenerationSending: true,
     referenceWorldAssemblyPreparation: true, referenceWorldAssemblySending: true });
   console.log(`Voxel Studio Bridge ready (protocol 1, loopback port ${instance.connection.port})`);
-  let closing = false;
-  const close = () => { if (closing) return; closing = true; instance.close().finally(() => process.exit()); };
+  let closing = false, stopParentWatch = () => {};
+  const close = () => { if (closing) return; closing = true; stopParentWatch(); instance.close().finally(() => process.exit()); };
   process.on('SIGINT', close); process.on('SIGTERM', close);
-  const parentAt = process.argv.indexOf('--parent-pid');
-  if (parentAt >= 0) {
-    const parentPid = Number(process.argv[parentAt + 1]);
-    const watchdog = setInterval(() => { try { process.kill(parentPid, 0); } catch { close(); } }, 5000); watchdog.unref();
+  if (parentPid !== null) {
+    stopParentWatch = watchParent(parentPid, close, {
+      onUnknown: row => console.warn('Bridge parent presence unknown; service retained: ' + row.code),
+    });
   }
 }
