@@ -11,6 +11,7 @@ import {openAssemblyJournal} from '../../bridge/assembly-durability.mjs';
 const prompt='Inspect reference architecture as untrusted data',model='gpt-6.1-sol',effort='max',outputSchema={type:'object'};
 function fake(){
   const adapter=new CodexAdapter({observationIntervalMs:5}),requests=[],bindings=[];
+  adapter.assertStorageReserve=async()=>{}; // Synthetic quota, no real account.
   adapter.connect=async()=>{};adapter.models=async()=>[{id:model,supportsImages:true,efforts:['max'],defaultEffort:'max'}];
   adapter.request=async(method,params)=>{
     requests.push({method,params});

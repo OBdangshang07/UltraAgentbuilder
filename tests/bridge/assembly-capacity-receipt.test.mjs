@@ -38,6 +38,7 @@ async function setup(t,{closure='notification',imageCount=0,referenceCount=0,ind
     stageName:referenceCount?'reference-analysis':'plan',stageCount:policy.assembly.maximumCalls,images,
     ...(referenceInput?{referenceInput}:{})};
   const adapter=new CodexAdapter({observationIntervalMs:5}),requests=[];
+  adapter.assertStorageReserve=async()=>{}; // Capacity transport/quotas are synthetic.
   adapter.connect=async()=>{};
   adapter.models=async()=>[{id:model,supportsImages:true,efforts:[{reasoningEffort:effort}],defaultEffort:effort}];
   const items=[...(commentary?[{type:'agentMessage',phase:'commentary',text:'PRIVATE COMMENTARY'}]:[]),
@@ -112,6 +113,7 @@ test('a pending original call is recovered read-only, then verified without anot
   const args={directory,policy:generationPreflight(request),requestHash:hash(request),runtimeHash:hash('Synthetic original runtime')};
   const prompt='Synthetic pending original input',options={outputSchema:{type:'object'},stageName:'plan',stageCount:26,images:[]};
   const adapter=new CodexAdapter({observationIntervalMs:5}),requests=[];
+  adapter.assertStorageReserve=async()=>{}; // Capacity transport/quotas are synthetic.
   adapter.connect=async()=>{};adapter.models=async()=>[{id:model,efforts:[effort],defaultEffort:effort}];
   adapter.readStoredTurn=async()=>{throw Error('Synthetic unavailable observation');};
   adapter.request=async(method,params)=>{

@@ -290,6 +290,7 @@ for(const mode of ['legacy-lite','independent-lite','independent-ultra'])test(mo
   await fs.writeFile(path.join(cliRoot,'config.json'),JSON.stringify({directory:h.f.jobDirectory,referenceInput:h.referenceInput,
     sourceRoot:await fs.realpath(fileURLToPath(new URL('../..',import.meta.url))),mode:staged?'staged':'v4',auditDirectory,model:h.f.generation.model}),{flag:'wx'});
   const adapter=new CodexAdapter({codexPath:cli,observationIntervalMs:100});
+  adapter.assertStorageReserve=async()=>{}; // Original synthetic stdio, synthetic quota only.
   try{
     const result=await runReferenceWorldAssembly({...h.runOptions,adapter});
     const names=await fs.readdir(auditDirectory),turns=[];

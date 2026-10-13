@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
@@ -10,6 +11,7 @@ import {responseEvidence,safeCodexUsage} from './response-evidence.mjs';
 import {codexImageInput} from './codex-image-input.mjs';
 import {codexRequestHash,checkCodexBinding,observePersistedCodexTurn} from './codex-persistent-receipt.mjs';
 import {codexTerminalOutput,codexTerminalFailure} from './codex-terminal-failure.mjs';
+import {assertCodexStorageReserve} from './generation-storage.mjs';
 
 export function compareVersions(a, b) {
   const parts = v => (v.match(/\d+\.\d+\.\d+/)?.[0] ?? '0.0.0').split('.').map(Number);
@@ -65,7 +67,9 @@ export class CodexAdapter extends EventEmitter {
     this.cli = await findCodex(this.options.codexPath);
     this.version = await codexVersion(this.cli);
     const args = ['app-server'];
-    this.process = spawn(this.cli.endsWith('.js') ? process.execPath : this.cli, this.cli.endsWith('.js') ? [this.cli, ...args] : args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const env={...process.env},base=process.cwd(),home=os.homedir();
+    this.storageLocation={env:{CODEX_HOME:env.CODEX_HOME,CODEX_SQLITE_HOME:env.CODEX_SQLITE_HOME},home,base,inspectSqlite:false};
+    this.process = spawn(this.cli.endsWith('.js') ? process.execPath : this.cli, this.cli.endsWith('.js') ? [this.cli, ...args] : args, { cwd:base,env,windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     this.process.stderr.on('data', () => {}); // Never log account-bearing subprocess diagnostics.
     const closed = error => {
       this.ready = null;
@@ -125,6 +129,21 @@ export class CodexAdapter extends EventEmitter {
       'features.shell_tool':false,'features.multi_agent':false,'features.enable_mcp_apps':false,'features.apps':false,
       'features.plugins':false,'features.hooks':false,'features.skill_search':false,'features.skip_host_skill_discovery':true,web_search:'disabled'};
   }
+  async assertStorageReserve(cwd,{resolveOriginal=false}={}){
+    const original=this.storageLocation;
+    if(resolveOriginal&&original&&!original.inspectSqlite){
+      // Only generation resolves startup state from THIS original app-server.
+      // Discovery and recovery stay read-only and do not acquire this gate.
+      // A job's project config cannot select a different SQLite disk for it.
+      let result;
+      try{result=await this.request('config/read',{includeLayers:false});}catch{}
+      if(this.storageLocation!==original||!result?.config||typeof result.config!=='object'||Array.isArray(result.config)){
+        const error=new Error('无法核验原 Codex 状态存储配置；没有提交模型，不会自动重发。');error.code='EIO';throw error;
+      }
+      this.storageLocation={...original,inspectSqlite:true,sqliteHome:result.config.sqlite_home};
+    }
+    return assertCodexStorageReserve(cwd,this.storageLocation??{});
+  }
   async readStoredTurn(identity) {
     // This separate connection only reads the exact original persisted thread.
     // No resume/start/steer/interrupt, model calls or global config writes.
@@ -168,6 +187,9 @@ export class CodexAdapter extends EventEmitter {
   async generate({ prompt, model, effort, cwd, signal, onEvent,onProviderBinding,images=[],referenceInput,outputSchema=specSchema }) {
     let selected, resolvedEffort, requestHash, evidence, threadId, binding, imageInput, phase = 'model-preflight';
     try {
+      phase='storage-preflight';
+      signal?.throwIfAborted();await this.assertStorageReserve(cwd);
+      phase='model-preflight';
       await this.connect();
       selected = (await this.models()).find(m => m.id === model);
       if (!selected) throw new Error(`Selected model unavailable: ${model}`);
@@ -202,6 +224,11 @@ export class CodexAdapter extends EventEmitter {
           throw Error('Reference input changed before dispatch; no generation submitted');
         signal?.throwIfAborted();
       }
+      // Recheck after config/image/binding work, before the sole chargeable
+      // turn request. This never aborts or adopts an already-dispatched turn.
+      phase='storage-dispatch-check';
+      await this.assertStorageReserve(cwd,{resolveOriginal:true});
+      signal?.throwIfAborted();
     } catch (original) {
       // This catch ends BEFORE any turn/start request. It is not a timeout or
       // inference from missing receipts. After dispatch, unknown stays unknown.

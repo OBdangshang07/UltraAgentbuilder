@@ -6,10 +6,15 @@ import os from 'node:os';
 import {CodexAdapter} from '../../bridge/codex-adapter.mjs';
 import {CompletedResponseFormatError} from '../../bridge/model-json.mjs';
 import {hash} from '../../src/generation/compiler.mjs';
+import {assertCodexStorageReserve,generationStorageReserveBytes} from '../../bridge/generation-storage.mjs';
+import {openAssemblyJournal} from '../../bridge/assembly-durability.mjs';
 
 async function fixture(emit,options={}){
   const cwd=await fs.mkdtemp(path.join(os.tmpdir(),'voxel-codex-generation-'));
   const a=new CodexAdapter(options),requests=[];
+  // Synthetic transport tests also use a synthetic quota snapshot. Dedicated
+  // storage tests exercise the real guard; answer evidence still uses disk.
+  a.assertStorageReserve=async()=>{};
   a.connect=async()=>{};
   a.readStoredTurn=async()=>{throw Error('Offline history unavailable');};
   a.models=async()=>[{id:'gpt-5.6-luna',efforts:[{reasoningEffort:'max'}],defaultEffort:'max'}];
@@ -273,4 +278,62 @@ test('capacity event before acknowledgement is matched to the bound original tur
     return e.diagnostic.failureKind==='model-capacity';
   });
   assert.equal(f.requests.filter(r=>r.method==='turn/start').length,1);
+});
+
+function quota(f,{failAt=1}={}){
+  let checks=0;
+  f.a.assertStorageReserve=async cwd=>{
+    checks++;
+    return assertCodexStorageReserve(cwd,{env:{CODEX_HOME:path.join(f.cwd,'synthetic-original-state')},home:f.cwd,
+      realpath:async p=>p,statfs:async()=>({bsize:1n,bavail:checks>=failAt?0n:generationStorageReserveBytes})});
+  };
+  return ()=>checks;
+}
+test('low original account disk refuses before connection, thread, turn or evidence creation',async()=>{
+  const f=await fixture(()=>assert.fail('No paid turn')),checks=quota(f);
+  f.a.connect=async()=>assert.fail('No connection needed for a known full account disk');
+  await assert.rejects(f.generate(),e=>e.code==='ENOSPC'&&e.diagnostic.reason==='not-submitted'&&e.diagnostic.phase==='storage-preflight');
+  assert.equal(checks(),1);assert.deepEqual(f.requests,[]);assert.deepEqual(await fs.readdir(f.cwd),[]);
+});
+test('reserve lost during setup preserves original empty thread binding but never sends a turn',async()=>{
+  const f=await fixture(()=>assert.fail('No paid turn')),checks=quota(f,{failAt:2}),bindings=[];
+  await assert.rejects(f.a.generate({prompt:'Offline data-only fixture',model:'gpt-5.6-luna',effort:'max',cwd:f.cwd,onProviderBinding:b=>bindings.push(b)}),
+    e=>e.code==='ENOSPC'&&e.diagnostic.reason==='not-submitted'&&e.diagnostic.phase==='storage-dispatch-check');
+  assert.equal(checks(),2);assert.equal(bindings.length,1);assert.equal(bindings[0].turnId,null);
+  assert.equal(f.requests.filter(r=>r.method==='thread/start').length,1);assert.equal(f.requests.filter(r=>r.method==='turn/start').length,0);
+  const dir=(await fs.readdir(f.cwd)).find(n=>n.startsWith('codex-response-'));
+  assert.equal(JSON.parse(await fs.readFile(path.join(f.cwd,dir,'thread.json'))).threadId,bindings[0].threadId);
+});
+test('a dispatched original is not watched, interrupted or repeated when space later falls',async()=>{
+  const f=await fixture(a=>complete(a,'{"original":true}')),checks=quota(f,{failAt:3});
+  assert.deepEqual((await f.generate()).spec,{original:true});assert.equal(checks(),2);
+  assert.equal(f.requests.filter(r=>r.method==='turn/start').length,1);assert.equal(f.requests.filter(r=>r.method==='turn/interrupt').length,0);
+});
+test('known storage refusal keeps the reservation and original error, without a local retry or refund',async()=>{
+  const f=await fixture(()=>assert.fail('No paid turn')),checks=quota(f),journal=await openAssemblyJournal({directory:f.cwd,requestHash:'storage-fixture',
+    runtimeHash:'synthetic-runtime',policy:{assembly:{maximumCalls:8}}});
+  const invoke=()=>journal.invoke('synthetic-plan',1,{stageName:'plan'},()=>f.generate());
+  for(let i=0;i<2;i++)await assert.rejects(invoke(),e=>e.diagnostic.reason==='not-submitted'&&e.diagnostic.phase==='storage-preflight');
+  assert.equal(checks(),1);assert.equal(journal.reserved,1);assert.equal(journal.peek(1).state,'error');assert.equal(journal.peek(1).providerBinding,undefined);
+  assert.deepEqual(f.requests,[]);
+});
+test('original receipt recovery remains available without a new-generation disk gate',async()=>{
+  const f=await fixture(a=>complete(a,'{"original":true}')),first=await f.generate();
+  f.a.assertStorageReserve=async()=>assert.fail('Recovery must not be turned into a new generation');
+  f.a.readStoredTurn=async()=>({thread:{id:'thread-fixture',ephemeral:false,turns:[{id:'turn-fixture',status:'completed',startedAt:1,completedAt:2,itemsView:'full',items:[
+    {type:'userMessage',content:[{type:'text',text:'Offline data-only fixture'}]},{type:'agentMessage',phase:'final_answer',text:'{"original":true}'}]}]}});
+  const result=await f.a.recoverOriginal({cwd:f.cwd,prompt:'Offline data-only fixture',model:'gpt-5.6-luna',effort:'max',
+    binding:{version:1,provider:'codex',storage:'persistent-single-turn',model:'gpt-5.6-luna',effort:'max',threadId:'thread-fixture',turnId:'turn-fixture',requestHash:first.diagnostic.requestHash}});
+  assert.deepEqual(result.spec,first.spec);assert.equal(f.requests.filter(r=>r.method==='turn/start').length,1);
+});
+test('startup storage config is read without job cwd, cached only for the same original owner, and sanitized on failure',async()=>{
+  const f=await fixture(()=>assert.fail('No paid turn')),provider=path.join(f.cwd,'synthetic-provider'),sqlite=path.join(f.cwd,'synthetic-sqlite');
+  await fs.mkdir(provider);await fs.mkdir(sqlite);
+  f.a.storageLocation={env:{CODEX_HOME:provider,CODEX_SQLITE_HOME:'unused-env'},home:f.cwd,base:f.cwd,inspectSqlite:false};
+  f.a.assertStorageReserve=CodexAdapter.prototype.assertStorageReserve.bind(f.a);
+  let reads=0;f.a.request=async(method,params)=>{reads++;assert.equal(method,'config/read');assert.deepEqual(params,{includeLayers:false});return {config:{sqlite_home:sqlite,PRIVATE:'never retain'}};};
+  for(let i=0;i<2;i++)assert.equal((await f.a.assertStorageReserve(f.cwd,{resolveOriginal:true})).length,3);
+  assert.equal(reads,1);assert.equal(f.a.storageLocation.sqliteHome,sqlite);assert.ok(!JSON.stringify(f.a.storageLocation).includes('PRIVATE'));
+  f.a.storageLocation={...f.a.storageLocation,inspectSqlite:false};f.a.request=async()=>{throw Error('PRIVATE/account/token');};
+  await assert.rejects(f.a.assertStorageReserve(f.cwd,{resolveOriginal:true}),e=>e.code==='EIO'&&!e.message.includes('PRIVATE'));
 });

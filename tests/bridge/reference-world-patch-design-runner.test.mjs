@@ -16,7 +16,7 @@ import {hash} from '../../src/generation/compiler.mjs';
 import {REFERENCE_PATCH_INVOCATION_PINS} from '../../contracts/reference-world-patch-invocation.mjs';
 
 // Real adapter, capsule/worker/journal/compilation code; authored pixels,
-// proposal and provider transport only. No paid call, real account or world.
+// proposal, quota snapshots and provider transport. No paid call, real account or world.
 const runtimeHash = await assemblyRuntimeIdentity();
 const selected = f => ({agent: f.input.intent.agent, model: f.input.intent.model, effort: f.input.intent.effort,
   runtimeHash, capability: structuredClone(f.input.capability)});
@@ -30,6 +30,7 @@ async function fixture(t, changes = {}) {
 }
 function fake(f, {proposal = patchTaskProposal(f.snapshot), supportsImages = true, beforeTurn, unknown = false} = {}) {
   const adapter = new CodexAdapter({observationIntervalMs: 10}), requests = [];
+  adapter.assertStorageReserve=async()=>{};
   adapter.connect = async () => {};
   adapter.models = async () => [{id: f.input.intent.model, supportsImages, efforts: ['high','max'], defaultEffort: 'max'}];
   adapter.readStoredTurn = async () => {throw Error('Synthetic original turn not yet closed');};

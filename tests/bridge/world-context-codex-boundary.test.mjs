@@ -13,7 +13,8 @@ import {contextAnalysisSchema} from '../../contracts/context-analysis.schema.mjs
 import {selectionChunks, regionCells} from '../../contracts/world-selection.mjs';
 
 // Exercise the actual adapter class and production runner together. Only the
-// transport is replaced: no CLI, provider, paid turn or world is contacted.
+// transport and quota snapshots are synthetic: no CLI, provider, paid turn or
+// world is contacted. Real answer-evidence path handling remains exercised.
 async function fixture(t, longPath = false, fault = null) {
   // Keep the exact legacy-length case exact even when the full regression
   // runner owns a deeply nested TEMP. A NEW physical project build child is
@@ -40,6 +41,7 @@ async function fixture(t, longPath = false, fault = null) {
   const spec = {format: 'WorldContextAnalysis', version: 1, requestHash: prepared.requestHash, snapshotHash: prepared.request.snapshotHash, summaryHash: prepared.request.summaryHash,
     observations: ['已披露石头状态统计。'], inferences: [], unknowns: ['功能未知。'], recommendations: []};
   const adapter = new CodexAdapter(), requests = [], failures = [];
+  adapter.assertStorageReserve=async()=>{};
   const generate = adapter.generate.bind(adapter);
   adapter.generate = async args => { try { return await generate(fault === 'storage' ? {...args, cwd: path.join(args.cwd, 'missing')} : args); } catch (error) { failures.push({type: error.name, code: error.code ?? null, syscall: error.syscall ?? null}); throw error; } };
   adapter.connect = async () => {};

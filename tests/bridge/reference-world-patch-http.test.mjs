@@ -17,12 +17,13 @@ import {patchTaskProposal} from '../fixtures/world-patch-task-fixture.mjs';
 
 // Actual paired HTTP server, CodexAdapter, original stores, pixel transport,
 // durable invocation and response/download workers. Only upstream transport
-// is synthetic: no paid call, account, user image, game or world operation.
+// and quota are synthetic: no paid call, account, user image, game or world operation.
 const runtimeHash = await assemblyRuntimeIdentity(), prefix = '/v1/reference-world-patch';
 async function fixture(t, {enabled = true, unknown = false, holdModels, holdTurn} = {}) {
   const f = await jointCapsuleFixture(t, {runtimeHash});
   f.snapshot = (await readFrozenReferenceWorldPatchTaskSource({dataDir:f.dir, capsuleId:f.receipt.capsuleId})).saved.snapshot;
   const adapter = new CodexAdapter({observationIntervalMs:10}), requests = [];
+  adapter.assertStorageReserve=async()=>{};
   let supportsImages = true, efforts = ['high','max'], modelQueries = 0;
   adapter.connect = async () => {};
   adapter.models = async () => {

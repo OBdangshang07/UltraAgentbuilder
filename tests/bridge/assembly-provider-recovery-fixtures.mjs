@@ -27,9 +27,10 @@ const response=(input,options)=>{
 };
 
 // Exercise the real adapter's evidence and binding paths with an inert
-// transport. Reusable by HTTP/reference tests; no account discovery or model.
+// transport and quota snapshot. Reusable by HTTP/reference tests; no account discovery or model.
 export async function syntheticRecoveryTurn(options,{index,answer,selected={},transport=[],loadAdapter=async()=>CodexAdapter}={}){
   const Adapter=await loadAdapter(),adapter=new Adapter({observationIntervalMs:5}),threadId='fixture-thread-'+index,turnId='fixture-turn-'+index;
+  adapter.assertStorageReserve=async()=>{}; // Explicit synthetic quota; never inspect a real account.
   adapter.connect=async()=>{};adapter.models=async()=>[{id:options.model??recoveryModel,supportsImages:true,efforts:[{reasoningEffort:options.effort??recoveryEffort}],defaultEffort:options.effort??recoveryEffort}];
   adapter.readStoredTurn=async()=>{throw Error('Synthetic unavailable original observation');};
   adapter.request=async(method,params)=>{
@@ -52,7 +53,7 @@ export async function syntheticRecoveryTurn(options,{index,answer,selected={},tr
 }
 
 // Actual adapter, persisted answer files and actual durable journal. ONLY the
-// app-server transport/model answers are synthetic; no account or model calls.
+// app-server transport/quotas/model answers are synthetic; no account or model calls.
 export async function recoveryHarness(t,{staged=false,enabled=true,requestDelta={},choose=()=>({}),loadAdapter=async()=>CodexAdapter}={}){
   const request={...(staged?stagedRequest:recoveryRequest),model:recoveryModel,effort:recoveryEffort,...requestDelta};
   let directory,base,options;

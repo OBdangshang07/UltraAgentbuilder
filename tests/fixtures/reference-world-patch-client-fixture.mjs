@@ -10,13 +10,14 @@ import {jointCapsuleFixture} from './reference-world-patch-capsule-fixture.mjs';
 import {patchTaskProposal} from './world-patch-task-fixture.mjs';
 
 /** Production paired HTTP, adapter, original stores and download workers.
- * Only upstream provider transport, answers and reference pixels are synthetic.
+ * Provider transport, quota snapshots, answers and reference pixels are synthetic.
  * No actual account/model, game, world write or paid network endpoint. */
 export async function referenceWorldPatchClientFixture(t, options={}) {
   const runtimeHash=await assemblyRuntimeIdentity();
   const f=await jointCapsuleFixture(t,{runtimeHash,...options});
   const original=await readFrozenReferenceWorldPatchTaskSource({dataDir:f.dir,capsuleId:f.receipt.capsuleId});
   const proposal=patchTaskProposal(original.saved.snapshot), adapter=new CodexAdapter({observationIntervalMs:10}), turns=[];
+  adapter.assertStorageReserve=async()=>{};
   adapter.connect=async()=>{};
   adapter.models=async()=>[{id:f.input.intent.model,supportsImages:true,efforts:[{reasoningEffort:'high'},{reasoningEffort:'max'}]}];
   adapter.request=async(method,params)=>{
