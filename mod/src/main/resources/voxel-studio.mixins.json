@@ -3,6 +3,6 @@
   "package": "dev.voxelstudio.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": ["WorldChunkMixin"],
-  "client": ["MouseMixin", "GameRendererMixin", "MinecraftClientMixin"],
+  "client": ["MouseMixin", "GameRendererMixin", "MinecraftClientMixin", "BufferBuilderNativeAccess"],
   "injectors": { "defaultRequire": 1 }
 }

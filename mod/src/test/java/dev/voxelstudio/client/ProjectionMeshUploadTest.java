@@ -43,4 +43,38 @@ class ProjectionMeshUploadTest {
         publisher.start();assertTrue(holding.await(2,TimeUnit.SECONDS));abandoning.start();assertFalse(finished.isDone());release.countDown();publisher.join(2000);abandoning.join(2000);
         assertFalse(publisher.isAlive());assertFalse(abandoning.isAlive());assertNull(f.join());assertNull(finished.join());assertEquals(1,Collections.frequency(a.calls,"publish"));
     }
+    @Test void consumerReceiptCompletesOnlyAfterLeaseRelease() {
+        var uploaded=new CompletableFuture<Void>();var consumed=new CompletableFuture<Void>();var a=new Fake();
+        ProjectionMeshUpload.executeRetained(uploaded,consumed,()->true,a,()->{assertTrue(uploaded.isDone());assertFalse(consumed.isDone());a.calls.add("lease");});
+        assertNull(consumed.join());assertEquals("lease",a.calls.get(a.calls.size()-1));assertEquals(1,a.releases);
+    }
+    @Test void cancelledQueuedUploadRetainsMemoryUntilItsActualCleanup() {
+        var freed=new AtomicBoolean();var owner=new OwnedNativeBuffer<>(new Object(),r->freed.set(true));var lease=owner.retain();
+        var uploaded=new CompletableFuture<Void>();var consumed=new CompletableFuture<Void>();var a=new Fake();
+        uploaded.cancel(false);owner.close();assertFalse(freed.get());
+        ProjectionMeshUpload.executeRetained(uploaded,consumed,()->true,a,lease::close);
+        assertTrue(freed.get());assertNull(consumed.join());assertEquals(1,a.releases);assertFalse(a.calls.contains("create"));
+    }
+    @Test void cancellationDuringActualUploadCannotFreeItsNativeSource() {
+        var freed=new AtomicBoolean();var owner=new OwnedNativeBuffer<>(new Object(),r->freed.set(true));var lease=owner.retain();
+        var uploaded=new CompletableFuture<Void>();var consumed=new CompletableFuture<Void>();var a=new Fake();
+        a.onUpload=()->{uploaded.cancel(false);owner.close();assertFalse(freed.get());};
+        ProjectionMeshUpload.executeRetained(uploaded,consumed,()->true,a,lease::close);
+        assertTrue(freed.get());assertFalse(a.calls.contains("publish"));assertNull(consumed.join());
+    }
+    @Test void uploadFailureRemainsPrimaryWhenNativeLeaseCleanupFails() {
+        var uploaded=new CompletableFuture<Void>();var consumed=new CompletableFuture<Void>();var a=new Fake();
+        var original=new IllegalStateException("upload");var cleanup=new IllegalStateException("native cleanup");a.errors.put("upload",original);
+        ProjectionMeshUpload.executeRetained(uploaded,consumed,()->true,a,()->{throw cleanup;});
+        assertSame(original,failure(consumed));assertArrayEquals(new Throwable[]{cleanup},original.getSuppressed());assertEquals(1,a.releases);
+    }
+    @Test void nativeCleanupFailureIsNotASuccessfulConsumerReceipt() {
+        var uploaded=new CompletableFuture<Void>();var consumed=new CompletableFuture<Void>();var a=new Fake();var cleanup=new AssertionError("native cleanup");
+        ProjectionMeshUpload.executeRetained(uploaded,consumed,()->true,a,()->{throw cleanup;});assertSame(cleanup,failure(consumed));
+    }
+    @Test void lateCancelledNativeCleanupFailureIsReportedToClientExecutor() {
+        var uploaded=new CompletableFuture<Void>();uploaded.cancel(false);var consumed=new CompletableFuture<Void>();var a=new Fake();var cleanup=new IllegalStateException("late native cleanup");
+        assertSame(cleanup,assertThrows(IllegalStateException.class,()->ProjectionMeshUpload.executeRetained(uploaded,consumed,()->true,a,()->{throw cleanup;})));
+        assertSame(cleanup,failure(consumed));assertEquals(1,a.releases);
+    }
 }

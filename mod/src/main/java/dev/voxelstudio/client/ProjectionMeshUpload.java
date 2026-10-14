@@ -20,6 +20,32 @@ final class ProjectionMeshUpload {
         void releaseSource();
     }
 
+    /** Native storage is retained until the actual consumer has stopped, not
+     * merely until the publication future completes or is cancelled. */
+    static <T> void executeRetained(CompletableFuture<Void> completion,CompletableFuture<Void> consumed,
+                                   BooleanSupplier current,Access<T> access,Runnable releaseLease) {
+        Objects.requireNonNull(consumed);Objects.requireNonNull(releaseLease);
+        Throwable failure=null;
+        try { execute(completion,current,access); }
+        catch(RuntimeException | Error original) { failure=original; }
+        if(failure==null&&completion.isCompletedExceptionally()&&!completion.isCancelled()) {
+            try { completion.join(); } catch(CompletionException original) { failure=original.getCause(); }
+        }
+        try { releaseLease.run(); }
+        catch(RuntimeException | Error cleanup) { failure=append(failure,cleanup); }
+        if(failure==null)consumed.complete(null);
+        else {
+            consumed.completeExceptionally(failure);
+            // A timed-out writer no longer observes this receipt. Preserve
+            // the existing client-executor reporting policy for late errors.
+            if(completion.isCancelled()) {
+                if(failure instanceof RuntimeException runtime)throw runtime;
+                if(failure instanceof Error fatal)throw fatal;
+                throw new CompletionException(failure);
+            }
+        }
+    }
+
     static <T> void execute(CompletableFuture<Void> completion,BooleanSupplier current,Access<T> access) {
         Objects.requireNonNull(completion);Objects.requireNonNull(current);Objects.requireNonNull(access);
         T resource=null;boolean consumed=false,published=false;Throwable failure=null;

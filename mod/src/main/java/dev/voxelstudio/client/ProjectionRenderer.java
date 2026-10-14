@@ -49,9 +49,11 @@ public final class ProjectionRenderer implements AutoCloseable {
                 if(bottom<0||bottom>=placement.asset().height||cutoff>=0&&bottom>cutoff)throw new IllegalArgumentException("Invalid section band");
                 if(left<0||near<0||right>placement.width()||far>placement.length()||right<=left||far<=near)throw new IllegalArgumentException("Invalid asset section clip");
                 var view = new View(placement,cutoff,bottom,onlyLayer,left,near,right,far); Random random = Random.create(42); long faces = 0;
+                try(var cpu=ProjectionBufferStorage.allocate()) {
+                BufferBuilder buffer=cpu.resource();
                 for (int cy = 0; cy < placement.asset().height; cy += 16) for (int cz = 0; cz < placement.length(); cz += 16) for (int cx = 0; cx < placement.width(); cx += 16) {
                     if (generation != ticket) return;
-                    BufferBuilder buffer = new BufferBuilder(65536); buffer.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE);
+                    buffer.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE);
                     for (int y = cy; y < Math.min(cy + 16, placement.asset().height); y++) for (int z = cz; z < Math.min(cz + 16, placement.length()); z++) for (int x = cx; x < Math.min(cx + 16, placement.width()); x++) {
                         BlockPos pos = new BlockPos(x, y, z); BlockState state = view.getBlockState(pos);
                         if (state.getRenderType() != BlockRenderType.MODEL) continue;
@@ -83,7 +85,12 @@ public final class ProjectionRenderer implements AutoCloseable {
                     float mx = cx + 8, my = cy + 8, mz = cz + 8;
                     // One upload at a time bounds outstanding off-heap mesh memory.
                     CompletableFuture<Void> uploaded = new CompletableFuture<>();
-                    client.execute(() -> ProjectionMeshUpload.execute(uploaded,()->generation==ticket,new ProjectionMeshUpload.Access<VertexBuffer>() {
+                    CompletableFuture<Void> consumed = new CompletableFuture<>();
+                    var consumerClaim=new ProjectionUploadClaim();
+                    java.util.function.BooleanSupplier current=()->generation==ticket;
+                    // Allocate callback state before retaining storage. An
+                    // allocation failure must not strand an unqueued lease.
+                    var access=new ProjectionMeshUpload.Access<VertexBuffer>() {
                         @Override public VertexBuffer create(){return new VertexBuffer(VertexBuffer.Usage.STATIC);}
                         @Override public void bind(VertexBuffer gpu){gpu.bind();}
                         @Override public void upload(VertexBuffer gpu){gpu.upload(built);}
@@ -91,8 +98,21 @@ public final class ProjectionRenderer implements AutoCloseable {
                         @Override public void publish(VertexBuffer gpu){meshes.add(new Mesh(gpu,mx,my,mz));}
                         @Override public void dispose(VertexBuffer gpu){gpu.close();}
                         @Override public void releaseSource(){built.release();}
-                    }));
-                    try { uploaded.get(30, TimeUnit.SECONDS); }
+                    };
+                    var lease=cpu.retain();
+                    try {
+                    Runnable releaseLease=lease::close;
+                    client.execute(() -> {
+                    if(!consumerClaim.beginConsumer())return;
+                    ProjectionMeshUpload.executeRetained(uploaded,consumed,current,access,releaseLease);
+                    }); } catch(RuntimeException | Error submission) {
+                        if(consumerClaim.rejectBeforeConsumption()) {
+                            try { built.release(); } catch(RuntimeException | Error cleanup) { if(cleanup!=submission)submission.addSuppressed(cleanup); }
+                            try { lease.close(); } catch(RuntimeException | Error cleanup) { if(cleanup!=submission)submission.addSuppressed(cleanup); }
+                        }
+                        throw submission;
+                    }
+                    try { consumed.get(30, TimeUnit.SECONDS);uploaded.get(); }
                     catch (Exception error) {
                         ProjectionMeshUpload.abandon(uploaded); // A late queued upload must not publish after timeout.
                         if(error instanceof InterruptedException)Thread.currentThread().interrupt();
@@ -100,8 +120,9 @@ public final class ProjectionRenderer implements AutoCloseable {
                     }
                     faceCount=faces;
                 }
+                }
                 client.execute(() -> { if (generation == ticket) {building = false;buildMillis=(System.nanoTime()-started)/1_000_000;} });
-            } catch (Exception e) { client.execute(() -> {
+            } catch (Exception | Error e) { client.execute(() -> {
                 if(generation!=ticket)return;
                 generation++; // Retire this failed build, including any late queued work.
                 try { release(); } catch(RuntimeException | Error cleanup) { if(cleanup!=e)e.addSuppressed(cleanup); }
