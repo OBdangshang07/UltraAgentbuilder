@@ -29,7 +29,7 @@ final class WorldPatchPreviewRenderer implements AutoCloseable {
     private final List<Mesh> meshes=new ArrayList<>();
     private volatile long generation;
     private volatile boolean cpuBusy;
-    private boolean closed;
+    private volatile boolean closed;
     volatile boolean building;
     volatile String error;
     volatile long faces,buildMillis;
@@ -55,11 +55,15 @@ final class WorldPatchPreviewRenderer implements AutoCloseable {
                     states.put(text,state);
                 }
                 var random=Random.create(42);long builtFaces=0;
+                // One arena for the whole original/proposed build. Each queued
+                // upload retains it until the actual consumer has stopped.
+                try(var cpu=ProjectionBufferStorage.allocate()) {
+                BufferBuilder buffer=cpu.resource();
                 for(boolean original:new boolean[]{true,false}){
                     var view=new View(preview,filter,states,original);
                     for(var section:preview.sections()){
                         if(ticket!=generation)return;
-                        var buffer=new BufferBuilder(65536);buffer.begin(VertexFormat.DrawMode.QUADS,VertexFormats.POSITION_COLOR_TEXTURE);
+                        buffer.begin(VertexFormat.DrawMode.QUADS,VertexFormats.POSITION_COLOR_TEXTURE);
                         BufferBuilder.BuiltBuffer built=null;
                         try{
                             for(var row:section.rows()){
@@ -99,18 +103,50 @@ final class WorldPatchPreviewRenderer implements AutoCloseable {
                             if(buffer.isBuilding()){var abandoned=buffer.endNullable();if(abandoned!=null)abandoned.release();}
                         }
                         if(built==null)continue;
-                        var ready=built;var uploaded=new CompletableFuture<Void>();
-                        client.execute(()->{
-                            VertexBuffer gpu=null;try{
-                                if(closed||ticket!=generation){ready.release();return;}
-                                gpu=new VertexBuffer(VertexBuffer.Usage.STATIC);gpu.bind();gpu.upload(ready);VertexBuffer.unbind();meshes.add(new Mesh(gpu,section.x()*16,section.y()*16,section.z()*16,original));gpu=null;
-                            }catch(Throwable failure){uploaded.completeExceptionally(failure);}finally{if(gpu!=null)gpu.close();VertexBuffer.unbind();uploaded.complete(null);}
-                        });
-                        uploaded.get(30,TimeUnit.SECONDS);faces=builtFaces;
+                        var ready=built;var uploaded=new CompletableFuture<Void>();var consumed=new CompletableFuture<Void>();
+                        var consumerClaim=new ProjectionUploadClaim();
+                        java.util.function.BooleanSupplier current=()->!closed&&ticket==generation;
+                        var access=new ProjectionMeshUpload.Access<VertexBuffer>() {
+                            @Override public VertexBuffer create(){return new VertexBuffer(VertexBuffer.Usage.STATIC);}
+                            @Override public void bind(VertexBuffer gpu){gpu.bind();}
+                            @Override public void upload(VertexBuffer gpu){gpu.upload(ready);}
+                            @Override public void unbind(){VertexBuffer.unbind();}
+                            @Override public void publish(VertexBuffer gpu){meshes.add(new Mesh(gpu,section.x()*16,section.y()*16,section.z()*16,original));}
+                            @Override public void dispose(VertexBuffer gpu){gpu.close();}
+                            @Override public void releaseSource(){ready.release();}
+                        };
+                        var lease=cpu.retain();
+                        try {
+                            Runnable releaseLease=lease::close;
+                            client.execute(()->{
+                                if(!consumerClaim.beginConsumer())return;
+                                ProjectionMeshUpload.executeRetained(uploaded,consumed,current,access,releaseLease);
+                            });
+                        } catch(RuntimeException | Error submission) {
+                            ProjectionMeshUpload.abandon(uploaded);
+                            if(consumerClaim.rejectBeforeConsumption()) {
+                                try { ready.release(); } catch(RuntimeException | Error cleanup) { if(cleanup!=submission)submission.addSuppressed(cleanup); }
+                                try { lease.close(); } catch(RuntimeException | Error cleanup) { if(cleanup!=submission)submission.addSuppressed(cleanup); }
+                            }
+                            throw submission;
+                        }
+                        try { consumed.get(30, TimeUnit.SECONDS);uploaded.get(); }
+                        catch(Exception failure) {
+                            ProjectionMeshUpload.abandon(uploaded);
+                            if(failure instanceof InterruptedException)Thread.currentThread().interrupt();
+                            throw failure;
+                        }
+                        if(ticket!=generation||closed)return;
+                        faces=builtFaces;
                     }
                 }
+                }
                 client.execute(()->{if(ticket==generation&&!closed){building=false;buildMillis=(System.nanoTime()-started)/1_000_000;}});
-            }catch(Exception failure){client.execute(()->{if(ticket==generation&&!closed){generation++;release();error=String.valueOf(failure.getMessage());building=false;}});}
+            }catch(Exception | Error failure){client.execute(()->{if(ticket==generation&&!closed){
+                generation++;
+                try { release(); } catch(RuntimeException | Error cleanup) { if(cleanup!=failure)failure.addSuppressed(cleanup); }
+                error=ProjectionMeshUpload.describe(failure);building=false;
+            }});}
             finally{cpuBusy=false;}
         });
     }
@@ -124,7 +160,13 @@ final class WorldPatchPreviewRenderer implements AutoCloseable {
         }completedDraws++;
     }
     void clear(){generation++;building=false;error=null;release();}
-    private void release(){for(var mesh:meshes)mesh.buffer.close();meshes.clear();}
+    private void release(){
+        Throwable failure=null;
+        try { for(var mesh:meshes)try{mesh.buffer.close();}catch(RuntimeException | Error error){if(failure==null)failure=error;else if(failure!=error)failure.addSuppressed(error);} }
+        finally { meshes.clear(); }
+        if(failure instanceof RuntimeException error)throw error;
+        if(failure instanceof Error error)throw error;
+    }
     @Override public void close(){if(closed)return;closed=true;clear();worker.shutdownNow();}
     private static final class View implements BlockRenderView {
         private final WorldDifferenceView preview;private final WorldPatchPreview.Filter filter;private final Map<String,BlockState> states;private final boolean original;
