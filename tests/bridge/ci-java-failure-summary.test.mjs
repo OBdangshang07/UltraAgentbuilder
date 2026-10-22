@@ -38,3 +38,22 @@ test('arbitrary method-shaped display names remain unreported',()=>{const r=summ
 test('known causes and suppressed types are retained without their messages',()=>{const r=summarizeJavaFailures(xml(`<failure type="java.io.IOException">Caused by: java.nio.file.AccessDeniedException: ${secret}\nSuppressed: java.nio.file.DirectoryNotEmptyException: ${secret}</failure>`));assert.deepEqual(r.failures[0].relatedExceptionTypes,['java.io.IOException','java.nio.file.AccessDeniedException','java.nio.file.DirectoryNotEmptyException']);assert.ok(!JSON.stringify(r).includes(secret));});
 test('unknown exception-shaped cause text cannot escape the fixed type list',()=>{const r=summarizeJavaFailures(xml(`<failure type="java.io.IOException">Caused by: java.io.${secret.replaceAll('-','_')}: hidden</failure>`));assert.deepEqual(r.failures[0].relatedExceptionTypes,['java.io.IOException']);assert.ok(!JSON.stringify(r).includes(secret.replaceAll('-','_')));});
 test('repeated cause rows are deduplicated rather than expanding output',()=>{const rows=Array.from({length:100},()=>`Caused by: java.io.IOException: ${secret}`).join('\n');const r=summarizeJavaFailures(xml(`<failure type="java.io.IOException">${rows}</failure>`));assert.deepEqual(r.failures[0].relatedExceptionTypes,['java.io.IOException']);});
+
+const bridgeSuite='dev.voxelstudio.client.BridgeClientTest';
+const bridgeMethods=['referenceHistoryClientReadsOnlyExactOriginalGetRoutesAndNoSendOrConfirmation','exactImageRestoreClientOnlyGetsSelectedOriginalBytesAndRechecksOriginalScope'];
+test('fixed Bridge read tests retain the Future wait location without inventing a transport cause',()=>{
+  for(const known of bridgeMethods){
+    const input=`<testsuite name="${bridgeSuite}"><testcase name="${known}()"><failure type="java.util.concurrent.TimeoutException" message="${secret}">java.util.concurrent.TimeoutException: ${secret}\n at java.base/java.util.concurrent.CompletableFuture.timedGet(CompletableFuture.java:1960)\n at java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:2095)\n at ${bridgeSuite}.${known}(${secret}:109)</failure></testcase></testsuite>`;
+    const r=summarizeJavaFailures(input),f=r.failures[0];assert.equal(f.suite,bridgeSuite);assert.equal(f.method,known);assert.equal(f.category,'future-wait-timeout');assert.equal(f.frames.length,3);assert.equal(f.causeNotProven,true);assert.equal(r.testOutcomeUnchanged,true);assert.ok(!JSON.stringify(r).includes(secret));assert.ok(!JSON.stringify(r).includes('.java:'));
+  }
+});
+test('trusted Bridge package does not allow arbitrary test names or frame suffixes',()=>{
+  const name=bridgeMethods[0]+secret.replaceAll('-','_');const r=summarizeJavaFailures(`<testsuite name="${bridgeSuite}"><testcase name="${name}()"><failure type="java.util.concurrent.TimeoutException">at ${bridgeSuite}.${name}(private:1)\nat java.util.concurrent.CompletableFuture.${name}(private:2)</failure></testcase></testsuite>`);
+  assert.equal(r.failures[0].method,'unreported');assert.deepEqual(r.failures[0].frames,[]);assert.equal(r.failures[0].category,'unclassified');assert.ok(!JSON.stringify(r).includes(secret.replaceAll('-','_')));
+});
+test('known display names are accepted only under their fixed public suite',()=>{
+  const r=summarizeJavaFailures(`<testsuite name="${secret}"><testcase name="${bridgeMethods[0]}()"><failure type="java.util.concurrent.TimeoutException"/></testcase></testsuite>`);assert.equal(r.failures[0].suite,'unreported');assert.equal(r.failures[0].method,'unreported');assert.equal(r.failures[0].category,'unclassified');assert.ok(!JSON.stringify(r).includes(secret));
+});
+test('a TimeoutException alone is not proof of a Future wait or HTTP failure',()=>{
+  const r=summarizeJavaFailures(xml('<failure type="java.util.concurrent.TimeoutException"/>'));assert.equal(r.failures[0].category,'unclassified');assert.equal(r.failures[0].causeNotProven,true);assert.deepEqual(r.failures[0].frames,[]);
+});

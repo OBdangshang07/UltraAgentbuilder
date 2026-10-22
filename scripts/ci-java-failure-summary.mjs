@@ -5,6 +5,9 @@ import {fileURLToPath} from 'node:url';
 const maximumBytes=8*1024**2;
 const builtinSuite='dev.voxelstudio.client.BuiltinRuntimeTest';
 const builtinMethod='builtinAloneStartsBridgeAndCompilesFreeSampleWithoutExternalCompanion';
+const bridgeSuite='dev.voxelstudio.client.BridgeClientTest';
+const bridgeMethods=['referenceHistoryClientReadsOnlyExactOriginalGetRoutesAndNoSendOrConfirmation','exactImageRestoreClientOnlyGetsSelectedOriginalBytesAndRechecksOriginalScope'];
+const suiteMethods=new Map([[builtinSuite,[builtinMethod]],[bridgeSuite,bridgeMethods]]);
 const exceptionTypes=new Set(['java.io.IOException','java.nio.file.AccessDeniedException','java.nio.file.DirectoryNotEmptyException','java.nio.file.NoSuchFileException','java.nio.file.FileSystemException','java.lang.IllegalStateException','java.lang.AssertionError','java.util.concurrent.ExecutionException','java.util.concurrent.TimeoutException','org.opentest4j.AssertionFailedError','org.junit.platform.commons.JUnitException']);
 // Fixed public method names, not arbitrary message text that happens to look
 // like a Java frame. A model answer or forged XML cannot encode a secret here.
@@ -23,17 +26,19 @@ const frameMethods=new Map([
   ['org.junit.jupiter.engine.extension.TempDirectory$CloseablePath$1',['visitFile','postVisitDirectory']],
   ['org.junit.platform.engine.support.hierarchical.ThrowableCollector',['execute']],
   ['dev.voxelstudio.client.BridgeClient',['close']],
+  ['java.util.concurrent.CompletableFuture',['get','timedGet']],
+  [bridgeSuite,bridgeMethods],
   [builtinSuite,[builtinMethod]],
 ]);
 const allowedFrames=new Set([...frameMethods].flatMap(([name,methods])=>methods.map(method=>name+'.'+method)));
 function attribute(text,key){return text.match(new RegExp('(?:^|\\s)'+key+'="([^"<]*)"'))?.[1]??'';}
-function safeMethod(value){return value===builtinMethod||value.startsWith(builtinMethod+'(')?builtinMethod:'unreported';}
+function safeMethod(suite,value){return suiteMethods.get(suite)?.find(method=>value===method||value.startsWith(method+'('))??'unreported';}
 
 /** Diagnostic only: never emit exception messages, paths, output streams or XML. */
 export function summarizeJavaFailures(xml){
   if(typeof xml!=='string'||Buffer.byteLength(xml)>maximumBytes||/<!DOCTYPE|<!ENTITY/i.test(xml))throw new Error('Unsupported JUnit diagnostic input');
   const suite=xml.match(/<testsuite\b([^>]*)>/)?.[1];if(!suite)throw new Error('Missing JUnit suite');
-  const suiteName=attribute(suite,'name'),safeSuite=suiteName===builtinSuite?builtinSuite:'unreported';
+  const suiteName=attribute(suite,'name'),safeSuite=suiteMethods.has(suiteName)?suiteName:'unreported';
   const failures=[];
   for(const test of xml.matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)){
     for(const failed of (test[2]??'').matchAll(/<(failure|error)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/g)){
@@ -46,8 +51,9 @@ export function summarizeJavaFailures(xml){
         if(match&&allowedFrames.has(match[1])&&frames.length<48)frames.push(match[1]);
       }
       const cleanup=frames.some(frame=>frame.startsWith('org.junit.')&&frame.includes('TempDirectory'));
-      failures.push({suite:safeSuite,method:safeMethod(attribute(test[1],'name')),kind:failed[1],exceptionType:exceptionTypes.has(type)?type:'unreported',relatedExceptionTypes:[...relatedTypes].sort(),
-        category:cleanup?'junit-temporary-cleanup':'unclassified',frames,rawMessageOmitted:true,rawStreamsOmitted:true,pathsOmitted:true,causeNotProven:true});
+      const futureWait=type==='java.util.concurrent.TimeoutException'&&frames.some(frame=>frame==='java.util.concurrent.CompletableFuture.get'||frame==='java.util.concurrent.CompletableFuture.timedGet');
+      failures.push({suite:safeSuite,method:safeMethod(suiteName,attribute(test[1],'name')),kind:failed[1],exceptionType:exceptionTypes.has(type)?type:'unreported',relatedExceptionTypes:[...relatedTypes].sort(),
+        category:cleanup?'junit-temporary-cleanup':futureWait?'future-wait-timeout':'unclassified',frames,rawMessageOmitted:true,rawStreamsOmitted:true,pathsOmitted:true,causeNotProven:true});
     }
   }
   return {format:'SanitizedJavaFailureDiagnostics',version:1,failures,diagnosticOnly:true,testOutcomeUnchanged:true};
