@@ -17,8 +17,8 @@ import {hash} from '../../src/generation/compiler.mjs';
 // transport. Provider answers and transparent PNG pixels are SYNTHETIC: these
 // tests prove no architectural quality, real image understanding or game writes.
 const prefix='/v1/reference-world-assembly';
-async function fixture(t,{tier='lite',sending=true,afterGenerate}={}) {
-  const h=await jointResourceFixture(t,{tier,images:tier==='lite'?1:4});
+async function fixture(t,{tier='lite',sending=true,afterGenerate,generationOverrides={}}={}) {
+  const h=await jointResourceFixture(t,{tier,images:tier==='lite'?1:4,generationOverrides});
   h.f.jobDirectory=path.join(h.resources.root,h.f.ownerId);
   let app,implementation,queries=0,supportsImages=true,efforts=['high','max'];
   const adapter={models:async()=>{queries++;return [{id:h.f.generation.model,supportsImages,efforts}];},
@@ -128,6 +128,14 @@ for(const tier of ['lite','pro','max','ultra'])test(tier+' one paired full SEND 
   assert.equal((await h.request(h.job+'/candidate'+download)).status,409);
   assert.equal((await h.request(h.job+'/parts/0'+download)).status,409);
   assert.equal((await h.request(h.job)).status,409);assert.equal(h.calls.length,calls);
+});
+
+test('bounded recovery opt-in survives paired full HTTP SEND and completes the original task without extra calls',async t=>{
+  const h=await fixture(t,{generationOverrides:{assemblyProviderRecovery:'bounded'}});await h.heartbeat();
+  const sent=await h.request(prefix+'/jobs',{method:'POST',value:h.body});assert.equal(sent.status,202);
+  const final=await h.until(v=>v.state==='preview-ready',{render:true});assert.equal(final.reservedCalls,8);
+  assert.equal(final.maximumCalls,8);assert.equal(h.calls.length,8);assert.equal(final.canAuthorizePlacement,false);
+  assert.deepEqual((await h.request(prefix+'/jobs',{method:'POST',value:h.body})).value,final);assert.equal(h.calls.length,8);
 });
 
 test('unknown history and default disabled SEND stay readable and dispatch no models',async t=>{

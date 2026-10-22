@@ -19,9 +19,9 @@ import {referenceBrief} from './reference-generation-fixture.mjs';
 export const jointResourceBytes=value=>Buffer.from(JSON.stringify(value));
 export const jointResourceSend=p=>({format:'ReferenceWorldAssemblySend',version:2,purpose:'reference-world-assembly',confirmed:true,
   preparationHash:p.preparationHash,maximumCalls:p.maximumCalls});
-export async function jointResourceFixture(t,{tier='lite',images=2}={}) {
+export async function jointResourceFixture(t,{tier='lite',images=2,generationOverrides:overrides={},providerTurn}={}) {
   const staged=tier==='ultra',{model,...generationOverrides}=staged?stagedRequest:v4Request;
-  const f=await jointPixelFixture(t,{images,generationOverrides:{...generationOverrides,qualityTier:tier}});
+  const f=await jointPixelFixture(t,{images,generationOverrides:{...generationOverrides,qualityTier:tier,...overrides}});
   const contextId=randomUUID(),size=staged?[32,224,32]:[16,10,16],origin=[-16,-40,-16];
   const selection={format:'WorldSelection',version:1,world:{worldId:'joint_resource_synthetic',dimension:'minecraft:overworld',minY:-64,maxY:320},
     revision:7,edit:{min:origin,max:origin.map((v,i)=>v+size[i])},context:{min:origin.map(v=>v-1),max:origin.map((v,i)=>v+size[i]+1)},protected:[]};
@@ -48,13 +48,15 @@ export async function jointResourceFixture(t,{tier='lite',images=2}={}) {
       assert.equal(data.worldContext.snapshotHash,saved.record.snapshotHash);assert.deepEqual(data.worldContext.origin,origin);
       const call=JSON.parse(await fs.readFile(path.join(f.jobDirectory,'assembly-journal',`call-${index}.json`)));
       assert.equal(call.value.state,'pending');
+      const answer=request.outputSchema.properties.format.enum[0]==='ArchitectureReferenceBrief'
+        ? referenceBrief(reference):(staged?stagedResponse:v4Response)(data,{outputSchema:request.outputSchema});
+      if(providerTurn)return providerTurn({request,index,answer});
       const imageHashes=request.referenceInput?reference.manifest.references.map(r=>r.sha256):await Promise.all(request.images.map(async file=>hash(await fs.readFile(file))));
       const binding={version:1,provider:'codex',storage:'persistent-single-turn',threadId:'synthetic-resources-'+index,turnId:null,
         model:request.model,effort:request.effort,requestHash:codexRequestFingerprint({prompt:request.prompt,model:request.model,effort:request.effort,
           outputSchema:request.outputSchema,imageHashes,...(request.referenceInput?{referenceBindingHash:reference.binding.bindingHash}:{})})};
       await request.onProviderBinding(binding);await request.onProviderBinding({...binding,turnId:'turn-'+index});
-      if(request.outputSchema.properties.format.enum[0]==='ArchitectureReferenceBrief')return {spec:referenceBrief(reference)};
-      return {spec:(staged?stagedResponse:v4Response)(data,{outputSchema:request.outputSchema})};
+      return {spec:answer};
     }};
     return {directory:f.jobDirectory,referenceInput:bound.referenceInput,preparationHash:prepared.preparationHash,adapter,
       signal:new AbortController().signal,onStage:async()=>{},nativeEvidence:options=>requestNativeEvidence({...options,jobDirectory:f.jobDirectory,

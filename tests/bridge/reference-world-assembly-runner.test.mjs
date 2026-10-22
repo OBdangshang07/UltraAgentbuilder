@@ -9,6 +9,7 @@ import {createReferenceWorldAssemblyRunner} from '../../bridge/reference-world-a
 import {reserveReferenceWorldAssemblyExecution} from '../../bridge/reference-world-assembly-execution.mjs';
 import {runReferenceWorldAssembly} from '../../bridge/reference-world-assembly.mjs';
 import {hash} from '../../src/generation/compiler.mjs';
+import {syntheticRecoveryTurn,capacityMessage} from './assembly-provider-recovery-fixtures.mjs';
 
 // Real controller/ledger/shared pipeline, authored synthetic pixels/responses.
 // No paid provider, game, account, snapshot refresh or world writer.
@@ -54,6 +55,46 @@ for(const tier of ['lite','pro','max','ultra'])test(tier+' ONE original start au
   assert.equal(start.lifetime,'original-started-task-full-budget');assert.equal(start.maximumCalls,{lite:8,pro:14,max:20,ultra:26}[tier]);
   assert.equal(start.createdAt<start.captureExpiresAt,true);assert.equal(start.firstCallIndex,1);
   if(tier==='ultra')assert.equal(final.candidate.partCount>1,true);
+});
+
+for(const tier of ['lite','ultra'])test(tier+' original full runner forwards confirmed model/effort when bounded recovery is enabled',async t=>{
+  const h=await fixture(t,{tier,generationOverrides:{assemblyProviderRecovery:'bounded'}}),runner=h.makeRunner();
+  await runner.start(h.f.ownerId);const final=await runner.wait(h.f.ownerId);
+  await verifySuccess(h,final);assert.equal(final.maximumCalls,tier==='ultra'?26:8);
+  assert.equal(h.calls.length,tier==='ultra'?17:8);
+  for(const call of h.calls){assert.equal(call.model,h.prepared.selected.model);assert.equal(call.effort,h.prepared.selected.effort);}
+  assert.deepEqual(await runner.start(h.f.ownerId),final);assert.equal(h.calls.length,final.reservedCalls);
+});
+
+test('original full Ultra runner retains closed capacity failure and completes once within its unchanged shared budget',async t=>{
+  const transport=[],h=await fixture(t,{tier:'ultra',generationOverrides:{assemblyProviderRecovery:'bounded'},
+    providerTurn:({request,index,answer})=>syntheticRecoveryTurn(request,{index,answer,transport,
+      selected:index===1?{failure:capacityMessage}:{}})}),runner=h.makeRunner();
+  await runner.start(h.f.ownerId);const final=await runner.wait(h.f.ownerId);await verifySuccess(h,final);
+  assert.equal(final.maximumCalls,26);assert.equal(final.reservedCalls,18);assert.equal(h.calls.length,18);
+  const journal=await Promise.all(Array.from({length:18},(_,i)=>load(path.join(h.f.jobDirectory,'assembly-journal',`call-${i+1}.json`))));
+  assert.equal(journal[0].state,'error');assert.equal(journal[0].error.diagnostic.reason,'failed');
+  assert.equal(journal[1].providerRetry.failedIndex,1);assert.equal(journal[1].providerRetry.ordinal,1);
+  assert.ok(journal.slice(1).every(call=>call.state==='response'));
+  assert.equal(new Set(journal.map(call=>call.providerBinding.threadId+'/'+call.providerBinding.turnId)).size,18);
+  assert.equal(transport.filter(event=>event.method==='turn/start').length,18);
+  const nativeCalls=h.calls.filter(call=>call.images.length);assert.equal(nativeCalls.length,3);
+  assert.ok(nativeCalls.every(call=>call.model===h.prepared.selected.model&&call.effort===h.prepared.selected.effort));
+  assert.deepEqual(await runner.start(h.f.ownerId),final);assert.equal(h.calls.length,18);
+  const query={referenceInput:h.executionOptions.referenceInput,preparationHash:h.prepared.preparationHash,candidateHash:final.candidate.candidateHash};
+  const metadata=await h.operation('metadata',query),empty=metadata.candidate.proofFiles.filter(pin=>pin.bytes===0);
+  assert.equal(empty.length,1);assert.equal(empty[0].sha256,hash(Buffer.alloc(0)));assert.match(empty[0].path,/^codex-response-[-\w]+\/answer-1\.txt$/);
+  assert.equal((await h.operation('part',{...query,partIndex:0})).candidateHash,final.candidate.candidateHash,'Warm worker accepts the exact audited empty failure');
+  const file=path.join(h.f.jobDirectory,empty[0].path);await fs.writeFile(file,' ');
+  await assert.rejects(h.operation('part',{...query,partIndex:0}));await fs.writeFile(file,'');
+  const unrelated=path.join(path.dirname(file),'unknown-empty.txt');await fs.writeFile(unrelated,'');
+  await assert.rejects(h.operation('metadata',query));await fs.unlink(unrelated);
+  const receipt=path.join(path.dirname(file),'receipt.json'),original=await fs.readFile(receipt);
+  await fs.writeFile(receipt,JSON.stringify({...JSON.parse(original),reason:'unknown'}));
+  await assert.rejects(h.operation('metadata',query));await fs.writeFile(receipt,original);
+  await fs.unlink(file);await assert.rejects(h.operation('metadata',query));await fs.writeFile(file,'');
+  assert.equal((await h.operation('metadata',query)).candidate.candidateHash,final.candidate.candidateHash);
+  assert.equal(h.calls.length,18,'Read-only rejections and restoration do not invoke a model');
 });
 
 test('a live original Ultra task may cross capture START expiry and still finish all mandatory calls and native parts',async t=>{

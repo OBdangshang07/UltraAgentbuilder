@@ -253,6 +253,8 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     };
     const rules = await fs.readFile(new URL('../prompts/scene-v1.md',import.meta.url),'utf8');
     const result = await runDurableAssembly({directory,requestHash:p.preparationHash,runtimeHash:p.runtimeHash,
+      // Recovery validates the exact confirmed identity, never adapter defaults.
+      model:p.selected.model,effort:p.selected.effort,
       policy:original.reference.preparation.policy,prompt:original.reference.preparation.generation.prompt,rules,
       referenceInput,worldContext:original.worldContext,signal,onStage,onRecovery,nativeEvidence,
       invoke:(prompt,index,options) => invoke(prompt,index,options),

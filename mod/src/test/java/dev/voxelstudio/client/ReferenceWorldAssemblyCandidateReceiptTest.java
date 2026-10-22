@@ -36,6 +36,30 @@ class ReferenceWorldAssemblyCandidateReceiptTest {
             if(f.get("tier").getAsString().equals("ultra")){assertTrue(parts.size()>1);assertEquals(224,m.reference().getAsJsonObject("prepared").getAsJsonObject("maximumBounds").get("height").getAsInt());}
         }
     }
+    @Test void actualClosedCapacityFailureSurvivesBridgeMetadataAndCompleteClientReadWithoutExtraAuthority()throws Exception{
+        var f=fixtures().get(1);assertEquals("bounded",f.getAsJsonObject("generation").get("assemblyProviderRecovery").getAsString());
+        assertEquals(2,f.getAsJsonObject("prepared").get("providerRetries").getAsInt());assertEquals(18,f.getAsJsonObject("status").get("reservedCalls").getAsInt());
+        var empty=f.getAsJsonObject("metadata").getAsJsonObject("candidate").getAsJsonArray("proofFiles").asList().stream()
+            .map(JsonElement::getAsJsonObject).filter(pin->pin.get("bytes").getAsLong()==0).toList();
+        assertEquals(1,empty.size());assertTrue(empty.get(0).get("path").getAsString().matches("codex-response-[-\\w]{1,96}/answer-1\\.txt"));
+        assertEquals(ContextReceipt.sha256(new byte[0]),empty.get(0).get("sha256").getAsString());
+        var m=metadata(f);var whole=ReferenceWorldAssemblyCandidateReceipt.whole(m,parts(f,m),()->false);
+        assertEquals(54406,whole.totalWrites());assertFalse(whole.canAuthorizePlacement());assertFalse(m.canAuthorizePlacement());
+    }
+    @Test void emptyPinsCannotAdmitOtherFilesChangedHashesNegativeSizesOrLegacyRecovery()throws Exception{
+        var capacity=fixtures().get(1);var empty=capacity.getAsJsonObject("metadata").getAsJsonObject("candidate").getAsJsonArray("proofFiles").asList().stream()
+            .map(JsonElement::getAsJsonObject).filter(pin->pin.get("bytes").getAsLong()==0).findFirst().orElseThrow();
+        for(var variant:List.of("path","sha256","negative","candidate-file","legacy")){
+            var f=(variant.equals("legacy")?fixtures().get(0):capacity).deepCopy();var c=f.getAsJsonObject("metadata").getAsJsonObject("candidate");
+            if(variant.equals("legacy"))c.getAsJsonArray("proofFiles").add(empty.deepCopy());
+            else if(variant.equals("candidate-file")){var pin=c.getAsJsonArray("files").get(0).getAsJsonObject();pin.addProperty("bytes",0);pin.addProperty("sha256",ContextReceipt.sha256(new byte[0]));}
+            else{var pin=c.getAsJsonArray("proofFiles").asList().stream().map(JsonElement::getAsJsonObject).filter(p->p.get("bytes").getAsLong()==0).findFirst().orElseThrow();
+                if(variant.equals("path"))pin.addProperty("path","codex-response-synthetic/unknown-empty.txt");
+                else if(variant.equals("sha256"))pin.addProperty("sha256","f".repeat(64));else pin.addProperty("bytes",-1);}
+            c.remove("candidateHash");c.addProperty("candidateHash",ContextReceipt.jsonHash(c));f.getAsJsonObject("status").getAsJsonObject("candidate").add("candidateHash",c.get("candidateHash"));
+            assertThrows(RuntimeException.class,()->metadata(f),variant);
+        }
+    }
     @Test void metadataCannotRehashItsWayToAnotherOriginalAssetScopePixelsOrBudget()throws Exception{
         var f=fixtures().get(0);var r=ReferenceWorldAssemblyReceiptTest.reference(f);for(var key:List.of("assetHash","cellsHash","snapshotHash","selectionHash","referenceSetHash","runtimeHash","sourceHash","origin","reservedCalls","partCount","movable","partialPublicationAllowed","canAuthorizePlacement")){
             var e=f.getAsJsonObject("metadata").deepCopy();var c=e.getAsJsonObject("candidate");if(key.equals("origin"))c.add(key,JsonParser.parseString("[0,0,0]"));else if(key.equals("reservedCalls"))c.addProperty(key,1);else if(key.equals("partCount"))c.addProperty(key,2);else if(key.equals("movable")||key.equals("partialPublicationAllowed")||key.equals("canAuthorizePlacement"))c.addProperty(key,true);else c.addProperty(key,"f".repeat(64));

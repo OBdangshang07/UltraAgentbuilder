@@ -11,6 +11,7 @@ import {readNativeEvidence,readNativeRevisionComparison} from './native-evidence
 import {assemblyCorrectionInput} from '../src/design/correction-feedback.mjs';
 import {readJobReferenceInput} from './reference-generation-binding.mjs';
 import {readReferenceWorldAssemblyExecutionStart} from './reference-world-assembly-execution.mjs';
+import {auditAssemblyProviderRecovery} from './assembly-provider-recovery-audit.mjs';
 
 // Original local evidence and complete native differences only. No adapter,
 // compiler worker, render request, journal invoke or world writer is used here.
@@ -32,14 +33,14 @@ async function physical(full) {
   const stat=await fs.lstat(full);
   if (!stat.isDirectory() || stat.isSymbolicLink() || await fs.realpath(full)!==full) fail('Joint result directory redirected');
 }
-async function member(root,relative,maximum) {
+async function member(root,relative,maximum,allowVerifiedEmpty=false) {
   if (!relative || path.isAbsolute(relative) || relative.includes('\\') || relative.split('/').some(p=>!p||p==='.'||p==='..')) fail('Unsafe joint result evidence path');
   await physical(root);let full=root;
   const segments=relative.split('/');
   for (const segment of segments.slice(0,-1)) {full=path.join(full,segment);await physical(full);}
   full=path.join(full,segments.at(-1));
   const before=await fs.lstat(full);
-  if (!before.isFile() || before.isSymbolicLink() || before.nlink!==1 || before.size<1 || before.size>maximum || await fs.realpath(full)!==full) fail('Joint result file type/link/size rejected');
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink!==1 || before.size<(allowVerifiedEmpty?0:1) || before.size>maximum || await fs.realpath(full)!==full) fail('Joint result file type/link/size rejected');
   const handle=await fs.open(full,'r');
   try {
     const opened=await handle.stat();
@@ -61,7 +62,7 @@ async function immutable(file,bytes) {
 
 /** Pin the whole ORIGINAL selected branch, ledger, references, render evidence
  * and final bundle. No copying, cleanup, re-rendering or alternate branches. */
-async function evidencePins(directory,branch,signal) {
+async function evidencePins(directory,branch,signal,verifiedEmptyAnswers=new Set()) {
   const roots=['reference-world-assembly-v2','reference-input','assembly-journal',branch,'reference-world-assembly-final'];
   const names=await fs.readdir(directory);
   for (const name of ['native-evidence','native-comparisons','native-revisions']) if (names.includes(name)) roots.push(name);
@@ -76,7 +77,7 @@ async function evidencePins(directory,branch,signal) {
       if (stat.isDirectory() && !stat.isSymbolicLink()) await visit(relativeFile,depth+1);
       else {
         if (pins.length>=REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofFiles) fail('Joint original evidence file quota');
-        const bytes=await member(directory,relativeFile,REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofFileBytes);
+        const bytes=await member(directory,relativeFile,REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofFileBytes,verifiedEmptyAnswers.has(relativeFile));
         total+=bytes.length;if (total>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofBytes) fail('Joint original evidence byte quota');
         pins.push({path:relativeFile,bytes:bytes.length,sha256:hash(bytes)});
       }
@@ -90,6 +91,36 @@ async function evidencePins(directory,branch,signal) {
     pins.push({path:name,bytes:bytes.length,sha256:hash(bytes)});
   }
   return pins;
+}
+
+// ONLY a completed full rebuild, or its private owner-memory cohort, may
+// supply these pins. An empty answer is evidence of a retained failed call,
+// never a usable model result or permission to retry an unknown outcome.
+function emptyAnswersFromVerifiedCandidate(candidate) {
+  const result=new Set();
+  for(const pin of candidate.proofFiles)if(pin.bytes===0){
+    if(!/^codex-response-[-\w]{1,96}\/answer-1\.txt$/.test(pin.path)||pin.sha256!==hash(Buffer.alloc(0)))
+      fail('Unknown empty original evidence');
+    result.add(pin.path);
+  }
+  return result;
+}
+
+async function verifiedCapacityEmptyAnswers(directory,original,branch,records,summary) {
+  const failed=records.filter(r=>r.invocationOutcome==='completed-empty-capacity');
+  if(!failed.length)return new Set();
+  const p=original.prepared,audit=await auditAssemblyProviderRecovery({directory,root:path.join(directory,branch,'assembly'),
+    records,summary,policy:original.reference.preparation.policy,requestHash:p.preparationHash,runtimeHash:p.runtimeHash,
+    model:p.selected.model,effort:p.selected.effort});
+  if(!audit?.report.allReservedCallsClosed)fail('Original capacity failures require a complete closed recovery audit');
+  const empty=new Set();
+  for(const record of failed){
+    const d=audit.diagnosticFor(record.index),e=d?.responseEvidence;
+    if(d?.reason!=='failed'||d.failureKind!=='model-capacity'||d.receivedTextBytes!==0||e?.persisted!==true
+      ||!/^codex-response-[-\w]{1,96}$/.test(e.directory??'')||e.file!=='answer-1.txt')fail('Exact verified closed capacity answer required');
+    empty.add(e.directory+'/'+e.file);
+  }
+  await audit.verifyUnchanged();return empty;
 }
 
 async function terminalEvidence(directory,original,branch,records,signal) {
@@ -175,10 +206,11 @@ async function prepare(directory,original,branch,records,signal,{retainParts=tru
     || partIndex<0 || partIndex>=WORLD_ASSEMBLY_PATCH_LIMITS.parts)) fail('Exact retained result mode/part index required');
   await physical(directory);signal?.throwIfAborted();
   const {summary,evidence}=await terminalEvidence(directory,original,branch,records,signal);
+  const verifiedEmptyAnswers=await verifiedCapacityEmptyAnswers(directory,original,branch,records,summary);
   const finalDirectory=path.join(directory,'reference-world-assembly-final');
   await physical(finalDirectory);
   // Strong physical file reads precede the existing native bundle validator.
-  const proofFiles=await evidencePins(directory,branch,signal),pins=new Map(proofFiles.map(f=>[f.path,f]));
+  const proofFiles=await evidencePins(directory,branch,signal,verifiedEmptyAnswers),pins=new Map(proofFiles.map(f=>[f.path,f]));
   const archiveNames=['manifest.json',...original.manifest.files.map(f=>f.path)].map(n=>'reference-world-assembly-v2/'+n).sort();
   if (hash(proofFiles.filter(f=>f.path.startsWith('reference-world-assembly-v2/')).map(f=>f.path).sort())!==hash(archiveNames)
     || hash(await json(directory,'reference-world-assembly-v2/manifest.json'))!==hash(original.manifest)) fail('Original frozen joint archive changed during result preparation');
@@ -241,7 +273,7 @@ async function prepare(directory,original,branch,records,signal,{retainParts=tru
   if(metadataBytes.length>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes)fail('Complete joint evidence metadata quota');
   if(expectedCandidateHash!==undefined && candidate.candidateHash!==expectedCandidateHash)
     fail('Candidate differs from complete original task/asset/proofs');
-  if(hash(await evidencePins(directory,branch,signal))!==hash(proofFiles))fail('Original joint proof changed during result preparation');
+  if(hash(await evidencePins(directory,branch,signal,verifiedEmptyAnswers))!==hash(proofFiles))fail('Original joint proof changed during result preparation');
   // All provisional members and original proofs have been checked before the
   // final metadata callback; a callback failure never returns a complete set.
   if(retainParts)buffers['candidate.json']=metadataBytes;
@@ -268,7 +300,7 @@ export async function readReferenceWorldAssemblyCandidateData({directory,origina
     }});
   const names=(await fs.readdir(root)).sort();
   if(hash(names)!==hash([...rebuilt.candidate.files.map(f=>f.path),'candidate.json'].sort()))fail('Joint candidate incomplete or contains unknown members');
-  if (hash(await evidencePins(directory,candidate.branch,signal))!==hash(rebuilt.candidate.proofFiles)) fail('Original joint proof changed during candidate read');
+  if (hash(await evidencePins(directory,candidate.branch,signal,emptyAnswersFromVerifiedCandidate(rebuilt.candidate)))!==hash(rebuilt.candidate.proofFiles)) fail('Original joint proof changed during candidate read');
   return rebuilt;
 }
 
@@ -283,12 +315,13 @@ export async function readCohortReferenceWorldAssemblyCandidate({directory,cohor
     ||partIndex!==null&&(!Number.isSafeInteger(partIndex)||partIndex<0||partIndex>=cohort.candidate.partCount))
     fail('Exact previously fully verified complete candidate required');
   const {candidate,patchSet}=cohort,root=path.join(directory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY);
+  const verifiedEmptyAnswers=emptyAnswersFromVerifiedCandidate(candidate);
   await physical(directory);signal?.throwIfAborted();
   // The full verifier pinned the complete frozen context, original calls,
   // reference pixels, native geometry, ownership and current render evidence.
   // Re-enumeration detects added/removed files; hashing detects same-size edits
   // and self-rehashed on-disk manifests, without trusting filesystem metadata.
-  if(hash(await evidencePins(directory,candidate.branch,signal))!==hash(candidate.proofFiles))
+  if(hash(await evidencePins(directory,candidate.branch,signal,verifiedEmptyAnswers))!==hash(candidate.proofFiles))
     fail('Original joint proof changed since full reconstruction');
   let patch=null,preview=null,total=0;
   for(const pin of candidate.files){
@@ -307,7 +340,7 @@ export async function readCohortReferenceWorldAssemblyCandidate({directory,cohor
   const names=(await fs.readdir(root)).sort();
   if(hash(names)!==hash([...candidate.files.map(f=>f.path),'candidate.json'].sort()))
     fail('Joint candidate incomplete or contains unknown members');
-  if(hash(await evidencePins(directory,candidate.branch,signal))!==hash(candidate.proofFiles))
+  if(hash(await evidencePins(directory,candidate.branch,signal,verifiedEmptyAnswers))!==hash(candidate.proofFiles))
     fail('Original joint proof changed during cohort read');
   signal?.throwIfAborted();
   return {candidate,patchSet,retainedAllParts:false,

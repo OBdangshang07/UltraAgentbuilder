@@ -113,17 +113,24 @@ final class ReferenceWorldAssemblyCandidateReceipt {
         yes(set,"fullAssetProcessed");no(set,"partialPublicationAllowed","serverBaselineVerified","physicsVerified","canAuthorizePlacement");zero(set,"worldWrites");
         var hashes=set.getAsJsonArray("partHashes");if(hashes.size()!=count)throw new IllegalStateException("原整组patch hash遗漏");var unique=new HashSet<String>();for(var v:hashes)if(!v.isJsonPrimitive()||!v.getAsJsonPrimitive().isString()||!v.getAsString().matches("[a-f0-9]{64}")||!unique.add(v.getAsString()))throw new IllegalStateException("原整组patch hash重复或无效");
         var names=new HashSet<String>(Set.of("records.json","patch-set.json"));for(int i=0;i<count;i++){names.add(name("part",i));names.add(name("preview",i));}
-        pins(c.getAsJsonArray("files"),names,AssemblyLimits.candidateBytes(),false,cancelled);pins(c.getAsJsonArray("proofFiles"),null,512L*1024*1024,true,cancelled);
+        var generation=r.getAsJsonObject("request").getAsJsonObject("generation");
+        boolean boundedCapacity=generation.has("assemblyProviderRecovery")&&text(generation,"assemblyProviderRecovery").equals("bounded")&&number(p,"providerRetries")==2;
+        pins(c.getAsJsonArray("files"),names,AssemblyLimits.candidateBytes(),false,false,cancelled);
+        pins(c.getAsJsonArray("proofFiles"),null,512L*1024*1024,true,boundedCapacity,cancelled);
         file(c,"patch-set.json",set);allowed(cancelled);return new Metadata(r,s,c,set);
     }
     private static String name(String type,int index){return type+"-"+String.format(Locale.ROOT,"%03d",index)+".json";}
     static int candidateFileLimit(){return 2+2*SelectionLimits.assemblyParts();}
-    private static void pins(JsonArray pins,Set<String> expected,long maximum,boolean proofs,BooleanSupplier cancelled){
+    private static void pins(JsonArray pins,Set<String> expected,long maximum,boolean proofs,boolean boundedCapacity,BooleanSupplier cancelled){
         if(pins==null||pins.isEmpty()||pins.size()>(proofs?4096:candidateFileLimit()))throw new IllegalStateException("原整组文件清单超额或缺失");var names=new HashSet<String>();long total=0;
         for(var v:pins){allowed(cancelled);var pin=v.getAsJsonObject();keys(pin,"path","bytes","sha256");String path=text(pin,"path");
             if(path.length()>2048||path.startsWith("/")||path.contains("\\")||path.contains(":")||Arrays.stream(path.split("/",-1)).anyMatch(segment->segment.isEmpty()||segment.equals(".")||segment.equals("..")||!segment.matches("[A-Za-z0-9._-]+"))||!names.add(path))throw new IllegalStateException("原整组文件清单路径不安全或重复");
             digest(pin,"sha256");long size=number(pin,"bytes"),limit=proofs?64L*1024*1024:path.equals("records.json")?AssemblyLimits.recordsBytes():AssemblyLimits.partBytes();
-            if(size<1||size>limit||(total+=size)>maximum)throw new IllegalStateException("原整组文件清单字节超额");
+            // Bridge independently audits this CLOSED failure before publishing.
+            // This pin is not a model result, retry permission or world authority.
+            boolean emptyCapacityAnswer=proofs&&boundedCapacity&&size==0&&path.matches("codex-response-[-\\w]{1,96}/answer-1\\.txt")
+                &&text(pin,"sha256").equals(ContextReceipt.sha256(new byte[0]));
+            if(size<1&&!emptyCapacityAnswer||size>limit||(total+=size)>maximum)throw new IllegalStateException("原整组文件清单字节超额");
         }
         if(expected!=null&&!names.equals(expected))throw new IllegalStateException("原整组文件清单遗漏或增加分片");
     }

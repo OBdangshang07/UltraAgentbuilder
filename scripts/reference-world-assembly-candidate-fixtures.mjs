@@ -6,6 +6,7 @@ import {jointResourceFixture,jointResourceBytes} from '../tests/bridge/joint-ass
 import {createReferenceWorldAssemblyJobRegistry} from '../bridge/reference-world-assembly-job-registry.mjs';
 import {readReferenceWorldAssemblyJobRecord} from '../bridge/reference-world-assembly-job-data.mjs';
 import {createReferenceWorldAssemblyRunner} from '../bridge/reference-world-assembly-runner.mjs';
+import {syntheticRecoveryTurn,capacityMessage} from '../tests/bridge/assembly-provider-recovery-fixtures.mjs';
 
 /** Production whole candidate, native/shared orchestration and read workers;
  * authored pixels, captures, responses and upload evidence are SYNTHETIC.
@@ -17,7 +18,10 @@ export async function makeReferenceWorldAssemblyCandidateFixtures(){
   for(const tier of ['lite','ultra']){
     const cleanup=[];
     try{
-      const h=await jointResourceFixture({after:fn=>cleanup.push(fn)},{tier});
+      const bounded=tier==='ultra';
+      const h=await jointResourceFixture({after:fn=>cleanup.push(fn)},{tier,
+        ...(bounded?{generationOverrides:{assemblyProviderRecovery:'bounded'},
+          providerTurn:({request,index,answer})=>syntheticRecoveryTurn(request,{index,answer,selected:index===1?{failure:capacityMessage}:{}})}:{})});
       const registry=await createReferenceWorldAssemblyJobRegistry({dataDir:h.f.dataDir,resources:h.resources});cleanup.push(()=>registry.close());
       h.f.jobDirectory=path.join(registry.root,h.f.ownerId);
       const request={format:'ReferenceWorldAssemblyJobRequest',version:2,purpose:'reference-world-assembly',contextId:h.contextId,
