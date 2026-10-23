@@ -4,6 +4,7 @@ import {REFERENCE_WORLD_ASSEMBLY_JOB_LIMITS} from '../contracts/reference-world-
 import {referenceWorldAssemblyOriginalController} from './reference-world-assembly-job-registry.mjs';
 import {reserveReferenceWorldAssemblyExecution,finishReferenceWorldAssemblyExecution} from './reference-world-assembly-execution.mjs';
 import {runReferenceWorldAssembly} from './reference-world-assembly.mjs';
+import {persistAssemblyTerminalFailure} from './reference-world-assembly-terminal-failure.mjs';
 
 const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};
 const failure=(message,statusCode=409)=>Object.assign(Error(message+'; no original task adoption or resend'),{statusCode});
@@ -18,6 +19,18 @@ export function createReferenceWorldAssemblyRunner(options) {
   const tasks=new Map();let closed=false,active=null;
   const checkpoint=()=>{if(closed)throw failure('Original full joint runner closed',503);};
   const idCheck=id=>{if(typeof id!=='string'||!REFERENCE_OWNER.test(id))throw failure('Exact original full-task UUID required',400);};
+  async function recordFailure(task,error,state){
+    task.error=error;task.state=state;
+    // No packet means reservation never issued an original job directory.
+    // Never invent one or write into a different/reopened task to log a cause.
+    if(!task.packet)return;
+    const p=task.packet;
+    try{task.privateDiagnostic=await persistAssemblyTerminalFailure({directory:p.directory,
+      binding:{id:task.id,requestHash:p.requestHash,preparationHash:p.prepared.preparationHash,runtimeHash:p.prepared.runtimeHash,
+        maximumCalls:p.prepared.maximumCalls,reservedCalls:task.reservedCalls,stageEventsObserved:task.stageEvents},
+      phase:task.localPhase??'starting',state,error});}
+    catch(diagnosticError){task.privateDiagnosticError=diagnosticError;}
+  }
   function view(task) {
     return freeze({format:'ReferenceWorldAssemblyRunnerStatus',version:2,purpose:'reference-world-assembly',id:task.id,
       state:task.state,stageEventsObserved:task.stageEvents,reservedCalls:task.reservedCalls,
@@ -47,17 +60,18 @@ export function createReferenceWorldAssemblyRunner(options) {
               if(!/^[a-f0-9]{64}$/.test(status?.id??'')||!['waiting','complete'].includes(status.state))throw Error('Exact original native status required');
               task.nativeEvidence={id:status.id,state:status.state,...(status.state==='complete'?{evidenceHash:status.evidenceHash}:{})};
             }}),
+            onLocalPhase:phase=>{task.localPhase=phase;},
             onStage:async(_,context)=>{task.stageEvents++;if(context?.reservedCalls!==undefined)task.reservedCalls=context.reservedCalls;}});
           task.reservedCalls=result.candidate.reservedCalls;
           task.candidate={candidateHash:result.candidate.candidateHash,patchSetHash:result.candidate.patchSetHash,
             partCount:result.candidate.partCount,operationCount:result.candidate.operationCount,
             canAuthorizePlacement:false,partIsApplyScope:false};
           task.state='preview-ready';
-        }catch(error){task.error=error;task.state=task.controller.signal.aborted?'cancelled-needs-original-inspection':'failed-needs-original-inspection';}
+        }catch(error){await recordFailure(task,error,task.controller.signal.aborted?'cancelled-needs-original-inspection':'failed-needs-original-inspection');}
         finally{finishReferenceWorldAssemblyExecution(execution);if(active===task)active=null;}
         return view(task);
       })();
-    })().catch(error=>{task.error=error;task.state='start-rejected';if(task.execution)finishReferenceWorldAssemblyExecution(task.execution);
+    })().catch(async error=>{await recordFailure(task,error,'start-rejected');if(task.execution)finishReferenceWorldAssemblyExecution(task.execution);
       if(active===task)active=null;throw error;});
     await task.ready;return view(task);
   }

@@ -12,6 +12,7 @@ import {REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY} from '../../bridge/reference-wor
 import {NATIVE_RENDERER} from '../../bridge/native-evidence.mjs';
 import {fixtureUpload,fixturePng} from './native-evidence-fixtures.mjs';
 import {hash} from '../../src/generation/compiler.mjs';
+import {syntheticJointTaskWait} from './synthetic-joint-task-wait.mjs';
 
 // Real paired HTTP, registry, ledger, shared pipeline and original native
 // transport. Provider answers and transparent PNG pixels are SYNTHETIC: these
@@ -60,8 +61,10 @@ async function fixture(t,{tier='lite',sending=true,afterGenerate,generationOverr
     assert.equal(requestData.requestHash,id);assert.equal(requestData.canAuthorizePlacement,false);return requestData;
   }
   async function until(predicate,{render=false}={}) {
-    const deadline=Date.now()+180000,uploaded=new Set();
-    while(Date.now()<deadline){await heartbeat();const current=await status();if(predicate(current))return current;
+    const wait=syntheticJointTaskWait(),uploaded=new Set();let last=null,polls=0;
+    while(!wait.expired()){await heartbeat();const current=await status();last=current;polls++;
+      wait.observe(current,{syntheticCalls:h.calls.length,uploadedNativeRequests:uploaded.size});if(wait.expired())break;
+      if(predicate(current))return current;
       if(render&&current.nativeEvidence?.state==='waiting'&&!uploaded.has(current.nativeEvidence.id)){
         const data=await native(current.nativeEvidence.id),accepted=await request(nativeRoute(data.requestHash)+'/upload',
           {method:'POST',value:fixtureUpload(data)});
@@ -71,7 +74,9 @@ async function fixture(t,{tier='lite',sending=true,afterGenerate,generationOverr
       if(current.state!=='running'&&current.state!=='starting')assert.fail('Original joint task stopped: '+JSON.stringify(current));
       await delay(50);
     }
-    assert.fail('Original synthetic joint task did not reach its expected state');
+    // Keep the actual last PUBLIC status in the failure output. Do not infer
+    // provider failure or relax production deadlines from a test wait timeout.
+    assert.fail('Original synthetic joint task did not reach its expected state: '+JSON.stringify({...wait.snapshot(),polls,syntheticCalls:h.calls.length,uploadedNativeRequests:uploaded.size,last}));
   }
   return {...h,request,body,job,heartbeat,status,native,nativeRoute,until,reopen,close:()=>app.close(),
     queries:()=>queries,setImages:value=>{supportsImages=value;},setEfforts:value=>{efforts=value;},

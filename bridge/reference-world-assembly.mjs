@@ -198,13 +198,15 @@ async function compileFinal(directory, scene, policy, signal) {
  * sees references ONLY in the existing prelude and exact native pictures in
  * review. Every stage receives the SAME original environment and scope.
  * This function is internal until normal HTTP/UI and game gates are complete. */
-export async function runReferenceWorldAssembly({directory,referenceInput,preparationHash,adapter,nativeEvidence,signal,onStage,onRecovery,execution=null,retainCandidateParts=true}) {
+export async function runReferenceWorldAssembly({directory,referenceInput,preparationHash,adapter,nativeEvidence,signal,onStage,onRecovery,onLocalPhase=()=>{},execution=null,retainCandidateParts=true}) {
   if(typeof retainCandidateParts!=='boolean')throw Error('Exact internal candidate retention mode required');
+  if(typeof onLocalPhase!=='function')throw Error('Internal read-only phase observer required');
   directory = await fs.realpath(path.resolve(directory));
   if (active.has(directory)) throw Error('Original full joint task already running; no concurrent dispatch');
   active.add(directory);
   try {
     if (!(signal instanceof AbortSignal) || typeof onStage !== 'function' || typeof nativeEvidence !== 'function') throw Error('Original task signal/stage observer/native renderer required');
+    onLocalPhase('source-validation');
     const original = await readFrozenReferenceWorldAssembly({directory,referenceInput}), p = original.prepared;
     if (p.preparationHash !== preparationHash) throw Error('Exact confirmed full-task preparation required');
     if (execution!==null)await beginReferenceWorldAssemblyExecution({execution,directory,prepared:p,signal});
@@ -213,6 +215,7 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
         throw Error('Original candidate publication already exists; use the read-only result, never restart or replace it');}
       catch (error) {if (error.code !== 'ENOENT') throw error;}
     }
+    onLocalPhase('runtime-validation');
     if (await assemblyRuntimeIdentity() !== p.runtimeHash) throw Error('Original full-task runtime changed');
     const recheck = async (freshCall,index) => {
       signal.throwIfAborted();const current = await readFrozenReferenceWorldAssembly({directory,referenceInput});
@@ -252,6 +255,7 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
       return output.spec;
     };
     const rules = await fs.readFile(new URL('../prompts/scene-v1.md',import.meta.url),'utf8');
+    onLocalPhase('generation');
     const result = await runDurableAssembly({directory,requestHash:p.preparationHash,runtimeHash:p.runtimeHash,
       // Recovery validates the exact confirmed identity, never adapter defaults.
       model:p.selected.model,effort:p.selected.effort,
@@ -263,7 +267,9 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     if (result.summary.sourceHash !== hash(result.scene) || result.summary.finalTextReviewCurrent !== true
       || result.summary.visualReviewCurrent !== true || result.summary.designQuality?.nativeMaterialReview !== true)
       throw Error('Current complete native review required; intermediate/old-image task cannot publish a joint patch');
+    onLocalPhase('final-native-compile');
     const final = await compileFinal(directory,result.scene,original.reference.preparation.policy,signal);
+    onLocalPhase('final-native-identity');
     if (final.compiled.manifest.scene?.sourceHash !== result.summary.sourceHash) throw Error('Final original SceneSpec/native source differs');
     const baseline = path.resolve(result.summary.lastAcceptedDirectory);
     if (!baseline.startsWith(directory+path.sep)) throw Error('Final reviewed diagnostic source outside original job');
@@ -272,6 +278,7 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
     if (diagnostic.scene?.sourceHash !== result.summary.sourceHash || hash(diagnosticCells) !== diagnostic.cellsHash
       || diagnostic.cellsHash !== final.compiled.manifest.cellsHash || !diagnosticCells.equals(final.compiled.binary))
       throw Error('Final native cells differ from original reviewed geometry; no substitute/rebase');
+    onLocalPhase('candidate-publication');
     const saved = await saveReferenceWorldAssemblyCandidate({directory,original,result,signal,retainParts:retainCandidateParts});
     const lowered = {patchSet:saved.patchSet,binding:saved.binding,
       ...(retainCandidateParts?{patch:saved.patch,patches:saved.patches}:{}),retainedAllParts:saved.retainedAllParts};

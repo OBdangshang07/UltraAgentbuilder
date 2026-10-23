@@ -10,6 +10,7 @@ import {reserveReferenceWorldAssemblyExecution} from '../../bridge/reference-wor
 import {runReferenceWorldAssembly} from '../../bridge/reference-world-assembly.mjs';
 import {hash} from '../../src/generation/compiler.mjs';
 import {syntheticRecoveryTurn,capacityMessage} from './assembly-provider-recovery-fixtures.mjs';
+import {REFERENCE_ASSEMBLY_TERMINAL_FAILURE_FILE} from '../../bridge/reference-world-assembly-terminal-failure.mjs';
 
 // Real controller/ledger/shared pipeline, authored synthetic pixels/responses.
 // No paid provider, game, account, snapshot refresh or world writer.
@@ -36,6 +37,7 @@ async function verifySuccess(h,status) {
   assert.equal(status.canAuthorizePlacement,false);assert.equal(status.serverBaselineVerified,false);
   assert.equal(status.providerReceiptsIndependentlyAudited,false);assert.equal(status.worldWrites,0);
   assert.equal(status.reservedCalls,h.calls.length);assert.equal(status.candidate.partIsApplyScope,false);
+  await assert.rejects(fs.stat(path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_TERMINAL_FAILURE_FILE)),{code:'ENOENT'});
   assert.equal(JSON.stringify(status).includes(h.f.dataDir),false);assert.doesNotMatch(JSON.stringify(status),/referenceInput|ownerReference|\.png/);
   const metadata=await h.operation('metadata',{referenceInput:h.executionOptions.referenceInput,
     preparationHash:h.prepared.preparationHash,candidateHash:status.candidate.candidateHash});
@@ -150,7 +152,14 @@ test('original task-start marker tampering stops further dispatch, never adopts 
   const runner=h.makeRunner(adapter);await runner.start(h.f.ownerId);const failed=await runner.wait(h.f.ownerId);
   assert.equal(failed.state,'failed-needs-original-inspection');assert.equal(h.calls.length,1);
   assert.equal(failed.automaticRetries,0);assert.equal(failed.candidate,null);
+  const diagnosticFile=path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_TERMINAL_FAILURE_FILE),diagnostic=await load(diagnosticFile),first=await fs.readFile(diagnosticFile);
+  assert.equal(diagnostic.state,failed.state);assert.equal(diagnostic.id,h.f.ownerId);assert.equal(diagnostic.phase,'generation');
+  assert.match(diagnostic.error.message.text,/task-start evidence changed/);
+  assert.equal(diagnostic.requestHash,failed.requestHash);assert.equal(diagnostic.preparationHash,failed.preparationHash);
+  assert.equal(diagnostic.allowsNewModelCall,false);assert.equal(diagnostic.providerOutcome,'not-established-by-local-error');
+  assert.equal(JSON.stringify(failed).includes('task-start evidence changed'),false);assert.equal(JSON.stringify(failed).includes(diagnosticFile),false);
   assert.deepEqual(await runner.start(h.f.ownerId),failed);assert.equal(h.calls.length,1);
+  assert.deepEqual(await fs.readFile(diagnosticFile),first);
 });
 
 test('complete ORIGINAL candidate pins task-start evidence; changed marker cannot be served as a transport part',async t=>{
@@ -176,6 +185,8 @@ test('explicit cancel retires original execution and later duplicate start canno
   const runner=h.makeRunner(adapter);await runner.start(h.f.ownerId);await waiting;const stopped=await runner.cancel(h.f.ownerId);
   assert.equal(stopped.state,'cancelled-needs-original-inspection');assert.equal(h.calls.length,1);
   assert.equal(stopped.reservedCalls,1);assert.equal(stopped.automaticRetries,0);assert.equal(stopped.candidate,null);
+  const diagnostic=await load(path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_TERMINAL_FAILURE_FILE));
+  assert.equal(diagnostic.state,stopped.state);assert.equal(diagnostic.phase,'generation');assert.equal(diagnostic.allowsNewModelCall,false);
   assert.deepEqual(await runner.start(h.f.ownerId),stopped);assert.equal(h.calls.length,1);assert.equal(runner.busy(),false);
 });
 
@@ -183,4 +194,17 @@ test('close rejects new starts and does not publish or reissue an uncertain firs
   const h=await fixture(t),runner=h.makeRunner(),work=runner.start(h.f.ownerId),rejected=assert.rejects(work,/closed|abort/);
   await runner.close();await rejected;assert.equal(runner.busy(),false);
   await assert.rejects(runner.start(h.f.ownerId),/closed/);assert.equal(h.calls.length,0);
+});
+
+test('diagnostic write failure preserves the actual task failure and never overwrites or retries',async t=>{
+  const h=await fixture(t),file=path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_TERMINAL_FAILURE_FILE),original=Buffer.from('retained partial diagnostic');
+  let modelChecks=0;
+  // Inject AFTER the original exact dispatch allowlist was checked. A random
+  // file present before dispatch correctly prevents that dispatch altogether.
+  const runner=h.makeRunner({models:async()=>{modelChecks++;await fs.writeFile(file,original,{flag:'wx'});throw Error('synthetic model advertisement failure');},generate:async()=>{throw Error('must not dispatch');}});
+  await runner.start(h.f.ownerId);const failed=await runner.wait(h.f.ownerId);
+  assert.equal(failed.state,'failed-needs-original-inspection');assert.equal(failed.candidate,null);assert.equal(h.calls.length,0);
+  assert.equal(failed.automaticRetries,0);assert.deepEqual(await fs.readFile(file),original);
+  assert.deepEqual(await runner.start(h.f.ownerId),failed);assert.equal(modelChecks,1);
+  assert.equal(JSON.stringify(failed).includes('synthetic model advertisement failure'),false);
 });

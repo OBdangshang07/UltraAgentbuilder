@@ -279,8 +279,14 @@ test('hash of reference transport object cannot substitute for the original froz
   assert.equal(call.value.state,'error');assert.equal(call.value.providerBinding,undefined);
 });
 
-for(const mode of ['legacy-lite','independent-lite','independent-ultra'])test(mode+' joint pipeline uses original CodexAdapter stdio and exact frozen picture binding',{timeout:180000},async t=>{
+for(const mode of ['legacy-lite','independent-lite','independent-ultra'])test(mode+' joint pipeline uses original CodexAdapter stdio and exact frozen picture binding',{
+  // SYNTHETIC17-turn adapter/compile/disk fixture, not a production model
+  // timeout. Keep a fixed ceiling without cancelling productive slow-host QA.
+  timeout:mode==='independent-ultra'?900000:180000,
+},async t=>{
   const staged=mode==='independent-ultra',h=await setup(t,{independent:mode!=='legacy-lite',tier:staged?'ultra':'lite',staged,images:2});
+  const interrupted=()=>{const records=h.observations.at(-1)??[],last=records.at(-1);t.diagnostic('Original synthetic stdio wait interrupted: '+JSON.stringify({mode,stageEvents:h.observations.length,reservedCalls:records.length,last:last?{index:last.index,phase:last.phase,state:last.state}:null,actualModelCalls:0}));};
+  t.signal.addEventListener('abort',interrupted,{once:true});t.after(()=>t.signal.removeEventListener('abort',interrupted));
   await freezeReferenceWorldAssembly({...h.prepareOptions,send:h.send});
   const cliRoot=path.join(h.f.dataDir,'synthetic-cli'),auditDirectory=path.join(h.f.dataDir,'synthetic-stdio');
   await fs.mkdir(cliRoot);await fs.mkdir(auditDirectory);

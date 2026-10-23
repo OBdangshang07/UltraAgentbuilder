@@ -40,7 +40,7 @@ import {isAssemblyProviderRecovery,stripAssemblyProviderRecovery} from './assemb
 import {representativeEvidenceEnabled} from '../contracts/assembly-evidence-policy.mjs';
 import {createAssemblyCameraBasis,verifyAssemblyCameraBasis} from './assembly-camera-evidence.mjs';
 import {stagedDesignCorrectionReserve} from '../contracts/assembly-completion-reserve.mjs';
-import {assemblyWorldContextData,WORLD_ASSEMBLY_RULES} from '../src/world/assembly-context.mjs';
+import {assemblyGenerationContext} from '../src/world/assembly-coupled-context.mjs';
 
 const PLAN=`Return a SceneAssemblyPlan: an original whole-building design intent, a complete full-height SceneSpec spatial skeleton and an adaptive list of 2..maxPackages design work packages. Do NOT return a finished building yet or shrink the requested scale. The skeleton contains real floor elevations, continuous core/stairs, entry and interfaces, not placeholders named after missing geometry. Every package must have meaningful visible detail work remaining. Choose architectural composition and material language before decomposition; no stock building template. Use fewer packages when appropriate, not arbitrary padding. Higher tiers separate more genuinely distinct tasks: functional zones, representative modules, special floors, facade corners/joints and landscape as relevant to the requested building. Typical storeys and repeated furniture use validated reusable modules, not one model call per storey/object.
 Each package has stable id (<=12 chars), purpose, dependencies, bounded WORLD regions and exclusive editableComponents from the skeleton. Unassigned initial components are read-only; no two packages may own the same mutable component. interfaces are indices into scene.constraints.passages, which all later edits must preserve. Anchors and local coordinates retain SceneSpec semantics. The task tree is orchestration data; it does not add arbitrary nesting/code to SceneSpec. Reserve actual space and precise ownership for later details, but do not grant blanket overwrite permission. Choose regions with room for intended projections. A package may add namespaced components/modules/material roles id__name and furnish ordinary mass/room air; it may not erase another package's solids, explicit voids or reservations. Plan valid shared boundaries and access before furnishing. All required interior/walkable functionality remains true. No images were supplied.`;
@@ -63,7 +63,7 @@ export async function runSceneAssembly({directory,responseDirectory=directory,pr
   if(!policy.assembly?.providerRecovery&&providerRecovery)throw Error('Legacy task cannot acquire provider recovery authority');
   const capacityProgress=providerRecovery?.isVerifiedCapacityRetry;
   const reference=await prepareAssemblyReferenceAnalysis({directory:responseDirectory,referenceInput,policy,prompt,runtimeHash,resume});
-  const worldData=worldContext===undefined?null:assemblyWorldContextData(worldContext);
+  const worldGeneration=worldContext===undefined?null:assemblyGenerationContext(worldContext),worldData=worldGeneration?.data??null;
   if(worldData&&(!reference||resume||policy.assembly.designReview?.mode!=='native'))throw Error('World/reference assembly requires a new shared reference task and native review');
   let referenceArchitecture=null;
   if(resume&&[3,4].includes(policy.assembly.quality?.version))throw new Error('Quality v3/v4 supports durable same-task replay, not engineering continuation; no model called');
@@ -91,7 +91,7 @@ export async function runSceneAssembly({directory,responseDirectory=directory,pr
     await write(root,'resume.json',{...restored.provenance,sourceDirectory:restored.sourceDirectory,files});await onStage(structuredClone(records));signal.throwIfAborted();
   }
   const stage=async(phase,task,input,instructions,schema,process,images=[],stageReferenceInput=undefined)=>{
-    if(worldData){input={...input,worldContext:structuredClone(worldData)};instructions+='\n'+WORLD_ASSEMBLY_RULES;}
+    if(worldData){input={...input,worldContext:structuredClone(worldData)};instructions+='\n'+worldGeneration.rules;}
     const referenceStage=['reference-analysis','correct-reference-analysis'].includes(phase);
     if(stageReferenceInput&&!referenceStage||referenceStage&&!stageReferenceInput||stageReferenceInput&&images.length)
       throw Error('Reference prelude and native review attachments cannot be mixed');
