@@ -38,6 +38,6 @@ Write-VoxelStage 'serialize'
 `;
   const child=spawn(path.join(process.env.SystemRoot??'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoLogo','-NoProfile','-NonInteractive','-Command',script],{windowsHide:true,shell:false,stdio:['ignore','pipe','pipe']});
-  const output=await collectWindowsOwnerQuery(child,{setTimer:callback=>setTimeout(callback,60000)});
+  const output=await collectWindowsOwnerQuery(child,{timeoutMs:60000,activeTimeoutMs:60000});
   return validateWindowsOwnerObservation(JSON.parse(output.replace(/^\uFEFF/,'')));
 }

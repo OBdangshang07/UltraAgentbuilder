@@ -7,23 +7,24 @@ import {collectWindowsOwnerQuery, publicWindowsOwnerQueryFailure, WINDOWS_OWNER_
 import * as bridgeObservation from '../../bridge/world-patch-owner-observation.mjs';
 import * as scriptObservation from '../../scripts/world-patch-owner-observation.mjs';
 
-function fixture() {
+function fixture(options={}) {
   const child = new EventEmitter();
   child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
-  let timerCallback, timerCleared = false, timerUnref = false, kills = 0;
+  const timers = []; let kills = 0, monotonicTime = 0;
   child.kill = () => { kills++; return true; };
   const pending = collectWindowsOwnerQuery(child, {
     setTimer(callback, milliseconds) {
-      assert.equal(milliseconds, 30000); timerCallback = callback;
-      return {unref() { timerUnref = true; }};
+      assert.equal(milliseconds, timers.length === 0 ? options.timeoutMs??45000 : options.activeTimeoutMs??30000);
+      const timer = {callback, milliseconds, cleared:false, unreferenced:false, unref() { this.unreferenced = true; }};
+      timers.push(timer); return timer;
     },
-    clearTimer() { timerCleared = true; }
+    clearTimer(timer) { timer.cleared = true; }, now: () => monotonicTime, ...options
   });
   // Observe rejection immediately so fake close events never leave an unhandled
   // rejection. Still assert the original promise and exact diagnostic later.
   pending.catch(() => {});
-  return {child, pending, timeout: () => timerCallback(), kills: () => kills,
-    timerCleared: () => timerCleared, timerUnref: () => timerUnref};
+  return {child, pending, timeout: () => timers[0].callback(), activeTimeout: () => timers[1].callback(), timers, at: value => {monotonicTime=value;},
+    kills: () => kills, timerCleared: () => timers.every(t => t.cleared), timerUnref: () => timers.every(t => t.unreferenced)};
 }
 test('both owner implementations retain exact identity and both independent boot checks', async () => {
   for (const file of ['bridge/world-patch-owner-observation.mjs']) {
@@ -55,7 +56,7 @@ async function failure(f, reason, phase = null) {
   return error;
 }
 test('owner query has bounded cold-start headroom and retains byte limits and stdout-only data', async () => {
-  assert.deepEqual(WINDOWS_OWNER_QUERY_LIMITS, {timeoutMs: 30000, stdoutBytes: 8192, stderrBytes: 8192});
+  assert.deepEqual(WINDOWS_OWNER_QUERY_LIMITS, {timeoutMs: 45000, activeTimeoutMs:30000, stdoutBytes: 8192, stderrBytes: 8192});
   assert.ok(Object.isFrozen(WINDOWS_OWNER_QUERY_LIMITS));
   const f = fixture(); f.child.emit('spawn');
   f.child.stderr.emit('data', Buffer.from('private-query-text\nVOXEL_OWNER_STAGE:serialize\n'));
@@ -87,17 +88,62 @@ test('a timeout with complete stdout and later zero exit remains rejected, not r
   assert.equal(error.observationDiagnostic.ownershipRecovered, false);
   assert.equal(f.kills(), 1);
 });
-test('one real synthetic helper can close after the former 15-second bound without acquiring authority', {timeout: 45000}, async () => {
+test('one real synthetic cold helper can report its first phase after30s and close without acquiring authority', {timeout: 60000}, async () => {
   const data = {synthetic: true, ownerObserved: false, ownershipRecovered: false, canAuthorizePlacement: false};
   const child = spawn(process.execPath, ['-e',
-    `process.stderr.write('VOXEL_OWNER_STAGE:serialize\\n');setTimeout(()=>process.stdout.write(${JSON.stringify(JSON.stringify(data)+'\n')}),16000);`],
+    `setTimeout(()=>{process.stderr.write('VOXEL_OWNER_STAGE:serialize\\n');setTimeout(()=>process.stdout.write(${JSON.stringify(JSON.stringify(data)+'\n')}),100);},31000);`],
   {windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe']});
   const started = process.hrtime.bigint(), output = await collectWindowsOwnerQuery(child);
   assert.equal(child.exitCode, 0); assert.equal(child.signalCode, null);
-  assert.ok(Number(process.hrtime.bigint() - started) / 1e6 >= 16000);
+  assert.ok(Number(process.hrtime.bigint() - started) / 1e6 >= 31000);
   const value = JSON.parse(output); assert.deepEqual(value, data);
   assert.throws(() => bridgeObservation.validateWindowsOwnerObservation(value));
   assert.throws(() => scriptObservation.validateWindowsOwnerObservation(value));
+});
+test('only the first complete allowlisted phase arms the30s active bound; later phases cannot renew it',async()=>{
+  const f=fixture();assert.deepEqual(f.timers.map(t=>t.milliseconds),[45000]);
+  f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:unknown-private\nVOXEL_OWNER_STAGE:boot-before'));
+  assert.equal(f.timers.length,1);f.child.stderr.emit('data',Buffer.from('\nVOXEL_OWNER_STAGE:process\n'));
+  assert.deepEqual(f.timers.map(t=>t.milliseconds),[45000,30000]);const active=f.timers[1];
+  f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:boot-after\nVOXEL_OWNER_STAGE:serialize\n'));
+  assert.equal(f.timers.length,2);assert.equal(f.timers[1],active);
+  f.child.stdout.emit('data',Buffer.from('synthetic-only'));f.child.emit('close',0,null);
+  assert.equal(await f.pending,'synthetic-only');assert.equal(f.kills(),0);assert.ok(f.timerCleared());
+});
+test('the30s active deadline rejects while cold overall budget remains and still awaits original close',async()=>{
+  const f=fixture();f.child.emit('spawn');f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:process\n'));
+  let settled=false;f.pending.then(()=>settled=true,()=>settled=true);f.activeTimeout();
+  f.child.stdout.emit('data',Buffer.from('{"synthetic":"late-complete"}'));f.child.emit('exit',0);await Promise.resolve();
+  assert.equal(settled,false);assert.equal(f.kills(),1);assert.equal(f.timerCleared(),false);
+  f.child.emit('close',0,null);await failure(f,'timeout','process');
+});
+test('late marker cannot extend the45s overall deadline and unmarked startup stays bounded',async()=>{
+  for(const marker of [null,'boot-before']){const f=fixture();f.child.emit('spawn');if(marker)f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:'+marker+'\n'));
+    f.timeout();f.child.emit('close',0,null);await failure(f,'timeout',marker);assert.equal(f.kills(),1);}
+});
+test('a delayed timer callback cannot admit a helper closed at or beyond the overall deadline',async()=>{
+  for(const closedAt of [45000,45001]){const f=fixture();f.child.emit('spawn');f.child.stdout.emit('data',Buffer.from('synthetic-complete'));
+    f.at(closedAt);f.child.emit('close',0,null);await failure(f,'timeout');assert.equal(f.kills(),0);}
+  const fresh=fixture();fresh.child.stdout.emit('data',Buffer.from('synthetic-only'));fresh.at(44999);fresh.child.emit('close',0,null);assert.equal(await fresh.pending,'synthetic-only');
+});
+test('monotonic active deadline remains30s even if no timer callback has fired',async()=>{
+  const f=fixture();f.at(10000);f.child.emit('spawn');f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:process\n'));
+  f.at(40000);f.child.stdout.emit('data',Buffer.from('synthetic-complete'));f.child.emit('close',0,null);await failure(f,'timeout','process');assert.equal(f.kills(),0);
+});
+test('late first phase within hard bound still has its own nonrenewable active window',async()=>{
+  const f=fixture();f.at(31000);f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:serialize\n'));f.at(31100);
+  f.child.stdout.emit('data',Buffer.from('synthetic-only'));f.child.emit('close',0,null);assert.equal(await f.pending,'synthetic-only');assert.ok(f.timerCleared());
+});
+test('legacy fixture may explicitly bound both windows at60s, never unbounded or active beyond overall',async()=>{
+  const f=fixture({timeoutMs:60000,activeTimeoutMs:60000});f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:serialize\n'));f.at(50000);f.child.stdout.emit('data',Buffer.from('synthetic-control-only'));f.child.emit('close',0,null);assert.equal(await f.pending,'synthetic-control-only');
+  for(const value of [{timeoutMs:0},{timeoutMs:60001},{timeoutMs:Infinity},{activeTimeoutMs:0},{activeTimeoutMs:45001}])assert.throws(()=>collectWindowsOwnerQuery(f.child,value),/Invalid bounded owner query allowance/);
+});
+test('an invalid/nonmonotonic injected clock never yields an owner observation',async()=>{
+  for(const closedAt of [-1,NaN]){const f=fixture();f.at(closedAt);f.child.emit('close',0,null);await failure(f,'query-failed');assert.equal(f.kills(),0);}
+});
+test('invalid first-phase clock cannot disable the active window while final close clock looks valid',async()=>{
+  for(const phaseAt of [-1,NaN,Infinity]){const f=fixture();f.at(phaseAt);f.child.stderr.emit('data',Buffer.from('VOXEL_OWNER_STAGE:process\n'));
+    f.at(1);f.child.emit('close',0,null);await failure(f,'query-failed','process');assert.equal(f.kills(),0);}
 });
 test('stdout over limit fails even with zero helper exit and valid prefix', async () => {
   const f = fixture(); f.child.stdout.emit('data', Buffer.alloc(8193, 32));
