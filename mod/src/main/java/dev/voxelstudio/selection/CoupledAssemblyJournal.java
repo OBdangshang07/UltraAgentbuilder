@@ -136,12 +136,12 @@ final class CoupledAssemblyJournal {
 
     /** Reconstruct facts ONLY. No factory from this result to Live or a native
      * writer exists. A missing/half/ambiguous receipt cannot become a resume. */
-    record Review(UUID id,CoupledAssemblyBinding binding,List<WorldPatchCompiler.Write> confirmed,int confirmedGroups,int intentBatches,int missingReceipts,Outcome outcome,String issue){
-        Review{confirmed=List.copyOf(confirmed);}boolean needsReview(){return issue!=null||missingReceipts>0||outcome==null;}
+    record Review(UUID id,CoupledAssemblyBinding binding,List<WorldPatchCompiler.Write> confirmed,int confirmedGroups,int intentBatches,int missingReceipts,Outcome outcome,String issue,String planHash,UUID player,List<AssemblyCoupledCompiler.Group> confirmedSchedule){
+        Review{confirmed=List.copyOf(confirmed);confirmedSchedule=List.copyOf(confirmedSchedule);}boolean needsReview(){return issue!=null||missingReceipts>0||outcome==null;}
         boolean canAuthorizePlacement(){return false;}boolean worldDurabilityVerified(){return false;}
     }
     static Review inspect(Path directory){
-        UUID id=null;CoupledAssemblyBinding binding=null;var confirmed=new ArrayList<WorldPatchCompiler.Write>();int groups=0,batches=0,missing=0;Outcome outcome=null;
+        UUID id=null;CoupledAssemblyBinding binding=null;Plan rebuilt=null;var confirmed=new ArrayList<WorldPatchCompiler.Write>();int groups=0,batches=0,missing=0;Outcome outcome=null;
         try{
             directory=directory.toAbsolutePath().normalize();WorldPatchJournalFiles.directory(directory);var v=WorldPatchJson.parse(WorldPatchJournalFiles.read(directory.resolve("plan.json"),METADATA),()->false);
             WorldPatchJson.keys(v,"format","version","id","player","binding","files","action","canAuthorizePlacement","serverBaselineVerified","worldDurabilityVerified","crashAtomicPublication","planHash");
@@ -157,7 +157,7 @@ final class CoupledAssemblyJournal {
             var parts=new ArrayList<CoupledAssemblyInput.Part>();for(int i=0;i<binding.partHashes().size();i++)parts.add(new CoupledAssemblyInput.Part(binding,i,members.get(partName(i,"patch")),members.get(partName(i,"preview"))));
             var input=new CoupledAssemblyInput(binding,members.get("native-manifest.json"),members.get("native-cells.bin"),members.get("coupling-plan.json"),parts);
             var capture=new SelectionReadService.Capture(binding.captureId(),binding.selection(),binding.contextRevision(),new String(members.get("source.json"),StandardCharsets.UTF_8),null,false);
-            var plan=prepare(capture,input,player,id,()->false);if(!Arrays.equals(plan.members.get("plan.json"),bytes(v)))throw new IOException("Coupled archive differs from complete native reconstruction");
+            var plan=prepare(capture,input,player,id,()->false);if(!Arrays.equals(plan.members.get("plan.json"),bytes(v)))throw new IOException("Coupled archive differs from complete native reconstruction");rebuilt=plan;
             var all=new TreeSet<String>();try(var stream=Files.newDirectoryStream(directory)){for(var f:stream){if(all.size()>=names.size()+2*maximumBatches(binding.totalWrites())+2)throw new IOException("Coupled event file quota");all.add(f.getFileName().toString());}}
             for(var name:all)if(!names.contains(name)&&!Set.of("outcome.json","ambiguous.json").contains(name)&&!name.matches("[0-9]{6}\\.(intent|applied)\\.json"))throw new IOException("Unknown/partial coupled event");
             ReceiptState stopped=null;for(var name:all.stream().filter(n->n.endsWith(".intent.json")).toList()){
@@ -176,8 +176,12 @@ final class CoupledAssemblyJournal {
                 WorldPatchJson.integer(result.get("batches"),batches,batches);WorldPatchJson.integer(result.get("confirmedWrites"),confirmed.size(),confirmed.size());WorldPatchJson.integer(result.get("confirmedGroups"),groups,groups);
                 outcome=Outcome.valueOf(WorldPatchJson.text(result.get("outcome")));if(missing!=0||outcome==Outcome.COMPLETED&&(confirmed.size()!=binding.totalWrites()||stopped!=null)||stopped!=null&&!stopped.name().equals(outcome.name()))throw new IOException("Coupled outcome cannot close unknown/incomplete groups");
             }
-        }catch(Exception error){return new Review(id,binding,confirmed,groups,batches,missing,outcome,String.valueOf(error.getMessage()));}
-        return new Review(id,binding,confirmed,groups,batches,missing,outcome,null);
+        }catch(Exception error){return review(id,binding,confirmed,groups,batches,missing,outcome,String.valueOf(error.getMessage()),rebuilt);}
+        return review(id,binding,confirmed,groups,batches,missing,outcome,null,rebuilt);
+    }
+
+    private static Review review(UUID id,CoupledAssemblyBinding binding,List<WorldPatchCompiler.Write> rows,int groups,int batches,int missing,Outcome outcome,String issue,Plan plan){
+        return new Review(id,binding,rows,groups,batches,missing,outcome,issue,plan==null?null:plan.hash,plan==null?null:plan.player,plan==null?List.of():plan.compiled.groups().subList(0,groups));
     }
 
     private static JsonObject base(Plan plan,String format){var v=new JsonObject();v.addProperty("format",format);v.addProperty("version",1);v.addProperty("id",plan.id.toString());v.addProperty("planHash",plan.hash);return v;}
