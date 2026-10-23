@@ -4,6 +4,7 @@ import {validateContextSnapshot, readSnapshotCell, readSnapshotBlockFact, contex
 import {worldPatchStateRestriction} from './world-patch.mjs';
 import {pointInRegion} from '../../contracts/world-selection.mjs';
 import {WORLD_ASSEMBLY_LIMITS} from '../../contracts/world-assembly-limits.mjs';
+import {ASSEMBLY_COUPLING_POLICY} from '../../contracts/assembly-coupling-policy.mjs';
 
 // An independently versioned READ-ONLY analysis, not WorldPatch v1, a new
 // candidate format or a placement capability. Nothing calls this from SEND.
@@ -18,22 +19,11 @@ const freeze = value => {
 // Explicit 1.20.1 upper-face whitelist. New materials do NOT automatically
 // acquire support semantics. Native shape tests check every admitted variant;
 // a server must still check the actual final state before any future write.
-const fullCubes = new Set(`bamboo_planks birch_planks black_concrete black_stained_glass black_terracotta blackstone
-blue_concrete blue_stained_glass bricks brown_concrete brown_stained_glass brown_terracotta calcite cherry_planks
-chiseled_stone_bricks cobblestone copper_block cracked_stone_bricks cut_copper cut_sandstone cyan_concrete
-cyan_stained_glass dark_oak_planks dark_prismarine deepslate_bricks dirt end_stone_bricks glass glowstone grass_block
-gray_concrete gray_stained_glass gray_terracotta green_concrete green_stained_glass green_terracotta light_blue_concrete
-light_blue_stained_glass light_gray_concrete light_gray_stained_glass lime_concrete lime_stained_glass magenta_concrete
-magenta_stained_glass moss_block mossy_stone_bricks mud_bricks nether_bricks oak_log oak_planks orange_concrete
-orange_stained_glass orange_terracotta oxidized_copper packed_mud pink_concrete pink_stained_glass polished_andesite
-polished_blackstone polished_blackstone_bricks polished_deepslate polished_diorite polished_granite prismarine
-purple_concrete purple_stained_glass quartz_block quartz_bricks red_concrete red_nether_bricks red_sandstone
-red_stained_glass sandstone sea_lantern shroomlight smooth_quartz smooth_red_sandstone smooth_sandstone smooth_stone
-spruce_log spruce_planks stone stone_bricks stripped_oak_log stripped_spruce_log terracotta tuff waxed_cut_copper
-white_concrete white_stained_glass white_terracotta yellow_concrete yellow_stained_glass`.split(/\s+/).map(id => 'minecraft:' + id));
+const fullCubes = new Set(ASSEMBLY_COUPLING_POLICY.fullUpperFaceIds);
 
 /** Conservative data claim about the UP face only, never generic "solid".
- * In particular air, doors and closed trapdoors are not full-face supports. */
+ * This policy does not admit air, doors or trapdoors as supports. A false value
+ * is conservative, not a claim that every Vanilla UP shape is partial. */
 export function assemblyUpperFaceSupport(state) {
   try {
     validateState(state);
@@ -58,7 +48,7 @@ export function assemblySupportStateCases() {
 function nativeInput(snapshot, native, signal) {
   const manifest = native?.manifest ? structuredClone(native.manifest) : null;
   const {assetHash,...metadata} = manifest ?? {};
-  if (!manifest || manifest.diagnosticOnly || hash(metadata) !== assetHash || !(native?.binary instanceof Uint8Array))
+  if (!manifest || Object.hasOwn(manifest,'diagnosticOnly') && manifest.diagnosticOnly !== false || hash(metadata) !== assetHash || !(native?.binary instanceof Uint8Array))
     throw Error('Exact eligible native asset required for coupling analysis; no diagnostic assets');
   const {width:w,height:h,length:d} = manifest.dimensions ?? {}, edit = snapshot.selection.edit;
   if (![w,h,d].every(n => Number.isSafeInteger(n) && n > 0) || w > LIMITS.width || h > LIMITS.height || d > LIMITS.length
@@ -68,7 +58,8 @@ function nativeInput(snapshot, native, signal) {
   const bytes = Buffer.from(native.binary);
   if (hash(bytes) !== manifest.cellsHash) throw Error('Coupling analysis native cells hash mismatch');
   const palette = manifest.palette;
-  if (!Array.isArray(palette) || palette.length < 2 || palette.length > 256 || palette[0] !== '@keep' || palette[1] !== 'minecraft:air')
+  if (!Array.isArray(palette) || palette.length < 2 || palette.length > 256 || palette.some(state=>typeof state!=='string'||!state.length||state.length>512)
+    || palette[0] !== '@keep' || palette[1] !== 'minecraft:air')
     throw Error('Coupling analysis requires exact native KEEP/CLEAR palette');
   const used = new Set(); let sets = 0, clears = 0;
   for (let i = 0; i < w*h*d; i++) {

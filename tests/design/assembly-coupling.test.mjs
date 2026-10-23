@@ -109,7 +109,7 @@ for(const [label,opts,pattern] of [
   ['protected write',{protect:[{min:[1,1,1],max:[2,2,2]}]},/protected BEFORE/],
   ['unknown write',{unknown:[[0,0]]},/UNKNOWN/],
   ['missing C closure',{tight:true},/closure inside C/],
-  ['unknown neighboring chunk',{origin:[-1,0,0],unknown:[[0,0]]},/UNKNOWN/],
+  ['unknown neighboring chunk',{origin:[-2,0,0],unknown:[[0,0]]},/UNKNOWN/],
   ['block entity neighbor',{changes:[[[2,1,1],'minecraft:stone',true]]},/block-entity/],
   ['fluid neighbor',{changes:[[[2,1,1],'minecraft:water[level=0]']]},/dynamic-state/],
   ['old door neighbor',{changes:[[[2,1,1],door()]]},/coupled-block/],

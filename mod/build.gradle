@@ -25,7 +25,7 @@ java {
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 17 }
 processResources { inputs.property 'version', project.version; filesMatching('fabric.mod.json') { expand 'version': project.version } }
-processResources { from('../contracts') { include 'context-analysis-protocol.json', 'world-patch-design-review-protocol.json', 'reference-world-patch-review-protocol.json'; into 'voxelstudio' } }
+processResources { from('../contracts') { include 'context-analysis-protocol.json', 'world-patch-design-review-protocol.json', 'reference-world-patch-review-protocol.json', 'assembly-coupling-policy.json'; into 'voxelstudio' } }
 test {
     useJUnitPlatform()
     inputs.dir layout.buildDirectory.dir('test-fixtures')
