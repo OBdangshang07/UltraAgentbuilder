@@ -93,6 +93,20 @@ final class AssemblyCoupledCompiler {
             if(checked.add(f.state()))WorldPatchStatePolicy.requireStatic(f.state());
             if(neighbor&&AssemblyCoupledPolicy.state(f.state()).id().endsWith("_stairs"))throw new IllegalArgumentException("Protected adjacent BEFORE stair");}
     }
+    /** Entire new packet must reconstruct against the ORIGINAL server-owned
+     * baseline. Caller identity and hashes alone never become a Compiled. */
+    static Compiled read(SelectionBaseline baseline,CoupledAssemblyInput input,BooleanSupplier cancelled){
+        Objects.requireNonNull(input);WorldPatchJson.cancelled(cancelled);var b=input.binding();
+        if(!baseline.selection.equals(b.selection())||baseline.contextRevision!=b.contextRevision()||!baseline.snapshotHash.equals(b.snapshotHash())||!baseline.selectionHash.equals(b.selectionHash()))throw new IllegalArgumentException("Coupled input belongs to another original server baseline");
+        var manifest=WorldPatchJson.parse(input.originalManifest(),cancelled);var rebuilt=compile(baseline,manifest,input.originalCells(),cancelled);var p=rebuilt.plan();
+        if(!AssemblyCoupledPolicy.HASH.equals(b.couplingPolicyHash())||!WorldPatchJson.text(p.get("planHash")).equals(b.couplingPlanHash())||!WorldPatchJson.text(p.get("analysisHash")).equals(b.analysisHash())||!WorldPatchJson.text(p.get("scheduleHash")).equals(b.scheduleHash())||!WorldPatchJson.text(p.get("assetHash")).equals(b.assetHash())||!WorldPatchJson.text(p.get("cellsHash")).equals(b.cellsHash())||rebuilt.writes.size()!=b.totalWrites()||!p.equals(WorldPatchJson.parse(input.originalPlan(),cancelled)))throw new IllegalArgumentException("Coupled whole input differs from native reconstruction");
+        var scene=manifest.getAsJsonObject("scene");if(scene==null||!WorldPatchJson.text(scene.get("sourceHash")).equals(b.sourceHash()))throw new IllegalArgumentException("Coupled native source differs from selected whole SceneSpec");
+        for(int i=0;i<input.parts().size();i++){
+            WorldPatchJson.cancelled(cancelled);var part=input.parts().get(i);rebuilt.verifyPart(i,WorldPatchJson.parse(part.originalPart(),cancelled),cancelled);rebuilt.verifyPreview(i,part.preview(),b.previewBinding(i),cancelled);
+        }
+        if(!rebuilt.patchSet(cancelled).equals(b.patchSet()))throw new IllegalArgumentException("Coupled full set differs from independent original reconstruction");
+        return rebuilt;
+    }
     static Compiled compile(SelectionBaseline baseline,JsonObject manifest,byte[] cells,BooleanSupplier cancelled){
         Objects.requireNonNull(baseline);Objects.requireNonNull(cancelled);WorldPatchJson.cancelled(cancelled);var source=new Native(manifest,cells,baseline,cancelled);var check=new Check(baseline);
         var counts=new JsonObject();for(String name:List.of("door","trapdoor","stairs","slab","static"))counts.addProperty(name,0);

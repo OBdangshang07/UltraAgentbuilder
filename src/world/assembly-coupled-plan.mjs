@@ -11,6 +11,7 @@ export const COUPLED_ASSEMBLY_POLICY = ASSEMBLY_COUPLING_POLICY.policy;
 export const COUPLED_EXECUTION_ORDER = 'native-order-promote-matching-upper-after-lower';
 const originals = new WeakMap();
 const partOwners = new WeakMap();
+const setOwners = new WeakMap();
 const directions = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
 const air = state => ['minecraft:air','minecraft:cave_air','minecraft:void_air'].includes(state);
 const freeze = value => {
@@ -78,6 +79,8 @@ export function compileCoupledAssemblyPlan(snapshotValue,native,{signal}={}) {
 }
 
 export function coupledAssemblyPlanData(plan) {original(plan);return structuredClone(plan);}
+export function coupledAssemblyNativeData(plan){const input=original(plan);return {manifest:structuredClone(input.manifest),binary:Buffer.from(input.bytes)};}
+export function checkedCoupledAssemblyPatchSet(plan,value){original(plan);if(setOwners.get(value)!==plan)throw Error('Original completed coupled part-set required');return value;}
 /** Internal read-only preview source, not a server attestation or consent. */
 export function coupledAssemblyPreviewBinding(plan){
   const {snapshot}=original(plan);
@@ -157,5 +160,5 @@ export async function streamCoupledAssemblyParts(plan,{onPart,signal}={}) {
     snapshotHash:plan.snapshotHash,selectionHash:plan.selectionHash,assetHash:plan.assetHash,cellsHash:plan.cellsHash,
     operationCount:offset,partCount:hashes.length,partHashes:hashes,fullAssetProcessed:true,
     partialPublicationAllowed:false,canAuthorizePlacement:false,serverBaselineVerified:false,physicsVerified:false,worldWrites:0};
-  return freeze({...content,patchSetHash:contextHash(content)});
+  const value=freeze({...content,patchSetHash:contextHash(content)});setOwners.set(value,plan);return value;
 }

@@ -12,6 +12,7 @@ import {resolveState,transformState} from '../src/generation/block-states.mjs';
 import {staticOpenDoorCollision} from '../src/generation/static-open-doors.mjs';
 import {assemblySupportStateCases} from '../src/world/assembly-coupling.mjs';
 import {makeAssemblyCoupledFixtures} from './assembly-coupled-fixtures.mjs';
+import {makeCoupledTransportFixtures} from './assembly-coupled-transport-fixtures.mjs';
 import {compileScene} from '../src/design/compiler.mjs';
 import {courtyard,teahouse,commercial,highrise,instanceStudy,worldHighrise,shape,panelCourtyard,panelTeahouse,panelHighrise,panelWorldHighrise,fourMetreWorldTower} from '../tests/design/fixtures.mjs';
 import {profileTower,profileGallery,profileCourt,profileWorldTower} from '../tests/design/profile-fixtures.mjs';
@@ -49,6 +50,7 @@ for(const fixture of [profileTower,profileGallery,profileCourt,profileWorldTower
 for(const spec of [...designExamples(),specialBlocksSpec()]){const c=compileSpec(spec,{navigationPolicy:'review'}),dir='mod/build/test-fixtures/'+spec.id;await fs.mkdir(dir,{recursive:true});await fs.writeFile(dir+'/manifest.json',JSON.stringify(c.manifest));await fs.writeFile(dir+'/cells.bin',c.binary);await fs.writeFile(dir+'/spec.json',JSON.stringify(spec));}
 await fs.mkdir('mod/build/test-fixtures',{recursive:true});
 await makeAssemblyCoupledFixtures();
+await makeCoupledTransportFixtures();
 await makeNativeEvidenceClientFixtures();
 await makeReferencePlayerFixtures();
 await makeReferenceWorldPatchClientFixtures();

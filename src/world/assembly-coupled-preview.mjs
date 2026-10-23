@@ -8,6 +8,12 @@ const fields=['format','version','policy','snapshotHash','selectionHash','patchH
   'couplingPlanHash','couplingPolicyHash','coordinateSpace','movable','bounds','palette','sections','summary',
   'canAuthorizePlacement','serverBaselineVerified','physicsVerified','worldRendered','previewHash'];
 const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};
+const originals=new WeakMap();
+export function checkedCoupledAssemblyPreview(plan,value,index,partHash){
+  coupledAssemblyPreviewBinding(plan);const origin=originals.get(value);
+  if(origin?.plan!==plan||origin.index!==index||origin.partHash!==partHash)throw Error('Original whole-plan preview required; reports/hashes cannot grant identity');
+  return value;
+}
 
 /** Version2 is an EXPLICIT whole-coupled display identity. It does not validate
  * a half-door as a legacy patch, certify a complete candidate or grant writes. */
@@ -20,7 +26,7 @@ export function prepareCoupledAssemblyPreview(plan,partValue,{signal}={}){
     summary:{writes:part.writes.length,counts:geometry.counts,omittedCells:'keep',explicitKeeps:0},
     canAuthorizePlacement:false,serverBaselineVerified:false,physicsVerified:false,worldRendered:false};
   if(Buffer.byteLength(JSON.stringify(content))+128>WORLD_ASSEMBLY_LIMITS.partBytes)throw Error('Coupled preview part byte quota');
-  signal?.throwIfAborted();return freeze({...content,previewHash:contextHash(content)});
+  signal?.throwIfAborted();const preview=freeze({...content,previewHash:contextHash(content)});originals.set(preview,{plan,index:part.index,partHash:part.partHash});return preview;
 }
 
 /** Rebuild from the SAME opaque complete plan/part. New modes cannot enter the
