@@ -190,12 +190,16 @@ public final class SelectionReadService {
     }
     private static boolean chunkFenceCurrent(Task t){return t.chunks.stable(t.selection.chunks().size(),(x,z)->t.world.getChunkManager().getWorldChunk(x,z));}
     private static boolean expired(Task t){return t.lifetime==null||t.lifetime.expired(System.nanoTime());}
+    private static SelectionCaptureValidity captureValidity(Task t){
+        return SelectionCaptureValidity.check(t.watch.revision()==t.detachedRevision,()->chunkFenceCurrent(t),()->!expired(t));
+    }
     private static Task checkedTask(MinecraftServer server,UUID player,String id,long revision) {
         onServer(server);var t=TASKS.get(server);
         if(t==null||!t.player.equals(player)||!t.handle.id.equals(id)||t.selection.revision()!=revision||t.handle.status.state()!=State.READY)throw new IllegalStateException("没有当前选区的有效快照");
         current(server,t);
-        if(t.watch.revision()!=t.detachedRevision||!chunkFenceCurrent(t)||expired(t)){
-            discard(server,State.STALE,"周围环境/区块覆盖已改变或原快照过期，需要重新读取");throw new IllegalStateException("周围环境/区块覆盖已改变或原快照过期，需要重新读取");
+        var validity=captureValidity(t);
+        if(validity!=SelectionCaptureValidity.CURRENT){
+            discard(server,State.STALE,validity.message());throw new IllegalStateException(validity.message());
         }return t;
     }
     public static CompletableFuture<Capture> checkedCapture(MinecraftServer server,UUID player,String id,long revision) {
@@ -522,7 +526,8 @@ public final class SelectionReadService {
         try{
             current(server,t);
             if(t.handle.status.state()==State.READY) {
-                if(t.watch.revision()!=t.detachedRevision||!chunkFenceCurrent(t)||expired(t))discard(server,State.STALE,"环境已改变或快照已过期，重新读取");
+                var validity=captureValidity(t);
+                if(validity!=SelectionCaptureValidity.CURRENT)discard(server,State.STALE,validity.message());
                 else {tickAudit(server,t);if(TASKS.get(server)==t)tickBefore(server,t);if(TASKS.get(server)==t)tickAssemblyAudit(server,t);if(TASKS.get(server)==t)tickAssemblyBefore(server,t);}
                 return;
             }
