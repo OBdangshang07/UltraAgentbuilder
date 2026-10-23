@@ -17,10 +17,12 @@ final class AssemblyCoupledCompiler {
     record Group(int offset,String kind,List<Integer> operationIndices){Group{operationIndices=List.copyOf(operationIndices);}}
     static final class Compiled {
         private final SelectionBaseline baseline;private final Native source;private final JsonObject analysis,plan;
-        private final List<WorldPatchCompiler.Write> writes;private final List<Integer> nativeIndices;private final List<Group> groups;
+        private final List<WorldPatchCompiler.Write> writes;private final List<Integer> nativeIndices;private final List<Group> groups;private final CoupledAssemblyInput checkedInput;
         private Compiled(SelectionBaseline baseline,Native source,JsonObject analysis,JsonObject plan,List<WorldPatchCompiler.Write> writes,List<Integer> indices,List<Group> groups){
-            this.baseline=baseline;this.source=source;this.analysis=analysis.deepCopy();this.plan=plan.deepCopy();this.writes=List.copyOf(writes);nativeIndices=List.copyOf(indices);this.groups=List.copyOf(groups);
+            this.baseline=baseline;this.source=source;this.analysis=analysis.deepCopy();this.plan=plan.deepCopy();this.writes=List.copyOf(writes);nativeIndices=List.copyOf(indices);this.groups=List.copyOf(groups);checkedInput=null;
         }
+        private Compiled(Compiled original,CoupledAssemblyInput input){baseline=original.baseline;source=original.source;analysis=original.analysis;plan=original.plan;writes=original.writes;nativeIndices=original.nativeIndices;groups=original.groups;checkedInput=Objects.requireNonNull(input);}
+        boolean fromOriginalInput(CoupledAssemblyInput input){return checkedInput!=null&&checkedInput==input;}
         SelectionBaseline baseline(){return baseline;}JsonObject analysis(){return analysis.deepCopy();}JsonObject plan(){return plan.deepCopy();}
         List<WorldPatchCompiler.Write> writes(){return writes;}List<Group> groups(){return groups;}
         boolean canAuthorizePlacement(){return false;}boolean physicsVerified(){return false;}
@@ -105,7 +107,7 @@ final class AssemblyCoupledCompiler {
             WorldPatchJson.cancelled(cancelled);var part=input.parts().get(i);rebuilt.verifyPart(i,WorldPatchJson.parse(part.originalPart(),cancelled),cancelled);rebuilt.verifyPreview(i,part.preview(),b.previewBinding(i),cancelled);
         }
         if(!rebuilt.patchSet(cancelled).equals(b.patchSet()))throw new IllegalArgumentException("Coupled full set differs from independent original reconstruction");
-        return rebuilt;
+        return new Compiled(rebuilt,input);
     }
     static Compiled compile(SelectionBaseline baseline,JsonObject manifest,byte[] cells,BooleanSupplier cancelled){
         Objects.requireNonNull(baseline);Objects.requireNonNull(cancelled);WorldPatchJson.cancelled(cancelled);var source=new Native(manifest,cells,baseline,cancelled);var check=new Check(baseline);
