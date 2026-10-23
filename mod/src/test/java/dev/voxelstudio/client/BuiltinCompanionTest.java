@@ -24,6 +24,16 @@ class BuiltinCompanionTest {
         assertEquals(first,again);assertTrue(Files.exists(first.directory().resolve(".agents/skills/voxel-studio/SKILL.md")));assertEquals("preserved",Files.readString(root.resolve("data/private.json")));assertEquals("legacy",Files.readString(root.resolve("legacy.txt")));
     }
     @Test void newVersionCoexistsWithOldRuntime()throws Exception{var f=files();var a=install(dir,f,"0.1.3-alpha");var b=install(dir,f,"0.1.4-alpha");assertNotEquals(a.directory(),b.directory());assertTrue(Files.exists(a.directory().resolve("runtime/node.exe")));}
+    @Test void exactOwnerHelperMembersInstallAndVerifyButCannotAuthorizeOtherRuntimeExecutables()throws Exception{
+        var f=files();f.put("runtime/windows-owner-helper.exe","synthetic-helper-not-executed".getBytes());f.put("runtime/windows-owner-helper.json","{}".getBytes());
+        var installed=install(dir,f,"0.1.4-alpha");assertArrayEquals(f.get("runtime/windows-owner-helper.exe"),Files.readAllBytes(installed.directory().resolve("runtime/windows-owner-helper.exe")));
+        assertEquals(installed,install(dir,f,"0.1.4-alpha"));
+        Files.writeString(installed.directory().resolve("runtime/windows-owner-helper.exe"),"tampered");assertThrows(IOException.class,()->install(dir,f,"0.1.4-alpha"));
+        assertEquals("tampered",Files.readString(installed.directory().resolve("runtime/windows-owner-helper.exe")));
+        for(String name:List.of("runtime/unapproved.exe","runtime/windows-owner-helper-other.exe","runtime/windows-owner-helper.json/../../outside")){
+            var bad=files();bad.put(name,new byte[]{1});Path rejected=dir.resolve("rejected");assertThrows(IOException.class,()->install(rejected,bad,"0.1.4-alpha"));assertFalse(Files.exists(rejected));
+        }
+    }
     @Test void exactManifestIdentitySurvivesReuseAndSameVersionDifferentBundlesCoexist()throws Exception{
         var f=files();var original=install(dir,f,"0.1.4-alpha");
         assertEquals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(manifest(f,"0.1.4-alpha"))),original.manifestHash());

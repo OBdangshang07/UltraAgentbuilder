@@ -49,12 +49,12 @@ final class BuiltinCompanion {
         }
         if(!names.containsAll(List.of("runtime/node.exe","bridge/server.mjs","package.json",".agents/skills/voxel-studio/skill.md")))throw new IOException("Incomplete builtin companion");
         root=root.toAbsolutePath().normalize();directory(root);String manifestHash=digest(metadata),id=version+"-"+manifestHash;
-        if(forLaunch&&exceedsLaunchPath(root,id)){
+        if(forLaunch&&exceedsLaunchPath(root,id,names)){
             Path previousBundles=root.resolve("bundles"),previous=previousBundles.resolve(id);
             // A shorter cache must not conceal a corrupt existing runtime.
             if(Files.exists(previousBundles,LinkOption.NOFOLLOW_LINKS))directory(previousBundles);
             if(Files.exists(previous,LinkOption.NOFOLLOW_LINKS))verify(previous,entries,metadata);
-            root=launchCache(localAppData,id);
+            root=launchCache(localAppData,id,names);
             progress.accept("实例路径较长；仅把已校验的内置配套准备到本机缓存，任务数据仍在原实例…");
         }
         Path bundles=root.resolve("bundles");directory(bundles);
@@ -82,10 +82,14 @@ final class BuiltinCompanion {
         }
     }
     static boolean exceedsLaunchPath(Path root,String id){return root.toAbsolutePath().normalize().resolve("bundles").resolve(id).resolve("runtime/node.exe").toString().length()>MAX_LAUNCH_PATH;}
-    private static Path launchCache(Path home,String id)throws IOException{
+    private static boolean exceedsLaunchPath(Path root,String id,Set<String> names){
+        if(exceedsLaunchPath(root,id))return true;
+        return names.contains("runtime/windows-owner-helper.exe")&&root.toAbsolutePath().normalize().resolve("bundles").resolve(id).resolve("runtime/windows-owner-helper.exe").toString().length()>MAX_LAUNCH_PATH;
+    }
+    private static Path launchCache(Path home,String id,Set<String> names)throws IOException{
         if(home==null||!home.isAbsolute())throw new IOException("实例路径超过 Windows 原生启动长度，且本机缓存目录不可用；原文件和任务保留，未启动服务");
         home=home.normalize();Path product=home.resolve("UltraAgentbuilder"),cache=product.resolve("builtin-companion");
-        if(exceedsLaunchPath(cache,id))throw new IOException("实例和本机缓存路径都超过 Windows 原生启动长度；请使用较短实例路径，未改动原运行时或任务");
+        if(exceedsLaunchPath(cache,id,names))throw new IOException("实例和本机缓存路径都超过 Windows 原生启动长度；请使用较短实例路径，未改动原运行时或任务");
         // Do not follow redirected ancestors or create an arbitrary supplied
         // home. Only the two named product cache directories may be created.
         for(Path ancestor=home;ancestor!=null;ancestor=ancestor.getParent()){
@@ -153,7 +157,7 @@ final class BuiltinCompanion {
     private static boolean safeName(String name){
         if(name.length()>240||name.startsWith("/")||name.contains("\\")||name.contains(":")||name.contains("\u0000"))return false;
         for(String part:name.split("/",-1))if(part.isEmpty()||part.equals(".")||part.equals("..")||part.endsWith(".")||part.endsWith(" ")||part.matches(".*[\\x00-\\x1f<>\"|?*].*")||part.matches("(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\\..*)?"))return false;
-        return name.equals("package.json")||name.equals("runtime/node.exe")||name.equals("runtime/NODE-LICENSE.txt")||List.of("bridge/","contracts/","prompts/","src/core/","src/generation/","src/design/","src/world/",".agents/skills/voxel-studio/").stream().anyMatch(name::startsWith);
+        return name.equals("package.json")||name.equals("runtime/node.exe")||name.equals("runtime/NODE-LICENSE.txt")||name.equals("runtime/windows-owner-helper.exe")||name.equals("runtime/windows-owner-helper.json")||List.of("bridge/","contracts/","prompts/","src/core/","src/generation/","src/design/","src/world/",".agents/skills/voxel-studio/").stream().anyMatch(name::startsWith);
     }
     static void directory(Path path)throws IOException{
         if(Files.exists(path,LinkOption.NOFOLLOW_LINKS)){var a=Files.readAttributes(path,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);if(!a.isDirectory()||a.isSymbolicLink()||a.isOther())throw new IOException("配套路径被重定向或不是目录："+path);}

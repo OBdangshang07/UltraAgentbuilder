@@ -6,6 +6,7 @@ import {exactKeys} from '../contracts/world-selection.mjs';
 import {hash} from '../src/generation/compiler.mjs';
 import {collectWindowsOwnerQuery} from './windows-owner-query.mjs';
 import {ownerCreationError} from './world-patch-owner-failure.mjs';
+import {resolveWindowsOwnerRuntime} from './windows-owner-runtime.mjs';
 
 // Independent P4 development evidence, not a recovery controller. Issuance
 // only creates a NEW owner in an empty directory. Inspection never creates or
@@ -132,10 +133,21 @@ $voxelMachineHash = Get-VoxelDigest $voxelMachine.Trim().ToLowerInvariant()
 $voxelObserved = [DateTime]::UtcNow.ToString('o')
 [Console]::Out.WriteLine('{"format":"WindowsOwnerObservation","version":1,"machineHash":"' + $voxelMachineHash + '","bootUtc":"' + $voxelBoot + '","observedUtc":"' + $voxelObserved + '","queriedPid":' + $voxelOwnerPid.ToString([Globalization.CultureInfo]::InvariantCulture) + ',"process":' + $voxelFoundJson + '}')
 `;
-  const executable = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
-    windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe']});
+  // Select ONE verified helper before dispatch. Failed/unknown direct queries
+  // NEVER fall back to PowerShell, retry or authorize another owner/SEND.
+  const native = await resolveWindowsOwnerRuntime();
+  const executable = native?.executable ?? path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const args = native ? [String(processId)] : ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script];
+  const env = {...process.env};
+  for (const key of Object.keys(env)) if (/^(?:CODEX_|OPENAI|ANTHROPIC|DEEPSEEK|DSH_|GH_TOKEN$|GITHUB_TOKEN$)/i.test(key)) delete env[key];
+  const child = spawn(executable, args, {
+    windowsHide: true, shell: false, env, stdio: ['ignore', 'pipe', 'pipe']});
   const output = await collectWindowsOwnerQuery(child);
+  if (native) {
+    const after = await resolveWindowsOwnerRuntime();
+    if (!after || after.executable !== native.executable || hash(after.manifest) !== hash(native.manifest))
+      throw Error('Windows owner runtime changed during observation; no recovery authorized');
+  }
   let value; try { value = JSON.parse(output.replace(/^\uFEFF/, '')); }
   catch { throw Object.assign(Error('Invalid exact Windows owner observation; no recovery authorized'),{code:'WINDOWS_OWNER_INVALID_JSON'}); }
   try { return validateWindowsOwnerObservation(value); }

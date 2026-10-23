@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {RELEASE_VERSION} from '../bridge/release.mjs';
 import {worldPatchDesignReviewProtocol} from '../src/world/world-patch-design-input.mjs';
+import {buildWindowsOwnerHelper} from './build-windows-owner-helper.mjs';
 
 const project=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const version=process.argv[2];
@@ -31,6 +32,9 @@ async function walk(relative){for(const entry of (await fs.readdir(path.join(pro
   if(entry.isDirectory())await walk(next);else await copyFile(path.join(project,next),next);
 }}
 for(const dir of ['bridge','contracts','prompts','src/core','src/generation','src/design','src/world','.agents/skills/voxel-studio'])await walk(dir);
+const ownerHelper=await buildWindowsOwnerHelper({project});
+await copyFile(ownerHelper.executable,'runtime/windows-owner-helper.exe');
+await copyFile(ownerHelper.manifestFile,'runtime/windows-owner-helper.json');
 await copyFile(process.execPath,'runtime/node.exe');
 await copyFile(path.join(path.dirname(process.execPath),'LICENSE'),'runtime/NODE-LICENSE.txt');
 const packageBytes=Buffer.from(JSON.stringify({name:'voxel-studio-companion',version,private:true,type:'module',engines:{node:'>=22.12'}},null,2));

@@ -78,6 +78,9 @@ tasks.register('prepareBuiltin', Exec) {
 }
 sourceSets.main.resources.srcDir bundleDir
 processResources.dependsOn tasks.named('prepareBuiltin')
+// Free owner fixtures use the same already-built direct Windows helper. Do
+// not race a partial compiler cache against the first observation.
+tasks.named('prepareJavaFixtures') { dependsOn tasks.named('prepareBuiltin') }
 tasks.named('sourcesJar') { dependsOn tasks.named('prepareBuiltin'); exclude 'voxelstudio-bundle/**' }
 loom { runs { client { runDir 'run'; programArgs '--width', '1280', '--height', '800' }; server { runDir 'run-server' } } }
 if (project.hasProperty('studioTestJob')) {

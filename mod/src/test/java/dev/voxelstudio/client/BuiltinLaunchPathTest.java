@@ -41,6 +41,16 @@ class BuiltinLaunchPathTest {
         var files=fixture.files();var root=cacheHome.resolve("short");var installed=install(root,null,files);
         assertTrue(installed.directory().startsWith(root.resolve("bundles")));assertFalse(Files.exists(cacheHome.resolve("UltraAgentbuilder")));
     }
+    @Test void nodeMayFitButLongerOwnerHelperStillRequiresTheVerifiedShortCache()throws Exception{
+        var files=fixture.files();files.put("runtime/windows-owner-helper.exe","synthetic-not-executed".getBytes());files.put("runtime/windows-owner-helper.json","{}".getBytes());
+        String version="0.1.4-alpha",id=version+"-"+java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(fixture.manifest(files,version)));
+        Path base=cacheHome.resolve("boundary");int padding=240-base.resolve("bundles").resolve(id).resolve("runtime/node.exe").toString().length();
+        assertTrue(padding>=0,"The synthetic short-cache test needs its isolated short profile");Path root=cacheHome.resolve("boundary"+"x".repeat(padding));Files.createDirectory(root);
+        assertFalse(BuiltinCompanion.exceedsLaunchPath(root,id),"Original Node launch path still fits");
+        assertTrue(root.resolve("bundles").resolve(id).resolve("runtime/windows-owner-helper.exe").toString().length()>240);
+        var cached=install(root,cacheHome,files);assertTrue(cached.directory().startsWith(cacheHome.resolve("UltraAgentbuilder/builtin-companion")));
+        assertFalse(Files.exists(root.resolve("bundles")));assertTrue(cached.directory().resolve("runtime/windows-owner-helper.exe").toString().length()<=240);
+    }
     @Test void corruptOriginalRuntimeCannotBeHiddenByFallbackCache()throws Exception{
         var files=fixture.files();var root=longRoot();var old=BuiltinCompanion.install(root,fixture.manifest(files,"0.1.4-alpha"),name->new ByteArrayInputStream(files.get(name)),s->{});
         Files.writeString(old.directory().resolve("runtime/node.exe"),"changed-original");assertThrows(IOException.class,()->install(root,cacheHome,files));

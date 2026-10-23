@@ -13,6 +13,12 @@ const {boundedStudioTestOptions}=await import('./studio-test-options.mjs');
 // Hundreds of native-bundle tests must not accumulate on the system drive.
 // Each run owns a new workspace-local temp root; failed evidence is retained.
 const project=await fs.realpath(fileURLToPath(new URL('../',import.meta.url)));
+// Build the same reviewed helper as the Windows player package before test
+// workers contend for CPU/disk. All tests and production deadlines remain.
+if(process.platform==='win32'&&process.arch==='x64'){
+ const {buildWindowsOwnerHelper}=await import('../packaging/build-windows-owner-helper.mjs');
+ await buildWindowsOwnerHelper({project});
+}
 const parent=path.join(project,'build','studio-tests');await fs.mkdir(parent,{recursive:true});
 if(await fs.realpath(parent)!==parent)throw new Error('Test output parent must not redirect outside the workspace');
 const run=await fs.mkdtemp(path.join(parent,'run-')),temp=path.join(run,'tmp');await fs.mkdir(temp);

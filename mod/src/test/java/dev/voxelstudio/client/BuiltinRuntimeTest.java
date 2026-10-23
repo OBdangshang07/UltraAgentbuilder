@@ -33,6 +33,17 @@ class BuiltinRuntimeTest {
                 assertEquals(expectedHash,health.get("builtinBundleHash").getAsString(),"Actual packaged startup must bind the original manifest even with long-path cache");
             }
             assertEquals(root.toAbsolutePath().normalize().resolve("data"),client.dataDirectory());
+            // Reuse this exact already-extracted JAR, not a developer helper.
+            // Only a fresh read-only self query; no model, owner lock or world.
+            var installed=BuiltinCompanion.prepare(root,s->{});
+            String probe="import {resolveWindowsOwnerRuntime} from './bridge/windows-owner-runtime.mjs';import {observeWindowsOwnerProcess} from './bridge/world-patch-owner-observation.mjs';const r=await resolveWindowsOwnerRuntime();if(r?.kind!=='bundled')throw Error('Exact bundled helper required');const v=await observeWindowsOwnerProcess(process.pid);if(v.process?.pid!==process.pid||!v.process.startedUtc.match(/\\.\\d{6}0Z$/))throw Error('Exact self facts required');console.log('BUNDLED_OWNER_SELF_VERIFIED');";
+            var builder=new ProcessBuilder(installed.directory().resolve("runtime/node.exe").toString(),"--input-type=module","-e",probe).directory(installed.directory().toFile());
+            builder.environment().keySet().removeIf(k->k.matches("(?i)^(CODEX_.*|OPENAI.*|ANTHROPIC.*|DEEPSEEK.*|DSH_.*|GH_TOKEN|GITHUB_TOKEN)$"));
+            builder.redirectError(ProcessBuilder.Redirect.DISCARD);Process ownerProbe=builder.start();
+            try{
+                assertTrue(ownerProbe.waitFor(50,TimeUnit.SECONDS),"Owned read-only probe must close under the production bound");
+                assertEquals(0,ownerProbe.exitValue());assertEquals("BUNDLED_OWNER_SELF_VERIFIED",new String(ownerProbe.getInputStream().readNBytes(128),java.nio.charset.StandardCharsets.UTF_8).trim());
+            }finally{if(ownerProbe.isAlive()){ownerProbe.destroy();assertTrue(ownerProbe.waitFor(10,TimeUnit.SECONDS),"Only this test's owned read-only probe may be closed");}}
             long ownedPid=JsonParser.parseString(Files.readString(root.resolve("data/connection.json"))).getAsJsonObject().get("pid").getAsLong();ownedProcess=ProcessHandle.of(ownedPid).orElseThrow();
             // Actual Java extraction and ordinary packaged CLI, not an
             // imported server with test-only opt-ins or provider adapters.
