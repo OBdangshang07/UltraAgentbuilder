@@ -6,9 +6,9 @@ const maximumBytes=8*1024**2;
 const builtinSuite='dev.voxelstudio.client.BuiltinRuntimeTest';
 const builtinMethod='builtinAloneStartsBridgeAndCompilesFreeSampleWithoutExternalCompanion';
 const bridgeSuite='dev.voxelstudio.client.BridgeClientTest';
-const bridgeMethods=['referenceHistoryClientReadsOnlyExactOriginalGetRoutesAndNoSendOrConfirmation','exactImageRestoreClientOnlyGetsSelectedOriginalBytesAndRechecksOriginalScope'];
+const bridgeMethods=['referenceHistoryClientReadsOnlyExactOriginalGetRoutesAndNoSendOrConfirmation','exactImageRestoreClientOnlyGetsSelectedOriginalBytesAndRechecksOriginalScope','archiveReadersUseExactReadOnlyRoutesAndBindActualWorkerRecordsWithoutPostOrGeneration'];
 const suiteMethods=new Map([[builtinSuite,[builtinMethod]],[bridgeSuite,bridgeMethods]]);
-const exceptionTypes=new Set(['java.io.IOException','java.nio.file.AccessDeniedException','java.nio.file.DirectoryNotEmptyException','java.nio.file.NoSuchFileException','java.nio.file.FileSystemException','java.lang.IllegalStateException','java.lang.AssertionError','java.util.concurrent.ExecutionException','java.util.concurrent.TimeoutException','org.opentest4j.AssertionFailedError','org.junit.platform.commons.JUnitException']);
+const exceptionTypes=new Set(['java.io.IOException','java.nio.file.AccessDeniedException','java.nio.file.DirectoryNotEmptyException','java.nio.file.NoSuchFileException','java.nio.file.FileSystemException','java.net.http.HttpTimeoutException','java.lang.IllegalStateException','java.lang.AssertionError','java.util.concurrent.ExecutionException','java.util.concurrent.TimeoutException','org.opentest4j.AssertionFailedError','org.junit.platform.commons.JUnitException']);
 // Fixed public method names, not arbitrary message text that happens to look
 // like a Java frame. A model answer or forged XML cannot encode a secret here.
 const frameMethods=new Map([
@@ -25,7 +25,8 @@ const frameMethods=new Map([
   ['org.junit.jupiter.engine.extension.TempDirectory$CloseablePath',['close','deleteAllFilesAndDirectories']],
   ['org.junit.jupiter.engine.extension.TempDirectory$CloseablePath$1',['visitFile','postVisitDirectory']],
   ['org.junit.platform.engine.support.hierarchical.ThrowableCollector',['execute']],
-  ['dev.voxelstudio.client.BridgeClient',['close']],
+  ['dev.voxelstudio.client.BridgeClient',['close','establish','exchange']],
+  ['jdk.internal.net.http.HttpClientImpl',['send']],
   ['java.util.concurrent.CompletableFuture',['get','timedGet']],
   [bridgeSuite,bridgeMethods],
   [builtinSuite,[builtinMethod]],
@@ -52,8 +53,9 @@ export function summarizeJavaFailures(xml){
       }
       const cleanup=frames.some(frame=>frame.startsWith('org.junit.')&&frame.includes('TempDirectory'));
       const futureWait=type==='java.util.concurrent.TimeoutException'&&frames.some(frame=>frame==='java.util.concurrent.CompletableFuture.get'||frame==='java.util.concurrent.CompletableFuture.timedGet');
+      const httpTimeout=relatedTypes.has('java.net.http.HttpTimeoutException');
       failures.push({suite:safeSuite,method:safeMethod(suiteName,attribute(test[1],'name')),kind:failed[1],exceptionType:exceptionTypes.has(type)?type:'unreported',relatedExceptionTypes:[...relatedTypes].sort(),
-        category:cleanup?'junit-temporary-cleanup':futureWait?'future-wait-timeout':'unclassified',frames,rawMessageOmitted:true,rawStreamsOmitted:true,pathsOmitted:true,causeNotProven:true});
+        category:cleanup?'junit-temporary-cleanup':futureWait?'future-wait-timeout':httpTimeout?'http-request-timeout':'unclassified',frames,rawMessageOmitted:true,rawStreamsOmitted:true,pathsOmitted:true,causeNotProven:true});
     }
   }
   return {format:'SanitizedJavaFailureDiagnostics',version:1,failures,diagnosticOnly:true,testOutcomeUnchanged:true};

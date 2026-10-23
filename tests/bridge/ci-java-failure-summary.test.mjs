@@ -57,3 +57,24 @@ test('known display names are accepted only under their fixed public suite',()=>
 test('a TimeoutException alone is not proof of a Future wait or HTTP failure',()=>{
   const r=summarizeJavaFailures(xml('<failure type="java.util.concurrent.TimeoutException"/>'));assert.equal(r.failures[0].category,'unclassified');assert.equal(r.failures[0].causeNotProven,true);assert.deepEqual(r.failures[0].frames,[]);
 });
+
+test('fixed archive-read diagnostics distinguish an actual HTTP request timeout from a Future wait',()=>{
+  const known='archiveReadersUseExactReadOnlyRoutesAndBindActualWorkerRecordsWithoutPostOrGeneration';
+  const input=`<testsuite name="${bridgeSuite}"><testcase name="${known}()"><failure type="java.util.concurrent.ExecutionException" message="${secret}">java.util.concurrent.ExecutionException: ${secret}
+ at java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:2095)
+Caused by: java.lang.IllegalStateException: ${secret}
+ at dev.voxelstudio.client.BridgeClient.establish(${secret}:654)
+Caused by: java.net.http.HttpTimeoutException: ${secret}
+ at java.net.http/jdk.internal.net.http.HttpClientImpl.send(${secret}:905)
+ at dev.voxelstudio.client.BridgeClient.exchange(${secret}:643)
+</failure></testcase></testsuite>`;
+  const r=summarizeJavaFailures(input),f=r.failures[0];assert.equal(f.method,known);assert.equal(f.category,'http-request-timeout');
+  assert.ok(f.relatedExceptionTypes.includes('java.net.http.HttpTimeoutException'));assert.ok(f.frames.includes('dev.voxelstudio.client.BridgeClient.establish'));
+  assert.equal(f.causeNotProven,true);assert.equal(r.testOutcomeUnchanged,true);assert.ok(!JSON.stringify(r).includes(secret));assert.ok(!JSON.stringify(r).includes('.java:'));
+});
+test('HTTP timeout classification requires an exact whitelisted type, not message text or a class-shaped secret',()=>{
+  for(const body of [`java.net.http.HttpTimeoutException: ${secret}`,`Caused by: java.net.http.HttpTimeoutException_${secret.replaceAll('-','_')}: hidden`]){
+    const r=summarizeJavaFailures(xml(`<failure type="java.util.concurrent.ExecutionException">${body}</failure>`));
+    assert.equal(r.failures[0].category,'unclassified');assert.ok(!JSON.stringify(r).includes(secret));assert.ok(!JSON.stringify(r).includes(secret.replaceAll('-','_')));
+  }
+});
