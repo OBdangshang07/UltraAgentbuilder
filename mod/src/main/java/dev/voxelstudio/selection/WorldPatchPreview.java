@@ -15,12 +15,20 @@ public final class WorldPatchPreview implements WorldDifferenceView {
     public enum Difference { ADDED, REMOVED, REPLACED }
     public enum Mode { CHANGES, BEFORE, AFTER }
     public record Binding(WorldSelection selection,long contextRevision,String snapshotHash,
-                          String selectionHash,String patchHash,String previewHash) {
+                          String selectionHash,String patchHash,String previewHash,
+                          String couplingPlanHash,String couplingPolicyHash) {
+        /** Legacy bindings remain explicitly v1; no automatic policy upgrade. */
+        public Binding(WorldSelection selection,long contextRevision,String snapshotHash,String selectionHash,String patchHash,String previewHash){
+            this(selection,contextRevision,snapshotHash,selectionHash,patchHash,previewHash,null,null);
+        }
         public Binding {
             Objects.requireNonNull(selection); revision(contextRevision);
             for(var hash:List.of(snapshotHash,selectionHash,patchHash,previewHash)) digest(hash);
             if(!sha(selection.json()).equals(selectionHash)) fail("Selection digest mismatch");
+            if((couplingPlanHash==null)!=(couplingPolicyHash==null))fail("Complete coupled preview identity required");
+            if(couplingPlanHash!=null){digest(couplingPlanHash);digest(couplingPolicyHash);}
         }
+        public boolean coupled(){return couplingPlanHash!=null;}
     }
     public record Row(SelectionRegion.Point position,String before,String after,Difference difference) {}
     public record Section(int x,int y,int z,List<Row> rows) {
@@ -60,10 +68,14 @@ public final class WorldPatchPreview implements WorldDifferenceView {
     public static WorldPatchPreview parse(byte[] bytes,Binding expected){return parse(bytes,expected,()->false);}
     public static WorldPatchPreview parse(byte[] bytes,Binding expected,BooleanSupplier cancelled){
         Objects.requireNonNull(bytes);Objects.requireNonNull(expected);Objects.requireNonNull(cancelled);
-        checkCancelled(cancelled);if(bytes.length>SelectionLimits.snapshotBytes())fail("Preview byte quota exceeded");
-        var value=JsonParser.parseString(new String(bytes,StandardCharsets.UTF_8)).getAsJsonObject();
-        keys(value,"format","version","policy","snapshotHash","selectionHash","patchHash","world","selectionRevision","contextRevision","coordinateSpace","movable","bounds","palette","sections","summary","canAuthorizePlacement","serverBaselineVerified","physicsVerified","worldRendered","previewHash");
-        eq(value,"format","WorldPatchPreview");number(value.get("version"),1,1);eq(value,"policy","static-patch-preview-data-v1");eq(value,"coordinateSpace","original-world-absolute");
+        checkCancelled(cancelled);if(bytes.length>(expected.coupled()?AssemblyLimits.partBytes():SelectionLimits.snapshotBytes()))fail("Preview byte quota exceeded");
+        var value=expected.coupled()?WorldPatchJson.parse(bytes,cancelled):JsonParser.parseString(new String(bytes,StandardCharsets.UTF_8)).getAsJsonObject();
+        var fields=new ArrayList<>(List.of("format","version","policy","snapshotHash","selectionHash","patchHash","world","selectionRevision","contextRevision","coordinateSpace","movable","bounds","palette","sections","summary","canAuthorizePlacement","serverBaselineVerified","physicsVerified","worldRendered","previewHash"));
+        if(expected.coupled()){fields.add("couplingPlanHash");fields.add("couplingPolicyHash");}
+        keys(value,fields.toArray(String[]::new));
+        eq(value,"format","WorldPatchPreview");int version=expected.coupled()?2:1;number(value.get("version"),version,version);
+        eq(value,"policy",expected.coupled()?"coupled-assembly-preview-data-v1":"static-patch-preview-data-v1");eq(value,"coordinateSpace","original-world-absolute");
+        if(expected.coupled()){eq(value,"couplingPlanHash",expected.couplingPlanHash);eq(value,"couplingPolicyHash",expected.couplingPolicyHash);}
         for(var key:List.of("movable","canAuthorizePlacement","serverBaselineVerified","physicsVerified","worldRendered")) falseFlag(value,key);
         eq(value,"snapshotHash",expected.snapshotHash);eq(value,"selectionHash",expected.selectionHash);eq(value,"patchHash",expected.patchHash);eq(value,"previewHash",expected.previewHash);
         if(!value.get("world").equals(expected.selection.world().json()))fail("World/dimension mismatch");
@@ -75,7 +87,7 @@ public final class WorldPatchPreview implements WorldDifferenceView {
         var rawPalette=value.getAsJsonArray("palette");if(rawPalette.size()<2||rawPalette.size()>SelectionLimits.paletteStates())fail("Palette quota exceeded");
         for(var item:rawPalette){String state=string(item);if(!state.matches("minecraft:[a-z0-9_]+(?:\\[[a-z0-9_]+=[a-z0-9_-]+(?:,[a-z0-9_]+=[a-z0-9_-]+)*\\])?"))fail("Invalid block state syntax");if(last!=null&&last.compareTo(state)>=0)fail("Palette not sorted/unique");palette.add(state);last=state;}
         var counts=new EnumMap<Difference,Integer>(Difference.class);for(var d:Difference.values())counts.put(d,0);
-        var positions=new HashMap<SelectionRegion.Point,Row>();var sections=new ArrayList<Section>();Section previous=null;int visited=0;
+        var positions=new HashMap<SelectionRegion.Point,Row>();var sections=new ArrayList<Section>();Section previous=null;int visited=0;var usedPalette=new HashSet<Integer>();
         int loX=Integer.MAX_VALUE,loY=loX,loZ=loX,hiX=Integer.MIN_VALUE,hiY=hiX,hiZ=hiX;
         var rawSections=value.getAsJsonArray("sections");if(rawSections.size()<1||rawSections.size()>SelectionLimits.editCells())fail("Section quota exceeded");
         for(var element:rawSections){
@@ -85,7 +97,8 @@ public final class WorldPatchPreview implements WorldDifferenceView {
             for(var elementRow:rawRows){
                 if((visited++&1023)==0)checkCancelled(cancelled);if(visited>SelectionLimits.editCells())fail("Row quota exceeded");
                 var r=elementRow.getAsJsonArray();if(r.size()!=4)fail("Invalid row");int index=(int)number(r.get(0),0,4095);if(index<=previousIndex)fail("Rows not sorted/unique");previousIndex=index;
-                String before=palette.get((int)number(r.get(1),0,palette.size()-1)),after=palette.get((int)number(r.get(2),0,palette.size()-1));var difference=Difference.values()[(int)number(r.get(3),0,2)];
+                int beforeIndex=(int)number(r.get(1),0,palette.size()-1),afterIndex=(int)number(r.get(2),0,palette.size()-1);usedPalette.add(beforeIndex);usedPalette.add(afterIndex);
+                String before=palette.get(beforeIndex),after=palette.get(afterIndex);var difference=Difference.values()[(int)number(r.get(3),0,2)];
                 var position=new SelectionRegion.Point(sx*16+index%16,sy*16+index/256,sz*16+index/16%16);
                 if(!bounds.contains(position)||expected.selection.protectedAt(position))fail("Row outside bounds or protected scope");
                 if(before.equals(after)||air(before)&&air(after)||difference!=(air(before)?Difference.ADDED:air(after)?Difference.REMOVED:Difference.REPLACED))fail("Difference classification mismatch");
@@ -95,8 +108,9 @@ public final class WorldPatchPreview implements WorldDifferenceView {
             var section=new Section(sx,sy,sz,rows);if(previous!=null&&compare(previous,section)>=0)fail("Sections not sorted/unique");previous=section;sections.add(section);
         }
         if(!bounds.equals(new SelectionRegion(new SelectionRegion.Point(loX,loY,loZ),new SelectionRegion.Point(hiX,hiY,hiZ))))fail("Changed-cell bounds mismatch");
+        if(expected.coupled()&&usedPalette.size()!=palette.size())fail("Coupled preview contains unused palette states");
         var summary=value.getAsJsonObject("summary");keys(summary,"writes","counts","omittedCells","explicitKeeps");eq(summary,"omittedCells","keep");
-        if(number(summary.get("writes"),1,SelectionLimits.editCells())!=positions.size())fail("Write count mismatch");number(summary.get("explicitKeeps"),0,SelectionLimits.editCells());var totals=summary.getAsJsonObject("counts");keys(totals,"added","removed","replaced");for(var d:Difference.values())if(number(totals.get(d.name().toLowerCase(Locale.ROOT)),0,SelectionLimits.editCells())!=counts.get(d))fail("Category count mismatch");
+        if(number(summary.get("writes"),1,SelectionLimits.editCells())!=positions.size())fail("Write count mismatch");number(summary.get("explicitKeeps"),0,expected.coupled()?0:SelectionLimits.editCells());var totals=summary.getAsJsonObject("counts");keys(totals,"added","removed","replaced");for(var d:Difference.values())if(number(totals.get(d.name().toLowerCase(Locale.ROOT)),0,SelectionLimits.editCells())!=counts.get(d))fail("Category count mismatch");
         checkCancelled(cancelled);return new WorldPatchPreview(expected,sections,palette,bounds,positions,counts);
     }
     private static int compare(Section a,Section b){int n=Integer.compare(a.y,b.y);if(n==0)n=Integer.compare(a.z,b.z);return n==0?Integer.compare(a.x,b.x):n;}

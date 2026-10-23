@@ -24,6 +24,7 @@ final class WorldPatchCompiler {
     private static int bytes(JsonElement value){return value.toString().getBytes(StandardCharsets.UTF_8).length;}
     private static String digest(JsonElement value){String hash=WorldPatchJson.text(value);if(!hash.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("Patch SHA256 required");return hash;}
     static Compiled read(SelectionBaseline original,byte[] bytes,WorldPatchPreview.Binding expected,String originalResponseHash,BooleanSupplier cancelled){
+        if(expected.coupled())throw new IllegalArgumentException("Legacy patch cannot adopt a coupled preview identity");
         var raw=WorldPatchJson.parse(bytes,cancelled);
         if(!SelectionBaseline.hash(raw).equals(originalResponseHash))throw new IllegalArgumentException("Original response hash changed");
         var rebuilt=compile(original,raw,cancelled);
@@ -34,6 +35,7 @@ final class WorldPatchCompiler {
         if(bytes(downloaded)>SelectionLimits.snapshotBytes()||!SelectionBaseline.hash(rebuilt.content).equals(SelectionBaseline.hash(downloaded)))throw new IllegalArgumentException("Downloaded patch differs from server reconstruction");
     }
     static void verifyPreview(Compiled rebuilt,WorldPatchPreview preview,WorldPatchPreview.Binding expected){
+        if(expected.coupled()||preview.binding().coupled())throw new IllegalArgumentException("Legacy patch cannot adopt a coupled preview identity");
         if(!preview.binding().equals(expected)||!expected.patchHash().equals(rebuilt.patchHash)||!expected.snapshotHash().equals(rebuilt.baseline.snapshotHash)||!expected.selection().equals(rebuilt.baseline.selection)||expected.contextRevision()!=rebuilt.baseline.contextRevision||preview.totalWrites()!=rebuilt.writes.size())throw new IllegalArgumentException("Preview/candidate/server source identity differs");
         for(var write:rebuilt.writes){var row=preview.at(write.position);if(row==null||!row.before().equals(write.before)||!row.after().equals(write.after)||!row.difference().name().toLowerCase(Locale.ROOT).equals(write.difference))throw new IllegalArgumentException("Preview diff differs from reconstructed writes");}
     }

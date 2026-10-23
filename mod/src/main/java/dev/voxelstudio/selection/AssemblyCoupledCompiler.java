@@ -46,6 +46,20 @@ final class AssemblyCoupledCompiler {
             v.addProperty("canAuthorizePlacement",false);v.addProperty("serverBaselineVerified",false);v.addProperty("physicsVerified",false);v.addProperty("worldWrites",0);v.addProperty("patchSetHash",SelectionBaseline.hash(v));return v;
         }
         void verifyPart(int index,JsonObject downloaded,BooleanSupplier cancelled){if(!part(index,cancelled).equals(downloaded))throw new IllegalArgumentException("Downloaded coupled part differs from complete original native");}
+        WorldPatchPreview.Binding previewBinding(int index,String previewHash,BooleanSupplier cancelled){
+            return new WorldPatchPreview.Binding(baseline.selection,baseline.contextRevision,baseline.snapshotHash,baseline.selectionHash,
+                    WorldPatchJson.text(part(index,cancelled).get("partHash")),previewHash,WorldPatchJson.text(plan.get("planHash")),AssemblyCoupledPolicy.HASH);
+        }
+        /** Display must agree with this server-owned COMPLETE native rebuild,
+         * not just the downloaded part, report or caller's self-rehashed pins. */
+        void verifyPreview(int index,WorldPatchPreview preview,WorldPatchPreview.Binding expected,BooleanSupplier cancelled){
+            if(!expected.coupled()||!preview.binding().equals(expected)||!expected.equals(previewBinding(index,expected.previewHash(),cancelled)))throw new IllegalArgumentException("Coupled preview/whole native identity differs");
+            int offset=index*8192,end=Math.min(writes.size(),offset+8192);if(preview.totalWrites()!=end-offset)throw new IllegalArgumentException("Coupled preview omitted native changes");
+            for(int i=offset;i<end;i++){
+                if((i&1023)==0)WorldPatchJson.cancelled(cancelled);var w=writes.get(i);var row=preview.at(w.position());
+                if(row==null||!row.before().equals(w.before())||!row.after().equals(w.after())||!row.difference().name().toLowerCase(Locale.ROOT).equals(w.difference()))throw new IllegalArgumentException("Coupled preview differs from exact native rows");
+            }
+        }
     }
     private static final class Native {
         final JsonObject manifest;final byte[] cells;final List<String> palette;final int width,height,length,plane,volume;

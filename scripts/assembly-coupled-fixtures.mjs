@@ -5,14 +5,15 @@ import {analyzeAssemblyCoupling,assemblySupportStateCases} from '../src/world/as
 import {resolveState} from '../src/generation/block-states.mjs';
 import {hash} from '../src/generation/compiler.mjs';
 import {ASSEMBLY_COUPLING_POLICY_HASH} from '../contracts/assembly-coupling-policy.mjs';
+import {prepareCoupledAssemblyPreview} from '../src/world/assembly-coupled-preview.mjs';
 
 export async function assemblyCoupledFixtures(){
   const valid=[],invalid=[];
   async function accepted(name,entries=coupledDoorEntries(),options={}){
-    const source=coupledSnapshot(options),native=coupledNative(entries,options.dimensions),parts=[];
-    const plan=compileCoupledAssemblyPlan(source.snapshot,native),patchSet=await streamCoupledAssemblyParts(plan,{onPart:async part=>parts.push(part)});
+    const source=coupledSnapshot(options),native=coupledNative(entries,options.dimensions),parts=[],previews=[];
+    const plan=compileCoupledAssemblyPlan(source.snapshot,native),patchSet=await streamCoupledAssemblyParts(plan,{onPart:async part=>{parts.push(part);previews.push(prepareCoupledAssemblyPreview(plan,part));}});
     valid.push({name,selection:source.selection,capture:source.capture,manifest:native.manifest,cellsBase64:native.binary.toString('base64'),
-      analysis:analyzeAssemblyCoupling(source.snapshot,native),plan,parts,patchSet,groups:[...coupledAssemblyExecutionGroups(plan)]});
+      analysis:analyzeAssemblyCoupling(source.snapshot,native),plan,parts,previews,patchSet,groups:[...coupledAssemblyExecutionGroups(plan)]});
   }
   function rejected(name,entries=coupledDoorEntries(),options={},mutate=()=>{}){
     const source=coupledSnapshot(options),native=coupledNative(entries,options.dimensions);mutate(native);
@@ -21,6 +22,7 @@ export async function assemblyCoupledFixtures(){
     invalid.push({name,selection:source.selection,capture:source.capture,manifest:native.manifest,cellsBase64:native.binary.toString('base64'),nodeRejected:true});
   }
   await accepted('complete-new-door');
+  await accepted('static-only',[[[1,1,1],'minecraft:glass']]);
   const boundary=coupledBoundaryEntries();await accepted('door-crosses-8192',boundary.entries,{dimensions:boundary.dimensions});
   await accepted('negative-original-origin',coupledDoorEntries(),{origin:[-20,-30,-20]});
   await accepted('captured-keep-support',coupledDoorEntries().slice(1),{changes:[[[1,0,1],'minecraft:stone']]});

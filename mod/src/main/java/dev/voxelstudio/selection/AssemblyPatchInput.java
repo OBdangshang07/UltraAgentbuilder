@@ -15,6 +15,7 @@ public final class AssemblyPatchInput {
          * Old read-only callers cannot fabricate it from a parsed display. */
         public Part(int index,byte[] proposal,byte[] patch,WorldPatchPreview preview,byte[] originalPreview){
             Objects.requireNonNull(proposal);Objects.requireNonNull(patch);this.preview=Objects.requireNonNull(preview);
+            if(preview.binding().coupled())throw new IllegalArgumentException("Legacy whole part cannot adopt a coupled preview; explicit new transport required");
             if(index<0||index>=SelectionLimits.assemblyParts()||proposal.length<1||proposal.length>AssemblyLimits.partBytes()
                     ||patch.length<1||patch.length>AssemblyLimits.partBytes())throw new IllegalArgumentException("Bounded original whole transport part required");
             this.index=index;this.proposal=proposal.clone();this.patch=patch.clone();

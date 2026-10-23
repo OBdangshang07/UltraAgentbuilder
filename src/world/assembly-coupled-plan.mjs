@@ -10,6 +10,7 @@ import {ASSEMBLY_COUPLING_POLICY,ASSEMBLY_COUPLING_POLICY_HASH} from '../../cont
 export const COUPLED_ASSEMBLY_POLICY = ASSEMBLY_COUPLING_POLICY.policy;
 export const COUPLED_EXECUTION_ORDER = 'native-order-promote-matching-upper-after-lower';
 const originals = new WeakMap();
+const partOwners = new WeakMap();
 const directions = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
 const air = state => ['minecraft:air','minecraft:cave_air','minecraft:void_air'].includes(state);
 const freeze = value => {
@@ -77,6 +78,17 @@ export function compileCoupledAssemblyPlan(snapshotValue,native,{signal}={}) {
 }
 
 export function coupledAssemblyPlanData(plan) {original(plan);return structuredClone(plan);}
+/** Internal read-only preview source, not a server attestation or consent. */
+export function coupledAssemblyPreviewBinding(plan){
+  const {snapshot}=original(plan);
+  return freeze({world:structuredClone(snapshot.selection.world),selectionRevision:snapshot.selection.revision,
+    contextRevision:snapshot.fence.end,couplingPlanHash:plan.planHash,couplingPolicyHash:plan.policyHash});
+}
+export function checkedCoupledAssemblyPart(plan,value){
+  original(plan);
+  if(partOwners.get(value)!==plan)throw Error('Original complete-plan part required; JSON/hash is not a verified part');
+  return value;
+}
 export function validateCoupledAssemblyPlan(snapshot,native,value,options) {
   const rebuilt=compileCoupledAssemblyPlan(snapshot,native,options);
   if(contextHash(rebuilt)!==contextHash(value))throw Error('Saved coupled plan differs from complete original native/source');
@@ -122,7 +134,7 @@ function part(input,plan,writes,index,offset,signal) {
     index,offset,totalWrites:plan.operationCount,writes,guards:sorted,
     provisional:true,partIsApplyScope:false,completePlanRequired:true,canAuthorizePlacement:false,worldWrites:0};
   if(Buffer.byteLength(JSON.stringify(content))+128>WORLD_ASSEMBLY_LIMITS.partBytes)throw Error('Coupled transport part byte quota');
-  return freeze({...content,partHash:contextHash(content)});
+  const value=freeze({...content,partHash:contextHash(content)});partOwners.set(value,plan);return value;
 }
 
 /** ALL complete-native coupling/support/scope checks precede even part zero.

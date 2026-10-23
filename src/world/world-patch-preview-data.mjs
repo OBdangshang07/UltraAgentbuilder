@@ -1,7 +1,8 @@
 import {WORLD_PATCH_LIMITS} from '../../contracts/world-patch.mjs';
-import {exactKeys, WORLD_SELECTION_LIMITS} from '../../contracts/world-selection.mjs';
+import {exactKeys} from '../../contracts/world-selection.mjs';
 import {contextHash} from './context-snapshot.mjs';
 import {validateWorldPatch} from './world-patch.mjs';
+import {encodeSparseWorldDifference} from './sparse-world-difference.mjs';
 
 // Independent experimental preview preparation, not part of the in-flight
 // Bridge runtime. No server, model, block writer or Minecraft renderer here.
@@ -19,7 +20,6 @@ function freeze(value) {
   return value;
 }
 const clone = value => structuredClone(value);
-const sectionOrder = (a, b) => a.y - b.y || a.z - b.z || a.x - b.x;
 const sectionPoint = (section, index) => [section.x * 16 + index % 16,
   section.y * 16 + Math.floor(index / 256), section.z * 16 + Math.floor(index / 16) % 16];
 
@@ -30,24 +30,12 @@ const sectionPoint = (section, index) => [section.x * 16 + index % 16,
 export function prepareWorldPatchPreview(snapshot, patchValue, {signal} = {}) {
   signal?.throwIfAborted();
   const patch = validateWorldPatch(snapshot, patchValue, {signal});
-  const palette = [...new Set(patch.writes.flatMap(w => [w.before, w.after]))].sort();
-  if (palette.length > WORLD_SELECTION_LIMITS.paletteStates) throw new Error('Preview palette quota exceeded');
-  const paletteIndex = new Map(palette.map((state, i) => [state, i])), sections = new Map();
-  for (let i = 0; i < patch.writes.length; i++) {
-    if (!(i % 1024)) signal?.throwIfAborted();
-    const write = patch.writes[i], [x, y, z] = write.position.map(n => Math.floor(n / 16));
-    const key = [x, y, z].join(',');
-    let section = sections.get(key);
-    if (!section) { section = {x, y, z, rows: []}; sections.set(key, section); }
-    const local = write.position.map((n, axis) => n - [x, y, z][axis] * 16);
-    const index = local[1] * 256 + local[2] * 16 + local[0];
-    section.rows.push([index, paletteIndex.get(write.before), paletteIndex.get(write.after), differences.indexOf(write.difference)]);
-  }
+  const geometry=encodeSparseWorldDifference(patch.writes,{signal});
   const content = {format: 'WorldPatchPreview', version: 1, policy: 'static-patch-preview-data-v1',
     snapshotHash: patch.snapshotHash, selectionHash: patch.selectionHash, patchHash: patch.patchHash,
     world: clone(patch.world), selectionRevision: patch.selectionRevision, contextRevision: patch.contextRevision,
     coordinateSpace: 'original-world-absolute', movable: false, bounds: clone(patch.summary.bounds),
-    palette, sections: [...sections.values()].sort(sectionOrder).map(s => ({...s, rows: s.rows.sort((a, b) => a[0] - b[0])})),
+    palette:geometry.palette, sections:geometry.sections,
     summary: {writes: patch.writes.length, counts: clone(patch.summary.counts), omittedCells: 'keep',
       explicitKeeps: patch.summary.explicitKeeps},
     canAuthorizePlacement: false, serverBaselineVerified: false, physicsVerified: false, worldRendered: false};

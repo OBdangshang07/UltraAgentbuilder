@@ -22,12 +22,16 @@ final class AssemblyCoupledCompilerTest {
     private JsonObject first(){return fixtures.getAsJsonArray("valid").get(0).getAsJsonObject();}
     private JsonObject named(String name){for(var f:fixtures.getAsJsonArray("valid"))if(f.getAsJsonObject().get("name").getAsString().equals(name))return f.getAsJsonObject();throw new AssertionError("Missing fixture "+name);}
     @Test void independentCompilerReconstructsEveryFullAnalysisPlanPartAndSet(){
-        assertEquals(0,fixtures.get("realModelCalls").getAsInt());assertEquals(0,fixtures.get("worldWrites").getAsInt());assertEquals(11,fixtures.getAsJsonArray("valid").size());assertEquals(AssemblyCoupledPolicy.HASH,fixtures.get("policyHash").getAsString());
+        assertEquals(0,fixtures.get("realModelCalls").getAsInt());assertEquals(0,fixtures.get("worldWrites").getAsInt());assertEquals(12,fixtures.getAsJsonArray("valid").size());assertEquals(AssemblyCoupledPolicy.HASH,fixtures.get("policyHash").getAsString());
         for(var element:fixtures.getAsJsonArray("valid")){
             var f=element.getAsJsonObject();var compiled=compile(f);String name=f.get("name").getAsString();
             assertEquals(f.get("analysis"),compiled.analysis(),name+" analysis");assertEquals(f.get("plan"),compiled.plan(),name+" plan");assertFalse(compiled.canAuthorizePlacement());assertFalse(compiled.physicsVerified());
             assertEquals(f.getAsJsonArray("parts").size(),compiled.partCount());
-            for(int index=0;index<compiled.partCount();index++){assertEquals(f.getAsJsonArray("parts").get(index),compiled.part(index,()->false),name+" part"+index);compiled.verifyPart(index,f.getAsJsonArray("parts").get(index).getAsJsonObject(),()->false);}
+            for(int index=0;index<compiled.partCount();index++){
+                assertEquals(f.getAsJsonArray("parts").get(index),compiled.part(index,()->false),name+" part"+index);compiled.verifyPart(index,f.getAsJsonArray("parts").get(index).getAsJsonObject(),()->false);
+                var raw=f.getAsJsonArray("previews").get(index).getAsJsonObject();var binding=compiled.previewBinding(index,raw.get("previewHash").getAsString(),()->false);
+                var preview=WorldPatchPreview.parse(raw.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),binding);compiled.verifyPreview(index,preview,binding,()->false);
+            }
             assertEquals(f.get("patchSet"),compiled.patchSet(()->false),name+" set");
             var groups=new JsonArray();for(var group:compiled.groups()){var row=new JsonObject();row.addProperty("offset",group.offset());row.addProperty("kind",group.kind());var indices=new JsonArray();group.operationIndices().forEach(indices::add);row.add("operationIndices",indices);row.addProperty("canAuthorizePlacement",false);groups.add(row);}
             assertEquals(f.get("groups"),groups,name+" groups");
