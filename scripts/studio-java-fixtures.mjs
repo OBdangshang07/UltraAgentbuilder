@@ -10,6 +10,7 @@ import {specialBlocksSpec} from '../tests/fixtures/special-blocks.mjs';
 import {MATERIALS} from '../src/generation/materials.mjs';
 import {resolveState,transformState} from '../src/generation/block-states.mjs';
 import {staticOpenDoorCollision} from '../src/generation/static-open-doors.mjs';
+import {assemblySupportStateCases} from '../src/world/assembly-coupling.mjs';
 import {compileScene} from '../src/design/compiler.mjs';
 import {courtyard,teahouse,commercial,highrise,instanceStudy,worldHighrise,shape,panelCourtyard,panelTeahouse,panelHighrise,panelWorldHighrise,fourMetreWorldTower} from '../tests/design/fixtures.mjs';
 import {profileTower,profileGallery,profileCourt,profileWorldTower} from '../tests/design/profile-fixtures.mjs';
@@ -61,6 +62,7 @@ for(const material of Object.keys(MATERIALS).filter(m=>m.endsWith('_door')))for(
  doorCollisionStates.push({state,collision});
 }
 await fs.writeFile('mod/build/test-fixtures/static-open-door-collisions.json',JSON.stringify(doorCollisionStates));
+await fs.writeFile('mod/build/test-fixtures/assembly-upper-face-support.json',JSON.stringify(assemblySupportStateCases()));
 await fs.writeFile('mod/build/test-fixtures/material-states.json',JSON.stringify(Object.values(MATERIALS)));
 const transforms=[];
 for(const facing of ['north','east','south','west'])for(const half of ['bottom','top'])for(const shape of ['straight','inner_left','inner_right','outer_left','outer_right'])for(let rotation=0;rotation<4;rotation++)for(const mirror of [false,true]){
