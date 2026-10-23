@@ -92,6 +92,13 @@ const completionPolicies=prototypePolicies.filter(f=>f.request.assemblyPrototype
  return {request,policy:generationPreflight(request),referencePolicy:referenceAssemblyPreflight(request)};
 });
 await fs.writeFile('mod/build/test-fixtures/completion-reserve-preflight.json',JSON.stringify(completionPolicies));
+const validationPolicies=[];
+for(const f of prototypePolicies.filter(f=>f.request.assemblyPrototypes==='staged'))for(const composed of [false,true]){
+ const request={...f.request,assemblyConfirmed:true,assemblyPrototypeValidation:'expanded-routes-v1',
+  ...(composed?{assemblyCompletionReserve:'design-correction-v1',assemblyEvidence:'representative-v1',assemblyProviderRecovery:'bounded',effort:'max'}:{})};
+ validationPolicies.push({request,policy:generationPreflight(request),referencePolicy:referenceAssemblyPreflight(request)});
+}
+await fs.writeFile('mod/build/test-fixtures/prototype-validation-preflight.json',JSON.stringify(validationPolicies));
 const cameraPolicies=prototypePolicies.filter(f=>f.request.assemblyPrototypes==='staged').map(f=>{
  const request={...f.request,assemblyEvidence:'representative-v1'};return {request,policy:generationPreflight(request)};
 });

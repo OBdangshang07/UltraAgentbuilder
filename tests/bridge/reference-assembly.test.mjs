@@ -64,9 +64,10 @@ for(const qualityTier of ['lite','pro','max','ultra'])test(qualityTier+' uses on
   assert.equal(audit.originalBriefReceiptVerified,true);assert.equal(audit.downstreamBriefIdentityVerified,true);assert.equal(audit.auditedStages,5);
 });
 
-for(const reserve of [false,true])test('staged Ultra '+(reserve?'with explicit completion reserve':'legacy')+' retains three concepts, four roles, five packages and final native review within 26 calls',async t=>{
+for(const expanded of [false,true])for(const reserve of [false,true])test('staged Ultra '+(expanded?'expanded-route ':'legacy-route ')+(reserve?'with explicit completion reserve':'legacy reserve')+' retains three concepts, four roles, five packages and final native review within 26 calls',async t=>{
   const {model:ignored,...generationOverrides}=stagedRequest;
   if(reserve)generationOverrides.assemblyCompletionReserve='design-correction-v1';
+  if(expanded)generationOverrides.assemblyPrototypeValidation='expanded-routes-v1';
   const h=await setup(t,{generationOverrides}),result=await runDurableAssembly(h.options);
   assert.equal(result.records.length,17);assert.equal(result.summary.completedPackages.length,5);
   assert.equal(result.summary.decomposition.requiredRoleStagesAccepted,4);assert.equal(result.summary.visualReviewCurrent,true);
@@ -74,6 +75,8 @@ for(const reserve of [false,true])test('staged Ultra '+(reserve?'with explicit c
   assert.equal(h.f.preparation.policy.assembly.prototypes.recoveryReserve,9);
   assert.equal(h.f.preparation.generation.assemblyCompletionReserve,reserve?'design-correction-v1':undefined);
   assert.equal(h.f.preparation.policy.assembly.completionReserve?.designCorrections,reserve?1:undefined);
+  assert.equal(h.f.preparation.generation.assemblyPrototypeValidation,expanded?'expanded-routes-v1':undefined);
+  assert.equal(h.f.preparation.policy.assembly.prototypes.version,expanded?6:5);
   const blueprint=h.calls.find(c=>c.options.stageName==='assembly-blueprint');
   assert.equal(blueprint.input.callBudget.version,2);assert.equal(blueprint.input.callBudget.completedPrelude,1);
   assert.equal(blueprint.input.callBudget.consumedRecovery,0,'Mandatory analysis is not counted as a recovery call');

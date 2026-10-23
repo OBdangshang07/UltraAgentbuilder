@@ -32,5 +32,17 @@ Synthetic tests use authored full-block scenes and exact saved worker outputs,
 not private model answers or native quality images. They reproduce the old
 rejection, exercise new full-task/durable replay and reject missing/short
 expansion, changed owners/regions and an unauthorized legacy inspection marker.
-The UI has not selected this new option in an installed candidate yet; live
-same-session acceptance and release gates are still separate work.
+The normal client now exposes a default-off `通路校验` option for staged Ultra
+v4. Explicit selection adds only `assemblyPrototypeValidation` to a NEW task;
+leaving the required workflow clears it. Ordinary and reference builders use
+the same selection, and both fee confirmation and exact current-request checks
+retain it. The client requires the exact version-6 validation policy; omitted
+selection retains version 5 and cannot silently gain the new policy. Reference
+preparation v2 retains the selection, while legacy v1 rejects it.
+
+Free source validation passed 31 related Node checks and 51 Java tests across
+eight suites, including policies for all 22–26-call budgets, composed recovery/
+camera/reserve options, altered/missing policy rejection and legacy consent.
+The source-only candidate compiled and built, but this UI selection has not yet
+completed a new installed-game gate. Real-model same-session acceptance,
+complete same-asset placement and release gates remain separate work.

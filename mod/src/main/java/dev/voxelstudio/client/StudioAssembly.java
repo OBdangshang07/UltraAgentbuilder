@@ -67,6 +67,7 @@ final class StudioAssembly {
         var out=new StringBuilder("\n\n组件化制作 · ").append(value(a,"id","未知")).append("\n确认上限：").append(value(p,"maximumCalls","?")).append(" 次底层模型调用\n已预留：").append(value(job,"assemblyCallsReserved","0")).append(" 次；调用回执：").append(receipts).append(" 次\n回执缺失不代表未执行或未计费；失败调用不退还预算；只有确定收到的可修复响应可在预算内纠正，未知结果不重发。");
         out.append(StudioProviderRecovery.details(job));
         if(StudioCompletionReserve.hasVerifiedPolicy(a))out.append("\n").append(StudioCompletionReserve.WARNING);
+        if(StudioPrototypeValidation.hasVerifiedPolicy(a))out.append("\n").append(StudioPrototypeValidation.WARNING);
         if(a.has("quality"))out.append("\n质量 v").append(value(a.getAsJsonObject("quality"),"version","?")).append("：代表原型与空间证据；跨包精修仅限已批准范围。");
         if(a.has("prototypes")){
             if("staged".equals(value(a.getAsJsonObject("prototypes"),"mode","")))out.append("\n分阶段原型（实验）：3 次独立概念 → 自动选案 → 差量蓝图 → 4 次单角色原型 → 种子看图复核 → 0 调用展开 → 全部深化包 → 整楼终审。纠错 / 改稿 / 再复核仍占同一预算。");
@@ -109,6 +110,7 @@ final class StudioAssembly {
         boolean representativeEvidence=StudioRepresentativeEvidence.verify(request,a);
         boolean providerRecovery=StudioProviderRecovery.verify(request,a);
         boolean completionReserve=StudioCompletionReserve.verify(request,a);
+        boolean expandedRoutes=StudioPrototypeValidation.verify(request,a);
         boolean recovery="safe".equals(value(request,"assemblyRecovery",""));
         if(recovery){
             if(a==null||!a.has("recovery"))throw new IllegalArgumentException("配套不支持安全自动恢复，请完整升级");
@@ -127,7 +129,7 @@ final class StudioAssembly {
         if(prototypes){
             if(!List.of("verified","staged").contains(value(request,"assemblyPrototypes",""))||!qualityName.equals("v4")||!nativeImages||!recovery||a==null||!a.has("prototypes")||!a.get("prototypes").isJsonObject())throw new IllegalArgumentException("原型展开选择 / 配套协议不一致");
             var e=a.getAsJsonObject("prototypes");
-            if(!(staged?"5":"1").equals(value(e,"version",""))||!value(request,"assemblyPrototypes","").equals(value(e,"mode",""))||!"true".equals(value(e,"newBuildingOnly",""))||!"true".equals(value(e,"seedVisualGate",""))||!"true".equals(value(e,"expandedVisualGate",""))||!"0".equals(value(e,"expansionCalls","")))throw new IllegalArgumentException("原型展开权限 / 整楼实图复核 / 调用策略不一致，请完整升级");
+            if(!(staged?(expandedRoutes?"6":"5"):"1").equals(value(e,"version",""))||!value(request,"assemblyPrototypes","").equals(value(e,"mode",""))||!"true".equals(value(e,"newBuildingOnly",""))||!"true".equals(value(e,"seedVisualGate",""))||!"true".equals(value(e,"expandedVisualGate",""))||!"0".equals(value(e,"expansionCalls","")))throw new IllegalArgumentException("原型展开权限 / 整楼实图复核 / 调用策略不一致，请完整升级");
             if(staged){
                 stagedPackageLimit(calls);
                 if(!"ultra".equals(t.id())||!"3".equals(value(e,"candidateCount",""))||!Integer.toString(stagedRecoveryReserve(calls)).equals(value(e,"recoveryReserve","")))throw new IllegalArgumentException("分阶段原型职责 / 预算策略不一致");
@@ -171,6 +173,7 @@ final class StudioAssembly {
             +(qualityName.equals("v4")?"\n修改后使用固定相机的前后原生图对照，分项核对上轮问题与设计取舍。可选精修被判为退步时保留上一完整已复核稿及原意见，不把概念草稿当成品，也不把未解决问题改记通过。":"")
             +(representativeEvidence?"\n"+StudioRepresentativeEvidence.WARNING:"")
             +(completionReserve?"\n"+StudioCompletionReserve.WARNING:"")
+            +(expandedRoutes?"\n"+StudioPrototypeValidation.WARNING:"")
             +(prototypes?"\n真实原型：先制作典型空间 / 立面 / 入口 / 特殊层样板；所有展开实例先完整几何预检，再以完整展开建筑的实际原生图复核，接受后才冻结制作范围。改稿仍绑定原种子及明确展开参数。展开本身 0 次模型调用；制作、纠错和看图复核仍在原总预算内。种子不是最终成品，此阶段不代表精修成品或通行已验证，不是世界写入授权。":"")
             +(staged?"\n原型纠错 v4：每次原型制作、基础纠错和追加纠错均保留全部后续原型、深化包、展开整楼复核、整楼终审及 "+(completionReserve?3:2)+" 次改稿 / 再复核"+(completionReserve?" / 几何纠错":"")+"预算；基础纠错 "+t.maximumComponentCorrections()+" 次，超出后仅使用本任务余量。不会升级旧任务、重置次数或重发未知调用。":"")
             +(staged?"\n分工校正 v1：概念接受前可明确调整包用途及增加 / 合并工作范围，核对全部原型展开格；保留原工作范围、组件归属、依赖、通行职责和保护空间。当前复核接受后冻结制作范围，后续组件不能再扩权；不增加模型预算或世界写入权限。":"")
