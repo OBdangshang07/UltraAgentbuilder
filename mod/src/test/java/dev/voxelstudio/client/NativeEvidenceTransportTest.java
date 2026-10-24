@@ -161,6 +161,26 @@ class NativeEvidenceTransportTest {
         var t=target();server.createContext(t.memberRoute("request"),e->{routes.add("GET "+e.getRequestURI());reply(e,404,bytes("{}"),"application/json");});
         assertThrows(ExecutionException.class,()->client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS));assertEquals(List.of("GET "+t.memberRoute("request")),routes);
     }
+    private JsonObject coupledStatus(){var value=status.deepCopy();value.addProperty("format","CoupledReferenceWorldAssemblyRunnerStatus");value.addProperty("version",1);value.addProperty("purpose","coupled-reference-world-assembly");return value;}
+    @Test void coupledV1UsesItsOwnActualRequestCellsAndUploadRoutes()throws Exception{
+        status=coupledStatus();var t=NativeEvidenceTarget.coupledAssembly(JOB,ORIGINAL,status);reads(t);
+        endpoint(t.jobRoute(),e->bytes(status.toString()),"application/json");endpoint(t.memberRoute("upload"),e->bytes(receipt.toString()),"application/json");
+        var r=client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS);assertTrue(client.loadEvidence(t,r).get(5,TimeUnit.SECONDS).diagnosticOnly);
+        assertEquals(receipt,client.uploadEvidence(t,upload).get(5,TimeUnit.SECONDS));assertEquals(NativeEvidenceTarget.Namespace.COUPLED_ASSEMBLY,t.namespace());
+        assertEquals(5,routes.size());assertTrue(routes.stream().allMatch(route->route.contains("/v1/coupled-reference-world-assembly/jobs/")));
+    }
+    @Test void coupledNativeStatusCannotCrossLegacyOrFullV2EvenWithEqualHashes(){
+        var value=coupledStatus();var t=NativeEvidenceTarget.coupledAssembly(JOB,ORIGINAL,value);
+        assertThrows(IllegalStateException.class,()->NativeEvidenceTarget.assembly(JOB,ORIGINAL,value));assertThrows(IllegalStateException.class,()->NativeEvidenceTarget.coupledAssembly(JOB,ORIGINAL,status));
+        assertThrows(IllegalStateException.class,()->t.stillWaiting(status));assertThrows(IllegalStateException.class,()->NativeEvidenceTarget.legacy(JOB,t.evidenceId()).stillWaiting(value));
+        assertThrows(IllegalStateException.class,()->NativeEvidenceTarget.coupledAssembly(JOB,"f".repeat(64),value));assertEquals(List.of(),routes);
+    }
+    @Test void coupledLostUploadAckOnlyQueriesTheOriginalAfterItProgresses()throws Exception{
+        status=coupledStatus();var t=NativeEvidenceTarget.coupledAssembly(JOB,ORIGINAL,status);endpoint(t.jobRoute(),e->bytes(status.toString()),"application/json");
+        server.createContext(t.memberRoute("upload"),e->{routes.add("POST "+e.getRequestURI());e.getRequestBody().readAllBytes();status.getAsJsonObject("nativeEvidence").addProperty("state","complete");status.getAsJsonObject("nativeEvidence").addProperty("evidenceHash","e".repeat(64));e.getResponseHeaders().set("Content-Type","application/json");e.sendResponseHeaders(200,100);try(var out=e.getResponseBody()){out.write('{');}});
+        assertThrows(ExecutionException.class,()->client.uploadEvidence(t,upload).get(5,TimeUnit.SECONDS));assertNull(client.uploadEvidence(t,upload).get(5,TimeUnit.SECONDS));
+        assertEquals(List.of("GET "+t.jobRoute(),"POST "+t.memberRoute("upload"),"GET "+t.jobRoute()),routes);
+    }
     @Test void substitutedManifestOrCellsCannotCreateBuildableOrDiagnosticReplacement()throws Exception{
         var t=target();reads(t);var r=client.readEvidenceRequest(t).get(5,TimeUnit.SECONDS);
         manifest.addProperty("assetHash","f".repeat(64));assertThrows(ExecutionException.class,()->client.loadEvidence(t,r).get(5,TimeUnit.SECONDS));assertEquals(2,routes.size());

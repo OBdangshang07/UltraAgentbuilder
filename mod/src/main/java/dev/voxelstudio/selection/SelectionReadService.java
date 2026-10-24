@@ -38,6 +38,13 @@ public final class SelectionReadService {
         void releaseIfNotDispatched();
         default boolean canAuthorizePlacement(){return false;}
     }
+    /** Independent coupled v1 retention, not a PatchRetention adapter. */
+    public interface CoupledRetention {
+        CompletableFuture<Void> checkedBeforeDispatch();
+        void markDispatchAttempted();
+        void releaseIfNotDispatched();
+        default boolean canAuthorizePlacement(){return false;}
+    }
     public static final class Handle {
         private final String id=UUID.randomUUID().toString();
         private final CompletableFuture<Capture> result=new CompletableFuture<>();
@@ -221,6 +228,30 @@ public final class SelectionReadService {
                 public CompletableFuture<Void> checkedBeforeDispatch(){
                     var checked=new CompletableFuture<Void>();server.execute(()->{try{
                         if(checkedTask(server,player,original.id(),original.selection().revision())!=t||t.capture!=original||t.lifetime!=lifetime)throw new IllegalStateException("原 SEND 保留已失效，不能重绑");
+                        lifetime.beforeDispatch(original,player,binding,System.nanoTime());checked.complete(null);
+                    }catch(Exception e){checked.completeExceptionally(e);}});return checked;
+                }
+                public void markDispatchAttempted(){lifetime.attempted(original,player,binding,System.nanoTime());}
+                public void releaseIfNotDispatched(){lifetime.releaseIfNotDispatched(original,player,binding);}
+            });
+        }catch(Exception e){result.completeExceptionally(e);}});return result;
+    }
+    /** Retain only the SAME original server Capture for one explicit coupled
+     * SEND. The common lifetime excludes any simultaneous legacy retention;
+     * no candidate, native lease or final write permission is created here. */
+    public static CompletableFuture<CoupledRetention> retainForCoupledSend(MinecraftServer server,UUID player,Capture original,CoupledAssemblySendBinding binding){
+        Objects.requireNonNull(original);Objects.requireNonNull(binding);var result=new CompletableFuture<CoupledRetention>();
+        server.execute(()->{try{
+            var t=checkedTask(server,player,original.id(),original.selection().revision());
+            if(t.capture!=original||t.baseline==null||!binding.contextId().equals(original.id())||binding.contextRevision()!=original.contextRevision()
+                    ||!binding.snapshotHash().equals(t.baseline.snapshotHash)||!binding.selectionHash().equals(t.baseline.selectionHash))
+                throw new IllegalStateException("新成组 SEND 与仍持有的原服务器快照不一致");
+            var lifetime=t.lifetime;lifetime.reserve(original,player,binding,System.nanoTime());
+            result.complete(new CoupledRetention(){
+                public CompletableFuture<Void> checkedBeforeDispatch(){
+                    var checked=new CompletableFuture<Void>();server.execute(()->{try{
+                        if(checkedTask(server,player,original.id(),original.selection().revision())!=t||t.capture!=original||t.lifetime!=lifetime)
+                            throw new IllegalStateException("新成组原 SEND 已失效，不能重绑");
                         lifetime.beforeDispatch(original,player,binding,System.nanoTime());checked.complete(null);
                     }catch(Exception e){checked.completeExceptionally(e);}});return checked;
                 }

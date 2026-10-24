@@ -45,8 +45,22 @@ native cells and all ordered part/preview downloads carry original bytes with
 hashes, and each read rechecks the whole completed candidate. The service fences
 other model/configuration/attachment/context lanes and cannot write the world.
 
-The new lane is not in the player UI yet. Strict client downloads,
-original server Capture/SEND retention, native
+The Java client now has independent v1 references, original SEND parsing and
+durable claims; none of the old reference lanes can adopt them. Its dedicated
+server retention keeps the exact original Capture/player and shares the
+single-Capture exclusion with legacy SENDs using distinct binding types.
+Started/unknown original sends have no idle generation cutoff; world/selection
+changes, explicit cancellation and server shutdown still revoke that lifetime.
+This retention is not a native lease or final write confirmation.
+
+The bounded client download retains exact manifest, cells, plan, binding and
+all part/preview bytes, counts actual received HTTP bytes, rechecks complete
+metadata and final status, and returns only one complete new input/display.
+Partial, reordered or cross-owner collections are not promoted. Original
+references have their own client-tick observer and native render namespace;
+closing a page does not trigger a new SEND or route a task through legacy IO.
+
+The new lane is not in the player UI yet. Independent native
 lease, final consent, mutual exclusion, installed projection, same-asset actual
 placement/undo and physical-save acceptance remain necessary. Existing coupled
 BEFORE editing is still protected, not silently enabled. Synthetic tests are

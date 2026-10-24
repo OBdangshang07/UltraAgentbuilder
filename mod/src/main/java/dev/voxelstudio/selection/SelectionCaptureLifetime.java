@@ -11,11 +11,19 @@ final class SelectionCaptureLifetime<O> {
     static final long IDLE_NANOS=300_000_000_000L,DISPATCH_PREPARATION_NANOS=120_000_000_000L;
     enum Phase { IDLE,PREPARING,POSSIBLY_SENT,ABANDONED,REVOKED }
     private final O original;private final UUID player;private final long readyAt;
-    private SelectionReadService.PatchSendBinding binding;private long preparedAt;
+    // Exactly one original lane may retain this Capture. Distinct value
+    // types cannot adopt each other's PREPARING or POSSIBLY_SENT lifetime.
+    private Object binding;private long preparedAt;
     private Phase phase=Phase.IDLE;
     SelectionCaptureLifetime(O original,UUID player,long readyAt){this.original=Objects.requireNonNull(original);this.player=Objects.requireNonNull(player);this.readyAt=readyAt;}
     private void owner(O original,UUID player){if(this.original!=original||!this.player.equals(player))throw new IllegalStateException("不能重绑原快照或玩家");}
     synchronized void reserve(O original,UUID player,SelectionReadService.PatchSendBinding binding,long now){
+        reserveOwned(original,player,binding,now);
+    }
+    synchronized void reserve(O original,UUID player,CoupledAssemblySendBinding binding,long now){
+        reserveOwned(original,player,binding,now);
+    }
+    private void reserveOwned(O original,UUID player,Object binding,long now){
         owner(original,player);Objects.requireNonNull(binding);
         if(expired(now))throw new IllegalStateException("原快照或发送准备已过期，不能重新保留");
         if(phase==Phase.PREPARING&&this.binding.equals(binding))return;
@@ -23,11 +31,21 @@ final class SelectionCaptureLifetime<O> {
         this.binding=binding;preparedAt=now;phase=Phase.PREPARING;
     }
     synchronized void beforeDispatch(O original,UUID player,SelectionReadService.PatchSendBinding binding,long now){
+        beforeOwnedDispatch(original,player,binding,now);
+    }
+    synchronized void beforeDispatch(O original,UUID player,CoupledAssemblySendBinding binding,long now){
+        beforeOwnedDispatch(original,player,binding,now);
+    }
+    private void beforeOwnedDispatch(O original,UUID player,Object binding,long now){
         owner(original,player);
         if(phase!=Phase.PREPARING||!Objects.equals(this.binding,binding)||expired(now))throw new IllegalStateException("原发送准备已失效、使用或被替换");
     }
     synchronized void attempted(O original,UUID player,SelectionReadService.PatchSendBinding binding,long now){beforeDispatch(original,player,binding,now);phase=Phase.POSSIBLY_SENT;}
+    synchronized void attempted(O original,UUID player,CoupledAssemblySendBinding binding,long now){beforeDispatch(original,player,binding,now);phase=Phase.POSSIBLY_SENT;}
     synchronized void releaseIfNotDispatched(O original,UUID player,SelectionReadService.PatchSendBinding binding){
+        owner(original,player);if(phase==Phase.PREPARING&&Objects.equals(this.binding,binding))phase=Phase.ABANDONED;
+    }
+    synchronized void releaseIfNotDispatched(O original,UUID player,CoupledAssemblySendBinding binding){
         owner(original,player);if(phase==Phase.PREPARING&&Objects.equals(this.binding,binding))phase=Phase.ABANDONED;
     }
     synchronized boolean expired(long now){
@@ -43,7 +61,7 @@ final class SelectionCaptureLifetime<O> {
      * response certificate, final confirmation or write capability. */
     synchronized void checkedAssembly(O original,UUID player,AssemblyPatchBinding candidate){
         owner(original,player);Objects.requireNonNull(candidate);
-        if(phase!=Phase.POSSIBLY_SENT||binding==null
+        if(phase!=Phase.POSSIBLY_SENT||!(this.binding instanceof SelectionReadService.PatchSendBinding binding)
                 ||!binding.contextId().equals(candidate.captureId())
                 ||binding.contextRevision()!=candidate.contextRevision()
                 ||!binding.snapshotHash().equals(candidate.snapshotHash())
@@ -52,6 +70,11 @@ final class SelectionCaptureLifetime<O> {
                 ||!binding.manifestHash().equals(candidate.contextRecordHash())
                 ||!binding.submissionHash().equals(candidate.requestHash())
                 ||!binding.runtimeHash().equals(candidate.runtimeHash()))throw new IllegalStateException("整组候选不是此玩家仍持有的原完整 SEND；不能重绑或续发");
+    }
+    synchronized void checkedCoupled(O original,UUID player,CoupledAssemblyBinding candidate){
+        owner(original,player);Objects.requireNonNull(candidate);
+        if(phase!=Phase.POSSIBLY_SENT||!(binding instanceof CoupledAssemblySendBinding coupled)||!coupled.matches(candidate))
+            throw new IllegalStateException("新完整成组候选不是仍持有的原 v1 SEND；不接管旧协议或重新绑定");
     }
     synchronized Phase phase(){return phase;}
     boolean canAuthorizePlacement(){return false;}

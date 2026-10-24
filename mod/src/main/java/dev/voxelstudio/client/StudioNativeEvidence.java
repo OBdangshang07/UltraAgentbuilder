@@ -27,7 +27,7 @@ final class StudioNativeEvidence {
     }
     static void observe(JsonObject job){
         // Full v2 status is deliberately ID-only. Never infer a legacy alias.
-        if(job.has("format")&&job.get("format").getAsString().startsWith("ReferenceWorldAssembly"))return;
+        if(job.has("format")&&(job.get("format").getAsString().startsWith("ReferenceWorldAssembly")||job.get("format").getAsString().startsWith("CoupledReferenceWorldAssembly")))return;
         String state=job.get("state").getAsString();
         if(java.util.Set.of("failed","cancelled","interrupted","preview-ready").contains(state)){if(jobId!=null&&jobId.equals(job.get("id").getAsString()))clear();return;}
         if(!job.has("nativeEvidence"))return;var evidence=job.getAsJsonObject("nativeEvidence");
@@ -44,9 +44,15 @@ final class StudioNativeEvidence {
         }catch(Exception error){status="原生证据请求被拒绝："+error.getMessage();}
     }
     static void observeAssembly(String originalJob,String originalRequestHash,JsonObject job){
+        observeFull(NativeEvidenceTarget.Namespace.FULL_ASSEMBLY,originalJob,originalRequestHash,job);
+    }
+    static void observeCoupledAssembly(String originalJob,String originalRequestHash,JsonObject job){
+        observeFull(NativeEvidenceTarget.Namespace.COUPLED_ASSEMBLY,originalJob,originalRequestHash,job);
+    }
+    private static void observeFull(NativeEvidenceTarget.Namespace namespace,String originalJob,String originalRequestHash,JsonObject job){
         try{
-            var next=NativeEvidenceTarget.assembly(originalJob,originalRequestHash,job);
-            if(next==null){if(target!=null&&target.namespace()==NativeEvidenceTarget.Namespace.FULL_ASSEMBLY&&target.jobId().equals(originalJob))clear();return;}
+            var next=namespace==NativeEvidenceTarget.Namespace.COUPLED_ASSEMBLY?NativeEvidenceTarget.coupledAssembly(originalJob,originalRequestHash,job):NativeEvidenceTarget.assembly(originalJob,originalRequestHash,job);
+            if(next==null){if(target!=null&&target.namespace()==namespace&&target.jobId().equals(originalJob))clear();return;}
             if(next.equals(target))return;
             clear();enabled=true;target=next;jobId=next.jobId();evidenceId=next.evidenceId();load();
         }catch(Exception error){status="完整联合任务原生请求被拒绝："+error.getMessage();}

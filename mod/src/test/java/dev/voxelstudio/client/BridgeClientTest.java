@@ -25,6 +25,11 @@ class BridgeClientTest {
         client=new BridgeClient(dir);
     }
     static void reply(HttpExchange e,String text)throws java.io.IOException{byte[] b=text.getBytes(java.nio.charset.StandardCharsets.UTF_8);e.sendResponseHeaders(200,b.length);try(var out=e.getResponseBody()){out.write(b);}}
+    // These are complete, multi-request reads, not latency assertions. Their
+    // old eight-second wait was shorter than the bounded ten-second health
+    // probe alone. Keep a bounded test wait without changing production HTTP
+    // deadlines, retry behavior, or the separate one-second cancel assertions.
+    static <T> T referenceResult(CompletableFuture<T> pending)throws Exception{return pending.get(30,TimeUnit.SECONDS);}
     @AfterEach void stop(){releaseSlow.countDown();client.close();server.stop(0);handlers.shutdownNow();}
     @Test void builtinIdentityMustMatchBeforeAnyApplicationRouteAndMismatchNeverStopsForeignOwner()throws Exception{
         var expectedVersion=BridgeClient.class.getDeclaredField("expectedVersion");expectedVersion.setAccessible(true);expectedVersion.set(client,"0.4.10-alpha");
@@ -106,8 +111,33 @@ class BridgeClientTest {
             server.createContext(prefix+"/images/"+record.get("id").getAsString(),e->{assertEquals("GET",e.getRequestMethod());pictures.incrementAndGet();e.sendResponseHeaders(200,png.length);try(var out=e.getResponseBody()){out.write(png);}});
         }
         server.createContext("/v1/reference-generation-jobs",e->{mutations.incrementAndGet();reply(e,"{}");});
-        var result=client.readReferenceHistory(original).get(8,TimeUnit.SECONDS);assertEquals(c.get("history"),result.history());assertEquals(2,result.images().size());assertEquals(1,queries.get());assertEquals(2,pictures.get());assertEquals(0,mutations.get());
+        var result=referenceResult(client.readReferenceHistory(original));assertEquals(c.get("history"),result.history());assertEquals(2,result.images().size());assertEquals(1,queries.get());assertEquals(2,pictures.get());assertEquals(0,mutations.get());
         result.history().addProperty("state","external edit");assertEquals("queued",result.history().get("state").getAsString());
+    }
+    @Test void originalHistoryMayExceedOldTestWaitWithoutReplayAndCancelStillBypassesIt()throws Exception{
+        var c=ReferenceJobHistoryReceiptTest.fixture();var original=c.getAsJsonObject("historyJob");String prefix="/v1/reference-generation-jobs/"+original.get("id").getAsString();
+        var queries=new java.util.concurrent.atomic.AtomicInteger();var pictures=new java.util.concurrent.atomic.AtomicInteger();var mutations=new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext(prefix+"/history",e->{
+            assertEquals("GET",e.getRequestMethod());queries.incrementAndGet();slowStarted.countDown();
+            try{assertTrue(releaseSlow.await(30,TimeUnit.SECONDS));}catch(InterruptedException error){Thread.currentThread().interrupt();throw new java.io.IOException(error);}
+            reply(e,c.get("history").toString());
+        });
+        for(int i=0;i<2;i++){
+            var record=c.getAsJsonObject("history").getAsJsonObject("manifest").getAsJsonArray("references").get(i).getAsJsonObject();var png=java.util.Base64.getDecoder().decode(c.getAsJsonArray("historyImages").get(i).getAsString());
+            server.createContext(prefix+"/images/"+record.get("id").getAsString(),e->{assertEquals("GET",e.getRequestMethod());pictures.incrementAndGet();bytes(e,png);});
+        }
+        server.createContext("/v1/reference-generation-jobs",e->{mutations.incrementAndGet();reply(e,"{}");});
+        var pending=client.readReferenceHistory(original);
+        try{
+            assertTrue(slowStarted.await(10,TimeUnit.SECONDS));
+            assertThrows(TimeoutException.class,()->pending.get(8250,TimeUnit.MILLISECONDS));
+            assertFalse(pending.isDone());assertEquals(1,queries.get());assertEquals(0,pictures.get());
+            assertEquals("cancelled",client.request("POST","/v1/jobs/test/cancel",null).get(1,TimeUnit.SECONDS).get("state").getAsString());
+            assertFalse(pending.isDone());releaseSlow.countDown();
+            var result=referenceResult(pending);assertEquals(c.get("history"),result.history());assertEquals(2,result.images().size());
+            for(int i=0;i<2;i++)assertArrayEquals(java.util.Base64.getDecoder().decode(c.getAsJsonArray("historyImages").get(i).getAsString()),result.images().get(i).png());
+            assertEquals(1,queries.get());assertEquals(2,pictures.get());assertEquals(0,mutations.get());
+        }finally{releaseSlow.countDown();}
     }
     @Test void cancelBypassesSlowHistoryAndSubstitutedPixelsCannotAppearAsOriginal()throws Exception{
         var c=ReferenceJobHistoryReceiptTest.fixture();var original=c.getAsJsonObject("historyJob");String prefix="/v1/reference-generation-jobs/"+original.get("id").getAsString();
@@ -153,7 +183,7 @@ class BridgeClientTest {
         }
         server.createContext("/v1/reference-generation-jobs",e->{forbidden.incrementAndGet();reply(e,"{}");});
         server.createContext("/v1/jobs",e->{forbidden.incrementAndGet();reply(e,"{}");});
-        var result=client.readReferenceImagesForNewDraft(s,hash).get(8,TimeUnit.SECONDS);assertEquals(p,result.preparation());assertEquals(2,result.photos().size());
+        var result=referenceResult(client.readReferenceImagesForNewDraft(s,hash));assertEquals(p,result.preparation());assertEquals(2,result.photos().size());
         assertEquals(2,reads.get());assertEquals(2,pictures.get());assertEquals(0,forbidden.get());assertFalse(Files.exists(dir.resolve("data/client-state")));
         result.preparation().addProperty("model","outside edit");assertEquals(p,result.preparation());
     }

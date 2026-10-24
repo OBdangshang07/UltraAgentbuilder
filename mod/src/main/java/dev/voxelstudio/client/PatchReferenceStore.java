@@ -20,6 +20,9 @@ final class PatchReferenceStore {
         },
         ASSEMBLY("reference-world-assembly-references","SavedReferenceWorldAssemblyReference","preparationHash",65536) {
             JsonObject verify(JsonObject value){return ReferenceWorldAssemblyReceipt.verifyReference(value);}
+        },
+        COUPLED_ASSEMBLY("coupled-reference-world-assembly-references","SavedCoupledReferenceWorldAssemblyReference","preparationHash",65536) {
+            JsonObject verify(JsonObject value){return CoupledReferenceWorldAssemblyReceipt.verifyReference(value);}
         };
         final String directory,format,identityKey;
         final int maximumBytes;
