@@ -22,7 +22,7 @@ public final class WorldOperationExclusion {
     }
     public static void require(MinecraftServer server,Kind kind){
         if(!server.isOnThread())throw new IllegalStateException("World operation exclusion requires server thread");
-        var lanes=new Lanes(PlacementService.busy(server),WorldPatchPlacementService.busy(server),AssemblyPatchPlacementService.busy(server),SelectionReadService.busy(server),SelectionReadService.coupledAuditActive(server));
+        var lanes=new Lanes(PlacementService.busy(server),WorldPatchPlacementService.busy(server),AssemblyPatchPlacementService.busy(server),SelectionReadService.busy(server),SelectionReadService.coupledAuditActive(server)||CoupledAssemblyPlacementService.busy(server));
         if(blocked(kind,lanes))throw new IllegalStateException("已有其他建筑、单片/整组改造或读取任务；等待或显式取消，不隐式接管");
     }
     private WorldOperationExclusion(){}
