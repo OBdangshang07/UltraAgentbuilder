@@ -34,7 +34,18 @@ Completed proof includes original request, owner, dispatch and start records.
 The bounded resource lane returns exact-file payloads for the complete native
 manifest/cells/plan and parts. It does not borrow legacy warm-verifier receipts.
 
-This entry is not exposed through HTTP or the player UI yet. Client downloads,
+An independent `/v1/coupled-reference-world-assembly` loopback service now mounts
+behind the exact Host, no-Origin and bearer checks. New process-only preparation
+and SEND switches default off, even when the legacy service is enabled; neither
+HTTP nor configuration nor normal CLI startup enables the new lane. Full SEND
+uses the original v1 registry and runner, never a legacy consent or execution.
+Closing a panel or losing its HTTP acknowledgement does not cancel the task.
+Native rendering has its own request/member/upload routes. Candidate metadata,
+native cells and all ordered part/preview downloads carry original bytes with
+hashes, and each read rechecks the whole completed candidate. The service fences
+other model/configuration/attachment/context lanes and cannot write the world.
+
+The new lane is not in the player UI yet. Strict client downloads,
 original server Capture/SEND retention, native
 lease, final consent, mutual exclusion, installed projection, same-asset actual
 placement/undo and physical-save acceptance remain necessary. Existing coupled
