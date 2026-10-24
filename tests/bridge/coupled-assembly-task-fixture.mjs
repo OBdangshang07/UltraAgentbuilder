@@ -63,8 +63,15 @@ export async function coupledTaskFixture(t,{tier='lite',staged=false,images=2,pr
     }
     assert.equal(request.referenceInput,undefined);assert.equal(input.referenceArchitecture.briefHash,hash(input.referenceArchitecture.brief));
     const response=(staged?stagedResponse:v4Response)(input,{outputSchema:schema});
-    if(withDoor&&schema.properties.format.enum[0]==='SceneAssemblyPlan')response.scene.components.push({kind:'entry',id:'coupled_entry',host:'main',allowOverwrite:[],face:'north',u:3,feet:1,width:1,
-      door:'dark_oak_door',frame:'frame',threshold:true,thresholdMaterial:'floor',canopy:0,open:true});
+    if(withDoor){
+      const door={kind:'entry',id:'coupled_entry',host:'main',allowOverwrite:[],face:'north',u:3,feet:1,width:1,
+        door:'dark_oak_door',frame:'frame',threshold:true,thresholdMaterial:'floor',canopy:0,open:true};
+      if(schema.properties.format.enum[0]==='SceneAssemblyPlan')response.scene.components.push(door);
+      // Ultra's staged branch creates its full program via a BLUEPRINT, not a
+      // SceneAssemblyPlan. Inject only the authored synthetic provider answer,
+      // before the real schema/compiler/review pipeline sees it.
+      if(schema.properties.format.enum[0]==='SceneAssemblyBlueprint')response.sceneEdit.components.put.push(door);
+    }
     return {spec:response};
   }};
   const runOptions={directory:f.jobDirectory,referenceInput,preparationHash:prepared.preparationHash,adapter,
