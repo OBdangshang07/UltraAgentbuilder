@@ -84,6 +84,29 @@ test('normal companion CLI exposes reference and complete joint lanes without pr
   for (const key of ['legacyConsentTransferable', 'nativeRendererReady', 'serverBaselineVerified', 'canAuthorizePlacement'])
     assert.equal(joint.value[key], false, key);
   assert.equal(joint.value.automaticRetries, 0);
+  const coupled = await request('/v1/coupled-reference-world-assembly/capabilities');
+  assert.equal(coupled.status, 200);assert.equal(coupled.value.version, 1);
+  assert.equal(coupled.value.purpose, 'coupled-reference-world-assembly');
+  for (const key of ['preparationEnabled', 'sendingEnabled', 'playerUiImplemented', 'placementImplemented',
+    'sharedFullPipeline', 'independentJointConfirmationRequired', 'nativeTransportImplemented', 'historyImplemented'])
+    assert.equal(coupled.value[key], true, key);
+  for (const key of ['legacyConsentTransferable', 'nativeRendererReady', 'serverBaselineVerified', 'canAuthorizePlacement'])
+    assert.equal(coupled.value[key], false, key);
+  assert.equal(coupled.value.automaticRetries, 0);
+  assert.deepEqual(coupled.value.maximumCallsByTier, {lite: 8, pro: 14, max: 20, ultra: 26});
+  assert.match(coupled.value.runtimeHash, /^[a-f0-9]{64}$/);
+  assert.equal(coupled.value.runtimeHash, joint.value.runtimeHash);
+  assert.equal((await request('/v1/coupled-reference-world-assembly/jobs', {})).status, 409);
+  assert.equal((await request('/v1/coupled-reference-world-assembly/jobs', {}, false)).status, 401);
+  assert.equal((await request('/v1/coupled-reference-world-assembly/capabilities', undefined, false)).status, 401);
+  assert.equal((await request('/v1/coupled-reference-world-assembly/capabilities', undefined, true,
+    {Origin: 'https://not-contacted.invalid'})).status, 403);
+  const coupledPrepare = '/v1/coupled-reference-world-assembly/contexts/01234567-89ab-cdef-0123-456789abcdef/prepare';
+  assert.equal((await request(coupledPrepare, {})).status, 409);
+  assert.equal((await request(coupledPrepare, {}, false)).status, 401);
+  const coupledHistory = await request('/v1/coupled-reference-world-assembly/jobs');
+  assert.equal(coupledHistory.status, 200);assert.deepEqual(coupledHistory.value.jobs, []);
+  assert.equal(coupledHistory.value.allowsNewModelCall, false);assert.equal(coupledHistory.value.canAuthorizePlacement, false);
   // Enabling complete v2 availability does not upgrade the distinct legacy
   // one-call protocol or let a capability response authorize any actual task.
   assert.equal((await request('/v1/reference-world-patch/capabilities')).value.sendingEnabled, false);
@@ -137,6 +160,7 @@ test('normal companion CLI exposes reference and complete joint lanes without pr
   assert.deepEqual((await request('/v1/jobs')).value.jobs, []);
   assert.deepEqual(await fs.readdir(path.join(dataDir, 'jobs')), []);
   assert.deepEqual(await fs.readdir(path.join(dataDir, 'reference-world-assembly-jobs')), []);
+  assert.deepEqual(await fs.readdir(path.join(dataDir, 'coupled-reference-world-assembly-jobs')), []);
   await assert.rejects(fs.access(path.join(dataDir, 'reference-drafts')), {code: 'ENOENT'});
   await assert.rejects(fs.access(path.join(dataDir, 'reference-submissions')), {code: 'ENOENT'});
 });
@@ -145,6 +169,7 @@ test('imported Bridge remains explicitly opt-in and cannot activate reference SE
   const dataDir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'reference-import-default-')));
   await fs.writeFile(path.join(dataDir, 'config.json'), JSON.stringify({
     referenceGenerationSending: true, referenceWorldAssemblyPreparation: true, referenceWorldAssemblySending: true,
+    coupledReferenceWorldAssemblyPreparation: true, coupledReferenceWorldAssemblySending: true,
   }));
   let modelQueries = 0, generations = 0;
   const adapter = {close() {}, async models() { modelQueries++; return []; }, async generate() { generations++; throw Error('Unexpected generation'); }};
@@ -165,6 +190,12 @@ test('imported Bridge remains explicitly opt-in and cannot activate reference SE
   assert.equal(joint.value.preparationEnabled, false);
   assert.equal(joint.value.sendingEnabled, false);
   assert.equal(joint.value.runtimeHash, null);
+  const coupled = await request('/v1/coupled-reference-world-assembly/capabilities');
+  assert.equal(coupled.status, 200);assert.equal(coupled.value.preparationEnabled, false);assert.equal(coupled.value.sendingEnabled, false);
+  assert.equal(coupled.value.runtimeHash, null);assert.equal(coupled.value.canAuthorizePlacement, false);
+  assert.equal((await request('/v1/coupled-reference-world-assembly/jobs', {coupledReferenceWorldAssemblySending: true})).status, 409);
+  assert.equal((await request('/v1/coupled-reference-world-assembly/contexts/01234567-89ab-cdef-0123-456789abcdef/prepare',
+    {coupledReferenceWorldAssemblyPreparation: true})).status, 409);
   assert.equal((await request('/v1/reference-world-assembly/jobs', {referenceWorldAssemblySending: true})).status, 409);
   assert.equal((await request('/v1/reference-world-assembly/contexts/01234567-89ab-cdef-0123-456789abcdef/prepare',
     {referenceWorldAssemblyPreparation: true})).status, 409);
@@ -172,4 +203,5 @@ test('imported Bridge remains explicitly opt-in and cannot activate reference SE
   assert.equal(modelQueries, 0);
   assert.equal(generations, 0);
   await assert.rejects(fs.access(path.join(dataDir, 'reference-world-assembly-jobs')), {code: 'ENOENT'});
+  await assert.rejects(fs.access(path.join(dataDir, 'coupled-reference-world-assembly-jobs')), {code: 'ENOENT'});
 });

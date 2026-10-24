@@ -33,8 +33,10 @@ callback or cleared HUD cannot supply world authority. Renderer reload/close
 and hotkey suppression include the coupled overlay; shader/physical input
 compatibility still requires installed tests.
 
-These source paths do not enable normal paid dispatch or replace process-owned
-Bridge admission flags. Bridge capability implementation/availability flags and
-ordinary startup gates must be reconciled after installed acceptance. Static
-contracts and compilation are not a player-facing release, real image/model
-quality proof, Iris/IME acceptance or physical-save acceptance.
+Normal paired-companion availability is described in
+`coupled-normal-startup.md`. Imported defaults remain off; availability does
+not replace process-owned admission, native readiness or independent SEND and
+world confirmations. Startup does not invoke a model. This same final candidate
+still requires installed acceptance before binary release. Static contracts
+and compilation are not real image/model quality proof, Iris/IME acceptance
+or physical-save acceptance.

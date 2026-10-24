@@ -145,8 +145,9 @@ export async function startBridge({ dataDir, codexPath, claudePath, deepseekPath
         || contexts.active || contexts.queue.length || referencePreparations.busy() || referenceGeneration.busy()
         || patchDesign?.busy() || contextAnalysis?.busy() || [...jobs.values()].some(j => !terminal(j.state)),
         nativeRendererReady:Date.now()-nativeRendererSeen<=30000})});
-    // Independent v1 process opt-in only. HTTP/config/normal CLI cannot adopt
-    // a legacy SEND or enable an unaccepted player/server native lease.
+    // Independent v1 startup choice. The normal paired companion enables its
+    // versioned lane separately; HTTP/config cannot borrow a legacy SEND or
+    // create a player/server native lease from this availability flag.
     coupledAssembly = await createCoupledReferenceWorldAssemblyHttpService({dataDir,enabled:coupledReferenceWorldAssemblyPreparation,sending:coupledReferenceWorldAssemblySending,adapterFor:agentFor,
       state:() => ({closing:shuttingDown,changingConfig,busy:referenceUploads || contextUploads || jointPatch.busy() || jointAssembly.busy()
         || contexts.active || contexts.queue.length || referencePreparations.busy() || referenceGeneration.busy()
@@ -816,7 +817,8 @@ if (await isDirectEntrypoint(process.argv[1],import.meta.url)) {
   // remain mandatory. Imported defaults and legacy one-call opt-ins stay off.
   const instance = await startBridge({ dataDir, codexPath: config.codexPath,claudePath:config.claudePath,deepseekPath:config.deepseekPath,
     worldPatchSending: true, referenceGenerationSending: true,
-    referenceWorldAssemblyPreparation: true, referenceWorldAssemblySending: true });
+    referenceWorldAssemblyPreparation: true, referenceWorldAssemblySending: true,
+    coupledReferenceWorldAssemblyPreparation: true, coupledReferenceWorldAssemblySending: true });
   console.log(`Voxel Studio Bridge ready (protocol 1, loopback port ${instance.connection.port})`);
   let closing = false, stopParentWatch = () => {};
   const close = () => { if (closing) return; closing = true; stopParentWatch(); instance.close().finally(() => process.exit()); };

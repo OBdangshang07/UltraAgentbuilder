@@ -88,7 +88,7 @@ export async function createCoupledReferenceWorldAssemblyHttpService({dataDir,en
           nativeRendererReady:state().nativeRendererReady===true,nativeTransportImplemented:true,historyImplemented:true,
           automaticRetries:0,maximumCallsByTier:{lite:8,pro:14,max:20,ultra:26},sharedFullPipeline:true,
           independentJointConfirmationRequired:true,legacyConsentTransferable:false,
-          playerUiImplemented:false,placementImplemented:false,serverBaselineVerified:false,canAuthorizePlacement:false});return true;
+          playerUiImplemented:true,placementImplemented:true,serverBaselineVerified:false,canAuthorizePlacement:false});return true;
       }
       checkpoint();
       const mutation=!!context||collection&&post||job?.[2]==='cancel';
