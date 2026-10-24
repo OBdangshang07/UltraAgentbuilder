@@ -47,6 +47,8 @@ final class SelectionScreen extends Screen {
             button("原位改造的一次独立发送审核",()->tool.openPatchSend(this));
             button("原位改造历史 / 候选 · 只查询",()->client.setScreen(new WorldPatchHistoryScreen(this)));
             button("参考图＋场地 · 完整四档建筑任务",()->client.setScreen(new ReferenceWorldAssemblyTaskScreen(this)));
+            button("新成组参考图＋场地 · 门/活板门，独立完整四档",()->client.setScreen(new CoupledReferenceWorldAssemblyTaskScreen(this)));
+            button("新成组完整任务历史 · 只查询原任务",()->client.setScreen(new CoupledReferenceWorldAssemblyHistoryScreen(this)));
             button("完整联合历史 / 后台任务 · 不重发",()->client.setScreen(new ReferenceWorldAssemblyHistoryScreen(this)));
             button("旧参考图局部改造 · 一调用审核（独立协议）",()->tool.openReferencePatchSend(this));
             button("旧参考图局部改造历史 · 不升级确认",()->client.setScreen(new ReferenceWorldPatchHistoryScreen(this)));
@@ -54,6 +56,8 @@ final class SelectionScreen extends Screen {
             button("原位事务进度 / 显式取消 · 不恢复写入",()->client.setScreen(new WorldPatchOperationScreen(this)));
             if(StudioClient.ASSEMBLY_PREVIEW.preview()!=null)button("完整整组差异 · 原位置，应用需独立确认",()->client.setScreen(new AssemblyPatchPreviewScreen(this)));
             button("整组事务进度 / 显式取消 / 保护撤销",()->client.setScreen(new AssemblyPatchOperationScreen(this)));
+            if(StudioClient.COUPLED_PREVIEW.preview()!=null)button("新成组完整差异 · 原位置 / 独立最终确认",()->client.setScreen(new CoupledAssemblyPreviewScreen(this)));
+            button("新成组事务进度 / 显式取消 / 保护撤销",()->client.setScreen(new CoupledAssemblyOperationScreen(this)));
             button("取消读取 / 丢弃快照",tool::cancel);
             paragraph("读取额度：外层 "+SelectionLimits.contextCells()+" 格、内层 "+SelectionLimits.editCells()+" 格；持续变化最多重采 2 次后停止。",StudioTheme.MUTED);
             paragraph("本地最多保存 8 份 / 128 MiB，24 小时到期；丢弃后只移除本项目持有的快照文件。保存不等于发送。后续发送须确认模型、具体任务和摘要范围；未生成改造方案，没有建造权限。",StudioTheme.WARN);

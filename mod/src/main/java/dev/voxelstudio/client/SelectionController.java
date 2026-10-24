@@ -77,6 +77,27 @@ final class SelectionController {
         try{var status=readStatus();return draft!=null&&read!=null&&status!=null&&status.state()==SelectionReadService.State.READY&&AssemblyPatchContextMatch.reference(draft.selection(),read.id(),savedContext,reference);}
         catch(RuntimeException incomplete){return false;}
     }
+    boolean matchesCoupled(CoupledAssemblyBinding binding){
+        try{var status=readStatus();return draft!=null&&read!=null&&status!=null&&status.state()==SelectionReadService.State.READY&&CoupledAssemblyContextMatch.matches(draft.selection(),read.id(),savedContext,binding);}
+        catch(RuntimeException incomplete){return false;}
+    }
+    boolean matchesCoupledReference(JsonObject reference){
+        try{var status=readStatus();return draft!=null&&read!=null&&status!=null&&status.state()==SelectionReadService.State.READY&&CoupledAssemblyContextMatch.reference(draft.selection(),read.id(),savedContext,reference);}
+        catch(RuntimeException incomplete){return false;}
+    }
+    void loadCoupledPreview(Screen parent,JsonObject reference,JsonObject finalStatus,java.util.function.BooleanSupplier live){
+        if(contextBusy||!live.getAsBoolean()||!matchesCoupledReference(reference)){message="原新成组任务不匹配当前快照；不重绑或生成";return;}
+        var original=CoupledReferenceWorldAssemblyReceipt.verifyReference(reference.deepCopy());var status=CoupledReferenceWorldAssemblyReceipt.status(original,finalStatus.deepCopy());
+        long ticket=contextEpoch;contextBusy=true;message="只 GET 新成组完整原候选，后台核验全部成员与操作组；未写入";
+        ContextPublication.checkedValue(this::checkedCapture,capture->{
+            CoupledReferenceWorldAssemblyReceipt.retentionBinding(capture,original);
+            return StudioClient.BRIDGE.loadCoupledAssemblyCandidate(original,status,()->ticket==contextEpoch&&live.getAsBoolean());
+        }).whenComplete((candidate,error)->MinecraftClient.getInstance().execute(()->{
+            if(ticket!=contextEpoch)return;contextBusy=false;if(error!=null){message=root(error);return;}
+            var client=MinecraftClient.getInstance();if(!live.getAsBoolean()||client.currentScreen!=parent||!matchesCoupled(candidate.input().binding())){message="下载时原页面/快照改变；不发布替代成组投影，原任务保留";return;}
+            StudioClient.COUPLED_PREVIEW.showReadOnly(candidate);message="完整新成组差异已核验；应用需独立最终确认";client.setScreen(new CoupledAssemblyPreviewScreen(parent));
+        }));
+    }
     void loadAssemblyPreview(Screen parent,JsonObject reference,JsonObject finalStatus,java.util.function.BooleanSupplier live){
         if(contextBusy||!live.getAsBoolean()||!matchesAssemblyReference(reference)){message="原整组任务与当前选区/快照不匹配；不重绑、不生成";return;}
         var original=ReferenceWorldAssemblyReceipt.verifyReference(reference.deepCopy());var status=ReferenceWorldAssemblyReceipt.status(original,finalStatus.deepCopy());
@@ -103,7 +124,7 @@ final class SelectionController {
                     if(!valid.getAsBoolean()||!Boolean.TRUE.equals(ack)){accepted.completeExceptionally(new IllegalStateException("缺少原整组明确确认或未验证提示确认"));return;}
                     long displayTicket=StudioClient.ASSEMBLY_HUD.ticket();
                     AssemblyPatchPlacementService.confirm(owner,user,confirmation,true).whenComplete((operation,failed)->c.execute(()->{
-                        if(failed!=null)accepted.completeExceptionally(failed);else{if(server==owner&&Objects.equals(player,user)&&epoch==worldTicket){StudioClient.ASSEMBLY_PREVIEW.clear();StudioClient.ASSEMBLY_HUD.showApply(displayTicket,operation.id(),()->{var s=operation.status();return new AssemblyPatchHudState.Progress("整组应用 · "+s.state(),s.confirmed()+" / "+s.total()+" 格明确确认",s.reason());});}accepted.complete(operation);}
+                        if(failed!=null)accepted.completeExceptionally(failed);else{if(server==owner&&Objects.equals(player,user)&&epoch==worldTicket){StudioClient.ASSEMBLY_PREVIEW.clear();StudioClient.COUPLED_HUD.clear();StudioClient.ASSEMBLY_HUD.showApply(displayTicket,operation.id(),()->{var s=operation.status();return new AssemblyPatchHudState.Progress("整组应用 · "+s.state(),s.confirmed()+" / "+s.total()+" 格明确确认",s.reason());});}accepted.complete(operation);}
                     }));
                 });return accepted;
             };
@@ -120,12 +141,48 @@ final class SelectionController {
             var accepted=new CompletableFuture<AssemblyPatchUndoService.Operation>();c.execute(()->{
                 if(!live.getAsBoolean()||server!=owner||!Objects.equals(player,user)||epoch!=worldTicket||!Boolean.TRUE.equals(ack)){accepted.completeExceptionally(new IllegalStateException("整组撤销页面、世界、玩家或保护提示确认已改变"));return;}
                 long displayTicket=StudioClient.ASSEMBLY_HUD.ticket();
-                AssemblyPatchUndoService.confirm(owner,user,confirmation,true).whenComplete((operation,error)->c.execute(()->{if(error!=null)accepted.completeExceptionally(error);else{if(server==owner&&Objects.equals(player,user)&&epoch==worldTicket)StudioClient.ASSEMBLY_HUD.showUndo(displayTicket,parent.id(),()->{var s=operation.status();return new AssemblyPatchHudState.Progress("保护撤销 · "+s.state(),"检查 "+s.evaluated()+" / "+s.total()+" · 恢复 "+s.restored()+" · 保留 "+s.preserved(),s.reason());});accepted.complete(operation);}}));
+                AssemblyPatchUndoService.confirm(owner,user,confirmation,true).whenComplete((operation,error)->c.execute(()->{if(error!=null)accepted.completeExceptionally(error);else{if(server==owner&&Objects.equals(player,user)&&epoch==worldTicket){StudioClient.COUPLED_HUD.clear();StudioClient.ASSEMBLY_HUD.showApply(displayTicket,parent.id(),()->{var s=parent.status();return new AssemblyPatchHudState.Progress("整组应用 · "+s.state(),s.confirmed()+" / "+s.total(),s.reason());});StudioClient.ASSEMBLY_HUD.showUndo(displayTicket,parent.id(),()->{var s=operation.status();return new AssemblyPatchHudState.Progress("保护撤销 · "+s.state(),"检查 "+s.evaluated()+" / "+s.total()+" · 恢复 "+s.restored()+" · 保留 "+s.preserved(),s.reason());});}accepted.complete(operation);}}));
             });return accepted;
         };return CompletableFuture.completedFuture(new AssemblyUndoRun(handle,confirm,()->AssemblyPatchUndoService.cancelPreparation(owner,user,handle.id())));
     }
     CompletableFuture<AssemblyPatchUndoService.Operation> currentAssemblyUndo(){if(server==null||player==null)return CompletableFuture.failedFuture(new IllegalStateException("没有当前单人世界"));return AssemblyPatchUndoService.current(server,player);}
     void cancelAssemblyUndo(AssemblyPatchUndoService.Operation operation){if(server!=null&&player!=null)AssemblyPatchUndoService.cancel(server,player,operation.id());}
+    record CoupledPlacementRun(CoupledAssemblyPlacementService.PrepareHandle handle,java.util.function.BiFunction<CoupledAssemblyPlacementService.Confirmation,Boolean,CompletableFuture<CoupledAssemblyPlacementService.Operation>> confirm,Runnable cancel){}
+    CompletableFuture<CoupledPlacementRun> prepareCoupledPlacement(CoupledAssemblyCheckedCandidate candidate,java.util.function.BooleanSupplier live){
+        var result=new CompletableFuture<CoupledPlacementRun>();var client=MinecraftClient.getInstance();var preview=candidate.preview();
+        checkedCapture().whenComplete((capture,error)->client.execute(()->{
+            if(error!=null){result.completeExceptionally(error);return;}
+            if(!live.getAsBoolean()||!matchesCoupled(preview.binding())||StudioClient.COUPLED_PREVIEW.candidate()!=candidate||server==null||player==null){result.completeExceptionally(new IllegalStateException("原新成组页面/候选/快照已失效；没有写入"));return;}
+            var owner=server;var user=player;long worldTicket=epoch,contextTicket=contextEpoch;var handle=CoupledAssemblyPlacementService.prepare(owner,user,capture,preview,candidate.input());
+            java.util.function.BooleanSupplier valid=()->live.getAsBoolean()&&server==owner&&Objects.equals(player,user)&&epoch==worldTicket&&contextEpoch==contextTicket&&StudioClient.COUPLED_PREVIEW.candidate()==candidate&&matchesCoupled(preview.binding());
+            java.util.function.BiFunction<CoupledAssemblyPlacementService.Confirmation,Boolean,CompletableFuture<CoupledAssemblyPlacementService.Operation>> confirm=(confirmation,ack)->{
+                var accepted=new CompletableFuture<CoupledAssemblyPlacementService.Operation>();client.execute(()->{
+                    if(!valid.getAsBoolean()||!Boolean.TRUE.equals(ack)){accepted.completeExceptionally(new IllegalStateException("缺少原新成组最终确认或物理/通行未验证提示确认"));return;}
+                    long displayTicket=StudioClient.COUPLED_HUD.ticket();CoupledAssemblyPlacementService.confirm(owner,user,confirmation,true).whenComplete((operation,failed)->client.execute(()->{
+                        if(failed!=null)accepted.completeExceptionally(failed);else{if(server==owner&&Objects.equals(player,user)&&epoch==worldTicket){StudioClient.COUPLED_PREVIEW.clear();StudioClient.ASSEMBLY_HUD.clear();StudioClient.COUPLED_HUD.showApply(displayTicket,operation.id(),()->{var s=operation.status();return new AssemblyPatchHudState.Progress("新成组应用 · "+s.state(),s.confirmed()+" / "+s.total()+" 格完整组明确确认",s.reason());});}accepted.complete(operation);}
+                    }));
+                });return accepted;
+            };
+            result.complete(new CoupledPlacementRun(handle,confirm,()->CoupledAssemblyPlacementService.cancelPreparation(owner,user,handle.id())));
+        }));return result;
+    }
+    CompletableFuture<CoupledAssemblyPlacementService.Operation> currentCoupledOperation(){if(server==null||player==null)return CompletableFuture.failedFuture(new IllegalStateException("没有当前单人世界"));return CoupledAssemblyPlacementService.current(server,player);}
+    void cancelCoupledOperation(CoupledAssemblyPlacementService.Operation operation){if(server!=null&&player!=null)CoupledAssemblyPlacementService.cancel(server,player,operation.id());}
+    record CoupledUndoRun(CoupledAssemblyUndoService.PrepareHandle handle,java.util.function.BiFunction<CoupledAssemblyUndoService.Confirmation,Boolean,CompletableFuture<CoupledAssemblyUndoService.Operation>> confirm,Runnable cancel){}
+    CompletableFuture<CoupledUndoRun> prepareCoupledUndo(CoupledAssemblyPlacementService.Operation parent,java.util.function.BooleanSupplier live){
+        var client=MinecraftClient.getInstance();if(server==null||player==null||!live.getAsBoolean())return CompletableFuture.failedFuture(new IllegalStateException("缺少当前原新成组撤销页面"));
+        var owner=server;var user=player;long worldTicket=epoch;var handle=CoupledAssemblyUndoService.prepare(owner,user,parent);
+        java.util.function.BiFunction<CoupledAssemblyUndoService.Confirmation,Boolean,CompletableFuture<CoupledAssemblyUndoService.Operation>> confirm=(confirmation,ack)->{
+            var accepted=new CompletableFuture<CoupledAssemblyUndoService.Operation>();client.execute(()->{
+                if(!live.getAsBoolean()||server!=owner||!Objects.equals(player,user)||epoch!=worldTicket||!Boolean.TRUE.equals(ack)){accepted.completeExceptionally(new IllegalStateException("新成组撤销页面、世界、玩家或保护提示确认已改变"));return;}
+                long displayTicket=StudioClient.COUPLED_HUD.ticket();CoupledAssemblyUndoService.confirm(owner,user,confirmation,true).whenComplete((operation,error)->client.execute(()->{
+                    if(error!=null)accepted.completeExceptionally(error);else{if(server==owner&&Objects.equals(player,user)&&epoch==worldTicket){StudioClient.ASSEMBLY_HUD.clear();StudioClient.COUPLED_HUD.showApply(displayTicket,parent.id(),()->{var s=parent.status();return new AssemblyPatchHudState.Progress("新成组应用 · "+s.state(),s.confirmed()+" / "+s.total(),s.reason());});StudioClient.COUPLED_HUD.showUndo(displayTicket,parent.id(),()->{var s=operation.status();return new AssemblyPatchHudState.Progress("新成组保护撤销 · "+s.state(),"检查 "+s.evaluated()+" / "+s.total()+" · 恢复 "+s.restored()+" · 保留 "+s.preserved(),s.reason());});}accepted.complete(operation);}
+                }));
+            });return accepted;
+        };return CompletableFuture.completedFuture(new CoupledUndoRun(handle,confirm,()->CoupledAssemblyUndoService.cancelPreparation(owner,user,handle.id())));
+    }
+    CompletableFuture<CoupledAssemblyUndoService.Operation> currentCoupledUndo(){if(server==null||player==null)return CompletableFuture.failedFuture(new IllegalStateException("没有当前单人世界"));return CoupledAssemblyUndoService.current(server,player);}
+    void cancelCoupledUndo(CoupledAssemblyUndoService.Operation operation){if(server!=null&&player!=null)CoupledAssemblyUndoService.cancel(server,player,operation.id());}
     JsonObject confirmedTask(){return confirmedTask==null?null:confirmedTask.deepCopy();}
     void saveContext(){
         if(contextBusy){message="快照保存/核验正在进行；可取消";return;}if(read==null){message="先读取环境再保存";return;}
@@ -231,6 +288,17 @@ final class SelectionController {
                 message="完整联合内容与预算已核验；只在独立 SEND 页明确确认后才调用";
                 c.setScreen(new ReferenceWorldAssemblySendScreen(parent,plan,this::checkedCapture,live));
             }));
+    }
+    void prepareCoupledAssembly(Screen parent,JsonObject generation,JsonObject manifest,java.util.function.BooleanSupplier contentCurrent){
+        var source=referencePatchSourceGate();var exact=generation.deepCopy();var pixels=manifest.deepCopy();String world=StudioScreen.referenceWorldScope();
+        if(!source.getAsBoolean()||!contentCurrent.getAsBoolean()||!StudioScreen.coupledAssemblyGenerationCurrent(exact,world)){message="先保存准确原环境、图片和新成组完整设置；未发送";return;}
+        contextBusy=true;message="核验新成组独立完整预算、原图和 W 逐格披露；模型调用 0";
+        java.util.function.BooleanSupplier live=()->source.getAsBoolean()&&contentCurrent.getAsBoolean();
+        ContextPublication.checkedValue(this::checkedCapture,capture->StudioClient.BRIDGE.prepareCoupledAssembly(capture,exact,pixels,live)).whenComplete((plan,error)->MinecraftClient.getInstance().execute(()->{
+            if(!source.getAsBoolean())return;contextBusy=false;if(error!=null){message=root(error);return;}
+            var client=MinecraftClient.getInstance();if(client.currentScreen!=parent||!live.getAsBoolean()||!StudioScreen.coupledAssemblyGenerationCurrent(exact,world)){message="原页面、图片、提示词或设置已改变；旧准备不发送";return;}
+            message="新成组完整内容与预算已核验；仅独立 SEND 确认会调用";client.setScreen(new CoupledReferenceWorldAssemblySendScreen(parent,plan,this::checkedCapture,live));
+        }));
     }
     private void freezeReferencePatch(Screen parent,JsonObject prepared,JsonObject manifest,JsonObject capability,java.util.function.BooleanSupplier source){
         if(contextBusy||!source.getAsBoolean()){message="原图片或环境已失效，未冻结";return;}

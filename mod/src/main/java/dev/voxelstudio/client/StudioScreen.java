@@ -118,6 +118,15 @@ public final class StudioScreen extends Screen {
     static boolean referenceAssemblyGenerationCurrent(JsonObject exact,String world){
         try{return StudioGenerationConsent.matches(exact,referenceAssemblyGenerationRequest(exact.get("key").getAsString(),exact.get("prompt").getAsString()),world,projection().key(),idle());}catch(Exception error){return false;}
     }
+    /** Independent coupled request validation. Shared settings are not a
+     * transferable legacy SEND or final world confirmation. */
+    static JsonObject coupledAssemblyGenerationRequest(String owner,String prompt){
+        var request=referenceGenerationRequest(owner,prompt);request.addProperty("assemblyConfirmed",true);
+        CoupledReferenceWorldAssemblyReceipt.generation(request);return request;
+    }
+    static boolean coupledAssemblyGenerationCurrent(JsonObject exact,String world){
+        try{return StudioGenerationConsent.matches(exact,coupledAssemblyGenerationRequest(exact.get("key").getAsString(),exact.get("prompt").getAsString()),world,projection().key(),idle());}catch(Exception error){return false;}
+    }
     static String referenceAssemblyTierSummary(){return qualityTier+" · 完整共享预算 ≤"+StudioAssembly.tier(qualityTier).maximumCalls()+" 次（当前选择 "+assemblyCalls+"）";}
     static void chooseReferenceAssemblyTier(Screen parent,Runnable changed){
         if(!idle())throw new IllegalStateException("先等待原任务或事务结束；不改变运行任务");
@@ -698,7 +707,7 @@ public final class StudioScreen extends Screen {
         StudioClient.BRIDGE.request("POST","/v1/jobs/"+a.revision+"/export",null).whenComplete((r,e)->onClient(()->{if(e!=null){fail(e);return;}String file=r.get("file").getAsString();tell("已导出 .schem，详情中可复制路径",file+"\n\n外部 Schematic 中 keep 和 clear 都表示空气；粘贴时请核对导入器的空气策略。",StudioTheme.ACCENT);if(client.player!=null)client.player.sendMessage(Text.literal("已导出："+file),false);}));
     }
     public static void confirmPlacement(){
-        if(StudioClient.PATCH_PREVIEW.preview()!=null){projection().status="当前为只读改造差异；先丢弃差异预览或明确切换建筑投影";return;}
+        if(StudioClient.PATCH_PREVIEW.preview()!=null||StudioClient.ASSEMBLY_PREVIEW.preview()!=null||StudioClient.COUPLED_PREVIEW.preview()!=null){projection().status="当前为只读改造差异；先丢弃差异预览或明确切换建筑投影";return;}
         var c=MinecraftClient.getInstance();var p=projection();if(!p.canPlace()||taskBusy()){p.status=p.placementBlockReason();return;}
         Placement frozen=p.placement();String scope=p.key();Screen parent=c.currentScreen;
         checkingPlacement=true;tell("服务端正在复核实际放置区域…","只读检查，尚未写入世界。",StudioTheme.WARN);p.status="服务端正在复核实际放置区域…";

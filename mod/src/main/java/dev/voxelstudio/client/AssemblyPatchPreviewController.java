@@ -24,7 +24,7 @@ final class AssemblyPatchPreviewController implements AutoCloseable {
     WorldPatchPreview.Filter filter(){return filter;}
     /** The background whole loader and same-Capture client fences must verify
      * the exact original snapshot upstream. This local method grants no write. */
-    void showReadOnly(AssemblyPatchCheckedCandidate value){if(closed)throw new IllegalStateException("Preview closed");Objects.requireNonNull(value);clear();candidate=value;preview=value.preview();filter=preview.all(WorldPatchPreview.Mode.CHANGES);StudioClient.PATCH_PREVIEW.clear();StudioClient.PROJECTION.visible=false;visible=true;pending=true;message="完整整组差异 · 固定原位置 · 应用需独立确认";}
+    void showReadOnly(AssemblyPatchCheckedCandidate value){if(closed)throw new IllegalStateException("Preview closed");Objects.requireNonNull(value);clear();candidate=value;preview=value.preview();filter=preview.all(WorldPatchPreview.Mode.CHANGES);StudioClient.PATCH_PREVIEW.clear();StudioClient.COUPLED_PREVIEW.clear();StudioClient.PROJECTION.visible=false;visible=true;pending=true;message="完整整组差异 · 固定原位置 · 应用需独立确认";}
     void filter(WorldPatchPreview.Filter next){if(preview==null)throw new IllegalStateException("No preview");filter=preview.checked(next);renderer.clear();pending=true;}
     void reload(){if(preview!=null){renderer.clear();pending=true;}}
     void tick(MinecraftClient c){

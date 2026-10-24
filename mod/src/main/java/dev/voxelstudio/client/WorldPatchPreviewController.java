@@ -24,7 +24,7 @@ final class WorldPatchPreviewController implements AutoCloseable {
     WorldPatchPreview.Filter filter(){return filter;}
     /** Caller must first verify the exact original snapshot and patch
      * upstream. This local display method grants no world-write consent. */
-    void showReadOnly(WorldPatchPreview value){if(closed)throw new IllegalStateException("Preview closed");Objects.requireNonNull(value);clear();StudioClient.ASSEMBLY_PREVIEW.clear();preview=value;filter=value.all(WorldPatchPreview.Mode.CHANGES);StudioClient.PROJECTION.visible=false;visible=true;pending=true;message="实验差异预览 · 原世界位置 · 不可建造";}
+    void showReadOnly(WorldPatchPreview value){if(closed)throw new IllegalStateException("Preview closed");Objects.requireNonNull(value);clear();StudioClient.ASSEMBLY_PREVIEW.clear();StudioClient.COUPLED_PREVIEW.clear();preview=value;filter=value.all(WorldPatchPreview.Mode.CHANGES);StudioClient.PROJECTION.visible=false;visible=true;pending=true;message="实验差异预览 · 原世界位置 · 不可建造";}
     void showAuditableReadOnly(WorldPatchCheckedCandidate value){Objects.requireNonNull(value);showReadOnly(value.preview());candidate=value;}
     void filter(WorldPatchPreview.Filter next){if(preview==null)throw new IllegalStateException("No preview");filter=preview.checked(next);renderer.clear();pending=true;}
     void reload(){if(preview!=null){renderer.clear();pending=true;}}

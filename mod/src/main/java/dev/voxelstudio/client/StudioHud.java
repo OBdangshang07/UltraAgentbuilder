@@ -10,6 +10,11 @@ final class StudioHud {
     static void render(DrawContext draw,Map<String,KeyBinding> keys) {
         var c=MinecraftClient.getInstance();var p=StudioClient.PROJECTION;
         if(c.currentScreen!=null)return;
+        var coupled=StudioClient.COUPLED_PREVIEW;var complete=coupled.preview();
+        if(complete!=null){
+            var filter=coupled.filter();
+            assembly(draw,c,"新成组完整差异 · "+(coupled.visible?"投影显示":"投影隐藏"),"固定原坐标 "+complete.bounds().min()+"\n完整补丁 "+complete.totalWrites()+" 格 · "+filter.mode()+" · Y ["+filter.minY()+", "+filter.maxY()+")\n"+coupled.message+"\n"+key(keys,"open")+" 显示过滤 / 独立最终确认\n门的两个成员作为整体；过滤不是应用范围，未写入世界");return;
+        }
         var whole=StudioClient.ASSEMBLY_PREVIEW;var preview=whole.preview();
         if(preview!=null){
             var filter=whole.filter();
@@ -20,11 +25,12 @@ final class StudioHud {
             var filter=legacy.filter();
             assembly(draw,c,"原位补丁差异 · "+(legacy.visible?"投影显示":"投影隐藏"),"固定原坐标 "+patch.bounds().min()+"\n完整补丁 "+patch.totalWrites()+" 格 · "+filter.mode()+" · Y ["+filter.minY()+", "+filter.maxY()+")\n"+legacy.message+"\n"+key(keys,"open")+" 显示过滤 / 独立最终确认\n不支持移动或旋转；过滤不缩小补丁，当前未写入世界");return;
         }
-        var progress=StudioClient.ASSEMBLY_HUD.view();
+        boolean coupledProgress=StudioClient.COUPLED_HUD.hasProgress();
+        var progress=coupledProgress?StudioClient.COUPLED_HUD.view():StudioClient.ASSEMBLY_HUD.view();
         if(progress!=null){
             String status=progress.apply().title()+"\n"+progress.apply().counts()+"\n"+progress.apply().reason();
             if(progress.undo()!=null)status+="\n"+progress.undo().title()+"\n"+progress.undo().counts()+"\n"+progress.undo().reason();
-            assembly(draw,c,"整组原位事务 · live 进度",status+"\n"+key(keys,"open")+" 查看进度 / 显式取消 / 保护撤销\n关闭面板继续；数量不证明世界已落盘，不自动恢复写入");return;
+            assembly(draw,c,(coupledProgress?"新成组":"整组")+"原位事务 · live 进度",status+"\n"+key(keys,"open")+" 查看进度 / 显式取消 / 保护撤销\n关闭面板继续；数量不证明世界已落盘，不自动恢复写入");return;
         }
         if(!p.visible&&!p.busy)return;
         int w=Math.min(448,c.getWindow().getScaledWidth()-16);

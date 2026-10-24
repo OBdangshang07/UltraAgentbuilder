@@ -33,6 +33,8 @@ final class AssemblyPatchHudState {
         undo=Objects.requireNonNull(progress);return true;
     }
     boolean hasProgress(){return !closed&&apply!=null;}
+    /** Display invalidation only; never cancels or changes a server task. */
+    void clear(){if(closed)return;epoch++;operationId=null;apply=undo=null;}
     View view(){return hasProgress()?new View(operationId,apply.get(),undo==null?null:undo.get()):null;}
     void close(){epoch++;closed=true;owner=null;player=null;dimension=null;operationId=null;apply=undo=null;}
 }
