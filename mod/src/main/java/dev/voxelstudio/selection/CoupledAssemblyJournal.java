@@ -49,15 +49,24 @@ final class CoupledAssemblyJournal {
     }
 
     static Plan prepare(SelectionReadService.Capture original,CoupledAssemblyInput input,UUID player,BooleanSupplier cancelled){
-        return prepare(original,input,player,UUID.randomUUID(),cancelled);
+        return prepare(original,input,null,player,UUID.randomUUID(),cancelled);
     }
-    private static Plan prepare(SelectionReadService.Capture original,CoupledAssemblyInput input,UUID player,UUID id,BooleanSupplier cancelled){
+    /** The live server path retains its audited Compiled object. A separate
+     * archive reconstruction verifies bytes; it NEVER replaces that owner. */
+    static Plan prepareOwned(SelectionReadService.Capture original,CoupledAssemblyInput input,AssemblyCoupledCompiler.Compiled owned,UUID player,BooleanSupplier cancelled){
+        Objects.requireNonNull(owned);return prepare(original,input,owned,player,UUID.randomUUID(),cancelled);
+    }
+    private static Plan prepare(SelectionReadService.Capture original,CoupledAssemblyInput input,AssemblyCoupledCompiler.Compiled owned,UUID player,UUID id,BooleanSupplier cancelled){
         Objects.requireNonNull(original);Objects.requireNonNull(input);Objects.requireNonNull(player);Objects.requireNonNull(cancelled);WorldPatchJson.cancelled(cancelled);
         var b=input.binding();if(!original.id().equals(b.captureId())||!original.selection().equals(b.selection())||original.contextRevision()!=b.contextRevision())throw new IllegalArgumentException("Coupled journal requires original capture and whole binding");
         var source=original.payload().getBytes(StandardCharsets.UTF_8);if(source.length>SelectionLimits.snapshotBytes()+65536)throw new IllegalArgumentException("Coupled original source quota");
         var value=WorldPatchJson.parse(source,cancelled);WorldPatchJson.keys(value,"selection","capture");if(!value.get("selection").equals(b.selection().json()))throw new IllegalArgumentException("Coupled source selection differs");
         var baseline=SelectionBaseline.fromSealedCapture(b.selection(),value.getAsJsonObject("capture"),cancelled);
-        var compiled=AssemblyCoupledCompiler.read(baseline,input,cancelled);
+        var again=AssemblyCoupledCompiler.read(baseline,input,cancelled);var compiled=owned==null?again:owned;
+        if(owned!=null&&(!owned.fromOriginalInput(input)||!owned.baseline().selection.equals(b.selection())||owned.baseline().contextRevision!=b.contextRevision()
+                ||!owned.baseline().snapshotHash.equals(b.snapshotHash())||!owned.baseline().selectionHash.equals(b.selectionHash())
+                ||!again.writes().equals(owned.writes())||!again.groups().equals(owned.groups())||!again.plan().equals(owned.plan())||!again.analysis().equals(owned.analysis())))
+            throw new IllegalArgumentException("Archived coupled bytes cannot replace original server reconstruction");
         var members=new LinkedHashMap<String,byte[]>();members.put("source.json",source);members.put("binding.json",bytes(b.json()));members.put("native-manifest.json",input.originalManifest());members.put("native-cells.bin",input.originalCells());members.put("coupling-plan.json",input.originalPlan());
         for(var p:input.parts()){WorldPatchJson.cancelled(cancelled);members.put(partName(p.index(),"patch"),p.originalPart());members.put(partName(p.index(),"preview"),p.previewBytes());}
         var plan=new JsonObject();plan.addProperty("format","CoupledAssemblyTransactionPlan");plan.addProperty("version",1);plan.addProperty("id",id.toString());plan.addProperty("player",player.toString());plan.add("binding",b.json());
@@ -157,7 +166,7 @@ final class CoupledAssemblyJournal {
             var parts=new ArrayList<CoupledAssemblyInput.Part>();for(int i=0;i<binding.partHashes().size();i++)parts.add(new CoupledAssemblyInput.Part(binding,i,members.get(partName(i,"patch")),members.get(partName(i,"preview"))));
             var input=new CoupledAssemblyInput(binding,members.get("native-manifest.json"),members.get("native-cells.bin"),members.get("coupling-plan.json"),parts);
             var capture=new SelectionReadService.Capture(binding.captureId(),binding.selection(),binding.contextRevision(),new String(members.get("source.json"),StandardCharsets.UTF_8),null,false);
-            var plan=prepare(capture,input,player,id,()->false);if(!Arrays.equals(plan.members.get("plan.json"),bytes(v)))throw new IOException("Coupled archive differs from complete native reconstruction");rebuilt=plan;
+            var plan=prepare(capture,input,null,player,id,()->false);if(!Arrays.equals(plan.members.get("plan.json"),bytes(v)))throw new IOException("Coupled archive differs from complete native reconstruction");rebuilt=plan;
             var all=new TreeSet<String>();try(var stream=Files.newDirectoryStream(directory)){for(var f:stream){if(all.size()>=names.size()+2*maximumBatches(binding.totalWrites())+2)throw new IOException("Coupled event file quota");all.add(f.getFileName().toString());}}
             for(var name:all)if(!names.contains(name)&&!Set.of("outcome.json","ambiguous.json").contains(name)&&!name.matches("[0-9]{6}\\.(intent|applied)\\.json"))throw new IOException("Unknown/partial coupled event");
             ReceiptState stopped=null;for(var name:all.stream().filter(n->n.endsWith(".intent.json")).toList()){

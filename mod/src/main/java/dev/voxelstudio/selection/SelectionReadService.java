@@ -535,6 +535,54 @@ public final class SelectionReadService {
         var progress=previous==null?null:new CoupledAssemblyBeforeCheck.Progress(state,reason,previous.checked(),previous.total(),previous.reads(),previous.steps(),previous.maxStepNanos());
         b.handle.status=new CoupledBeforeStatus(state,reason,progress);b.handle.result.completeExceptionally(new IllegalStateException(reason));
     }
+    /** Opaque original coupled lease, not an old AssemblyNativeLease or a
+     * client report. It cannot detach without its own one-use APPLY ticket. */
+    static final class CoupledNativeLease {
+        private final Task task;private final CoupledAudit audit;private final CoupledBefore before;private final Capture original;
+        private final CoupledAssemblyInput input;private final CoupledAssemblyPreview preview;private final AssemblyCoupledCompiler.Compiled compiled;
+        private final Object confirmationOwner;private boolean detached;
+        private CoupledNativeLease(Task task,CoupledAssemblyPreview preview,Object confirmationOwner){
+            this.task=task;audit=task.coupledAudit;before=task.coupledBefore;original=task.capture;input=audit.input;compiled=audit.compiled;
+            this.preview=preview;this.confirmationOwner=Objects.requireNonNull(confirmationOwner);
+        }
+        CoupledAssemblyInput input(){return input;}CoupledAssemblyPreview preview(){return preview;}AssemblyCoupledCompiler.Compiled compiled(){return compiled;}
+        CoupledAssemblyJournal.Plan prepare(UUID player,java.util.function.BooleanSupplier cancelled){return CoupledAssemblyJournal.prepareOwned(original,input,compiled,player,cancelled);}
+        boolean canAuthorizePlacement(){return false;}
+        void current(MinecraftServer server,UUID player){
+            if(detached||checkedTask(server,player,original.id(),original.selection().revision())!=task||task.capture!=original
+                    ||task.coupledAudit!=audit||task.coupledBefore!=before||audit.input!=input||audit.compiled!=compiled||before.preview!=preview
+                    ||before.report==null||before.cancelled||before.handle.status.state()!=CoupledAssemblyBeforeCheck.State.MATCHED
+                    ||!compiled.fromOriginalInput(input)||!preview.fromOriginalInput(input)
+                    ||checkedCoupledAudit(task,original,player,audit.handle.id,input.binding())!=audit)throw new IllegalStateException("原成组审核、输入或 fresh BEFORE 已改变；不重新绑定");
+            before.scan.result();
+        }
+        CoupledNativeWorld detach(MinecraftServer server,UUID player,CoupledAssemblyConsent.Ticket ticket){
+            current(server,player);
+            CoupledAssemblyConsent.consume(ticket,confirmationOwner,player,input.binding(),CoupledAssemblyConsent.Purpose.APPLY,System.nanoTime());
+            if(!TASKS.remove(server,task))throw new IllegalStateException("原成组读取任务不能移交；最终确认已消耗");
+            detached=true;task.lifetime.revoke();
+            var world=new CoupledNativeWorld(task.world,task.player,task.selection,task.watch,task.chunks,input,compiled);task.watch=null;
+            stopCoupledBefore(task,CoupledAssemblyBeforeCheck.State.CANCELLED,"原成组读取已由独立最终确认移交");
+            stopCoupledAudit(task,PatchAuditState.CANCELLED,"原成组审核已绑定实际事务，不再作为读取能力");
+            if(task.scan!=null)task.scan.cancel();task.states.clear();task.capture=null;task.baseline=null;
+            task.handle.status=new Status(State.STALE,"原成组快照已用于明确确认；读取/投影能力失效",task.scan==null?null:task.scan.progress());return world;
+        }
+    }
+    /** Private-constructor native origin. New source/gateway wiring is still
+     * required; neither archived bytes nor a public binding constructs it. */
+    static final class CoupledNativeWorld {
+        final ServerWorld world;final UUID player;final WorldSelection selection;final WorldChangeTracker.Watch watch;
+        final SelectionChunkFence chunks;final CoupledAssemblyInput input;final AssemblyCoupledCompiler.Compiled compiled;
+        private CoupledNativeWorld(ServerWorld world,UUID player,WorldSelection selection,WorldChangeTracker.Watch watch,SelectionChunkFence chunks,CoupledAssemblyInput input,AssemblyCoupledCompiler.Compiled compiled){
+            this.world=world;this.player=player;this.selection=selection;this.watch=watch;this.chunks=chunks;this.input=input;this.compiled=compiled;
+        }
+    }
+    static CoupledNativeLease coupledNativeLease(MinecraftServer server,UUID player,Capture original,CoupledAssemblyPreview preview,String auditId,String beforeId,Object confirmationOwner){
+        var t=checkedTask(server,player,original.id(),original.selection().revision());var audit=checkedCoupledAudit(t,original,player,auditId,preview.binding());var b=t.coupledBefore;
+        if(b==null||b.audit!=audit||b.preview!=preview||!b.handle.id.equals(beforeId)||b.report==null||b.scan==null||b.handle.status.state()!=CoupledAssemblyBeforeCheck.State.MATCHED||!preview.fromOriginalInput(audit.input))
+            throw new IllegalStateException("缺少同一原成组候选的完整 fresh BEFORE");
+        var lease=new CoupledNativeLease(t,preview,confirmationOwner);lease.current(server,player);return lease;
+    }
     /** Same-live-task whole lease. Only the explicit final-confirmation
      * service may detach it; reports never construct this private witness. */
     static final class AssemblyNativeLease {
