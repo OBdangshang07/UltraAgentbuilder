@@ -23,7 +23,8 @@ function capability(value,generation){
 }
 export function coupledReferenceWorldAssemblyPreparation(reference,saved,selectedCapability){
   const p=reference.preparation,generation=p.generation,tier=p.policy.assembly;
-  if(p.version!==2||generation.agent!=='codex'||generation.assemblyConfirmed!==true||tier.recovery?.mode!=='safe'
+  const supportedReference=p.version===2||p.format==='CoupledAssemblyReferencePreparation'&&p.version===1;
+  if(!supportedReference||generation.agent!=='codex'||generation.assemblyConfirmed!==true||tier.recovery?.mode!=='safe'
     ||tier.designReview?.mode!=='native'||![2,3,4].includes(tier.quality?.version))throw Error('New coupled task requires explicit shared reference policy, safe recovery and native review');
   const worldContext=prepareCoupledAssemblyWorldContext(saved.snapshot);
   if(p.policy.minimumHeight>worldContext.maximumBounds.height||p.policy.maximumBounds&&Object.keys(worldContext.maximumBounds).some(k=>p.policy.maximumBounds[k]>worldContext.maximumBounds[k]))throw Error('Requested coupled building cannot fit original W; no shrinking or clipping');

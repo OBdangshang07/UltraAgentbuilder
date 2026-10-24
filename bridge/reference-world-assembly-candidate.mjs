@@ -6,6 +6,8 @@ import {WORLD_ASSEMBLY_LIMITS} from '../contracts/world-assembly-limits.mjs';
 import {hash} from '../src/generation/compiler.mjs';
 import {readNativeBundle} from '../src/generation/bundle.mjs';
 import {assemblyWorldContextData,streamAssemblyWorldPatch,WORLD_ASSEMBLY_PATCH_LIMITS} from '../src/world/assembly-context.mjs';
+import {assemblyGenerationContext} from '../src/world/assembly-coupled-context.mjs';
+import {readCoupledReferenceAssemblyRunClaim} from './coupled-reference-world-assembly-run-claim.mjs';
 import {prepareWorldPatchPreview} from '../src/world/world-patch-preview-data.mjs';
 import {readNativeEvidence,readNativeRevisionComparison} from './native-evidence.mjs';
 import {assemblyCorrectionInput} from '../src/design/correction-feedback.mjs';
@@ -60,6 +62,7 @@ async function member(root,relative,maximum,allowVerifiedEmpty=false) {
 }
 const json = async (root,name,maximum=REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofFileBytes) =>
   JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await member(root,name,maximum)));
+export const readReferenceAssemblyProofMember=member;
 async function immutable(file,bytes) {
   const handle=await fs.open(file,'wx',0o600);
   try {await handle.writeFile(bytes);await handle.sync();} finally {await handle.close();}
@@ -67,8 +70,8 @@ async function immutable(file,bytes) {
 
 /** Pin the whole ORIGINAL selected branch, ledger, references, render evidence
  * and final bundle. No copying, cleanup, re-rendering or alternate branches. */
-async function evidencePins(directory,branch,signal,verifiedEmptyAnswers=new Set()) {
-  const roots=['reference-world-assembly-v2','reference-input','assembly-journal',branch,'reference-world-assembly-final'];
+async function evidencePins(directory,branch,signal,verifiedEmptyAnswers=new Set(),archiveName='reference-world-assembly-v2') {
+  const roots=[archiveName,'reference-input','assembly-journal',branch,'reference-world-assembly-final'];
   const names=await fs.readdir(directory);
   for (const name of ['native-evidence','native-comparisons','native-revisions']) if (names.includes(name)) roots.push(name);
   roots.push(...names.filter(n=>/^codex-response-[-\w]{1,96}$/.test(n)).sort());
@@ -89,7 +92,7 @@ async function evidencePins(directory,branch,signal,verifiedEmptyAnswers=new Set
     }
   }
   for (const root of roots) await visit(root);
-  for(const name of ['_owner.json','request.json','original-dispatch.json','original-execution-start.json'])if(names.includes(name)) {
+  for(const name of ['_owner.json','request.json','original-dispatch.json','original-execution-start.json','coupled-reference-world-assembly-run-claim.json'])if(names.includes(name)) {
     if(pins.length>=REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofFiles)fail('Joint original ownership evidence quota');
     const bytes=await member(directory,name,131072);total+=bytes.length;
     if(total>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.proofBytes)fail('Joint original ownership byte quota');
@@ -136,7 +139,7 @@ async function terminalEvidence(directory,original,branch,records,signal) {
     || summary.finalTextReviewCurrent!==true || summary.visualReviewCurrent!==true || summary.designQuality?.nativeMaterialReview!==true
     || summary.worldContext?.worldContextHash!==p.worldContextHash || summary.worldContext.snapshotHash!==p.snapshotHash
     || summary.worldContext.selectionHash!==p.selectionHash) fail('Original complete current joint review required');
-  const world=assemblyWorldContextData(original.worldContext);
+  const world=assemblyGenerationContext(original.worldContext).data;
   const checkedEnvelope=async name=>{
     const envelope=await json(directory,'assembly-journal/'+name);
     exactKeys(envelope,['value','sha256'],'original joint journal envelope');
@@ -145,7 +148,8 @@ async function terminalEvidence(directory,original,branch,records,signal) {
   const identity=await checkedEnvelope('identity.json');
   if (hash(identity)!==hash({version:1,requestHash:p.preparationHash,policyHash:hash(original.reference.preparation.policy),
     runtimeHash:p.runtimeHash,maximumCalls:p.maximumCalls}) || hash(await checkedEnvelope('dispatched.json'))!==hash({count:records.length})) fail('Original joint ledger request/count differs');
-  await readReferenceWorldAssemblyExecutionStart({directory,prepared:p});
+  if(world.format==='CoupledAssemblyWorldContext')await readCoupledReferenceAssemblyRunClaim({directory,original});
+  else await readReferenceWorldAssemblyExecutionStart({directory,prepared:p});
   const journalNames=(await fs.readdir(path.join(directory,'assembly-journal'))).filter(n=>/^call-\d+\.json$/.test(n)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]));
   if (hash(journalNames)!==hash(records.map((_,i)=>`call-${i+1}.json`))) fail('Original joint call history missing/truncated');
   let currentReview=null;
@@ -206,21 +210,26 @@ async function terminalEvidence(directory,original,branch,records,signal) {
   return {summary,evidence};
 }
 
-async function prepare(directory,original,branch,records,signal,{retainParts=true,partIndex=null,onMember,expectedCandidateHash}={}) {
-  if (typeof retainParts!=='boolean' || partIndex!==null && (!Number.isSafeInteger(partIndex)
-    || partIndex<0 || partIndex>=WORLD_ASSEMBLY_PATCH_LIMITS.parts)) fail('Exact retained result mode/part index required');
+/** The complete original ledger/references/native-render/package verifier is
+ * shared, not replaced by a reduced coupled-only proof. No provider/compiler,
+ * new owner, candidate publication or world authority is acquired here. */
+export async function readReviewedReferenceAssemblySource({directory,original,branch,records,signal}) {
   await physical(directory);signal?.throwIfAborted();
+  const world=assemblyGenerationContext(original.worldContext).data,coupled=world.format==='CoupledAssemblyWorldContext';
+  const archiveName=coupled?'coupled-reference-world-assembly-v1':'reference-world-assembly-v2';
+  if(coupled?(original.prepared.format!=='CoupledReferenceWorldAssemblyPreparation'||original.prepared.version!==1)
+    :(original.prepared.format!=='ReferenceWorldAssemblyPreparation'||original.prepared.version!==2))fail('Original checked context and independent preparation protocol differ');
   const {summary,evidence}=await terminalEvidence(directory,original,branch,records,signal);
   const verifiedEmptyAnswers=await verifiedCapacityEmptyAnswers(directory,original,branch,records,summary);
   const finalDirectory=path.join(directory,'reference-world-assembly-final');
   await physical(finalDirectory);
   // Strong physical file reads precede the existing native bundle validator.
-  const proofFiles=await evidencePins(directory,branch,signal,verifiedEmptyAnswers),pins=new Map(proofFiles.map(f=>[f.path,f]));
-  const archiveNames=['manifest.json',...original.manifest.files.map(f=>f.path)].map(n=>'reference-world-assembly-v2/'+n).sort();
-  if (hash(proofFiles.filter(f=>f.path.startsWith('reference-world-assembly-v2/')).map(f=>f.path).sort())!==hash(archiveNames)
-    || hash(await json(directory,'reference-world-assembly-v2/manifest.json'))!==hash(original.manifest)) fail('Original frozen joint archive changed during result preparation');
+  const proofFiles=await evidencePins(directory,branch,signal,verifiedEmptyAnswers,archiveName),pins=new Map(proofFiles.map(f=>[f.path,f]));
+  const archiveNames=['manifest.json',...original.manifest.files.map(f=>f.path)].map(n=>archiveName+'/'+n).sort();
+  if (hash(proofFiles.filter(f=>f.path.startsWith(archiveName+'/')).map(f=>f.path).sort())!==hash(archiveNames)
+    || hash(await json(directory,archiveName+'/manifest.json'))!==hash(original.manifest)) fail('Original frozen joint archive changed during result preparation');
   for (const file of original.manifest.files) {
-    const pin=pins.get('reference-world-assembly-v2/'+file.path);
+    const pin=pins.get(archiveName+'/'+file.path);
     if (pin?.sha256!==file.sha256 || pin.bytes!==file.bytes) fail('Original frozen joint file changed during result preparation');
   }
   const p=original.prepared,reference=await readJobReferenceInput({directory,input:original.reference.input,model:p.selected.model,runtimeHash:p.runtimeHash});
@@ -238,6 +247,20 @@ async function prepare(directory,original,branch,records,signal,{retainParts=tru
     || hash(nativeIndexSpace(diagnostic))!==hash(nativeIndexSpace(native.manifest))
     || hash(diagnosticCells)!==diagnostic.cellsHash || diagnostic.cellsHash!==native.manifest.cellsHash
     || !diagnosticCells.equals(native.binary)) fail('Final original native asset differs from reviewed geometry');
+  const verifyUnchanged=async()=>{
+    signal?.throwIfAborted();
+    if(hash(await evidencePins(directory,branch,signal,verifiedEmptyAnswers,archiveName))!==hash(proofFiles))fail('Original joint proof changed during result preparation');
+  };
+  return {summary,evidence,native,finalDirectory,proofFiles,verifyUnchanged};
+}
+
+async function prepare(directory,original,branch,records,signal,{retainParts=true,partIndex=null,onMember,expectedCandidateHash}={}) {
+  if (typeof retainParts!=='boolean' || partIndex!==null && (!Number.isSafeInteger(partIndex)
+    || partIndex<0 || partIndex>=WORLD_ASSEMBLY_PATCH_LIMITS.parts)) fail('Exact retained result mode/part index required');
+  // Legacy v2 entry never becomes a coupled candidate via copied JSON flags.
+  assemblyWorldContextData(original.worldContext);
+  const p=original.prepared,{summary,evidence,native,finalDirectory,proofFiles,verifyUnchanged}=
+    await readReviewedReferenceAssemblySource({directory,original,branch,records,signal});
   // Production retains one current part/preview, never all patch trees and
   // serialized copies. The legacy data API deliberately retains its arrays.
   const buffers=retainParts?{}:null,patches=retainParts?[]:null,previews=retainParts?[]:null;
@@ -279,7 +302,7 @@ async function prepare(directory,original,branch,records,signal,{retainParts=tru
   if(metadataBytes.length>REFERENCE_ASSEMBLY_CANDIDATE_LIMITS.metadataBytes)fail('Complete joint evidence metadata quota');
   if(expectedCandidateHash!==undefined && candidate.candidateHash!==expectedCandidateHash)
     fail('Candidate differs from complete original task/asset/proofs');
-  if(hash(await evidencePins(directory,branch,signal,verifiedEmptyAnswers))!==hash(proofFiles))fail('Original joint proof changed during result preparation');
+  await verifyUnchanged();
   // All provisional members and original proofs have been checked before the
   // final metadata callback; a callback failure never returns a complete set.
   if(retainParts)buffers['candidate.json']=metadataBytes;

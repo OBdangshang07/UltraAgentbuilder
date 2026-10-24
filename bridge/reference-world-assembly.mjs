@@ -152,7 +152,7 @@ export async function readFrozenReferenceWorldAssembly({directory,referenceInput
   return {prepared:expected,send,reference,saved,worldContext:prepareAssemblyWorldContext(saved.snapshot),manifest};
 }
 
-async function selectedAdapter(adapter, prepared) {
+export async function selectedReferenceAssemblyAdapter(adapter, prepared) {
   if (typeof adapter?.models !== 'function' || typeof adapter?.generate !== 'function') throw Error('Explicit selected image adapter required');
   const model = (await adapter.models()).find(m => m.id === prepared.selected.model);
   const current = {id:model?.id,supportsImages:model?.supportsImages,efforts:model?.efforts?.map(e => e.reasoningEffort ?? e)};
@@ -160,7 +160,7 @@ async function selectedAdapter(adapter, prepared) {
     throw Error('Live original image/effort advertisement changed; no replacement model or new SEND');
 }
 
-async function compileFinal(directory, scene, policy, signal) {
+export async function compileReferenceAssemblyFinal(directory, scene, policy, signal) {
   // The first normal final compilation of the ORIGINAL accepted SceneSpec,
   // using the existing production compiler/exporter. Diagnostic assets are NOT
   // copied/promoted or modified. A retained final bundle is read, not replaced.
@@ -224,7 +224,7 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
       if (execution!==null)await checkReferenceWorldAssemblyExecution({execution,directory,prepared:p,freshCall,index});
       if (freshCall) {
         if(execution===null&&p.recordExpiresAt<=Date.now())throw Error('Original world capture expired; no new call or refresh');
-        await selectedAdapter(adapter,p);
+        await selectedReferenceAssemblyAdapter(adapter,p);
       }
       signal.throwIfAborted();return current;
     };
@@ -268,7 +268,7 @@ export async function runReferenceWorldAssembly({directory,referenceInput,prepar
       || result.summary.visualReviewCurrent !== true || result.summary.designQuality?.nativeMaterialReview !== true)
       throw Error('Current complete native review required; intermediate/old-image task cannot publish a joint patch');
     onLocalPhase('final-native-compile');
-    const final = await compileFinal(directory,result.scene,original.reference.preparation.policy,signal);
+    const final = await compileReferenceAssemblyFinal(directory,result.scene,original.reference.preparation.policy,signal);
     onLocalPhase('final-native-identity');
     if (final.compiled.manifest.scene?.sourceHash !== result.summary.sourceHash) throw Error('Final original SceneSpec/native source differs');
     const baseline = path.resolve(result.summary.lastAcceptedDirectory);

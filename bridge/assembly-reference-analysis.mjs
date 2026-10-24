@@ -19,7 +19,10 @@ export async function prepareAssemblyReferenceAnalysis({directory,referenceInput
   assert.equal(analysis.maximumCorrections,1);assert.equal(analysis.provider,'codex');assert.equal(tier.recovery?.mode,'safe');
   assert.match(runtimeHash??'',/^[a-f0-9]{64}$/,'Reference runtime identity required');
   const reference=await readJobReferenceInput({directory,input:referenceInput,model:analysis.model,runtimeHash});
-  assert.equal(reference.preparation.version,2,'Legacy free preparation is not shared-budget assembly authorization');
+  const coupled=referenceInput.format==='CoupledAssemblyReferenceInput'
+    &&reference.preparation.format==='CoupledAssemblyReferencePreparation'&&reference.preparation.version===1
+    &&reference.jointPreparation?.format==='CoupledReferenceWorldAssemblyPreparation'&&reference.send?.format==='CoupledReferenceWorldAssemblySend';
+  assert.ok(reference.preparation.version===2||coupled,'Legacy free preparation is not shared-budget assembly authorization');
   assert.equal(hash(reference.preparation.policy),hash(policy),'Reference assembly policy changed after SEND');
   assert.equal(reference.preparation.generation.prompt,prompt,'Reference original user prompt changed');
   return reference;

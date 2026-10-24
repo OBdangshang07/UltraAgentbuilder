@@ -4,7 +4,7 @@ import {hash} from '../../src/generation/compiler.mjs';
 import {coupledNative,coupledSnapshot,coupledBoundaryEntries} from '../fixtures/assembly-coupled-native.mjs';
 import {compileCoupledAssemblyPlan,streamCoupledAssemblyParts,coupledAssemblyNativeData} from '../../src/world/assembly-coupled-plan.mjs';
 import {prepareCoupledAssemblyPreview} from '../../src/world/assembly-coupled-preview.mjs';
-import {prepareCoupledAssemblyBinding} from '../../src/world/assembly-coupled-binding.mjs';
+import {prepareCoupledAssemblyBinding,collectCoupledAssemblyBinding} from '../../src/world/assembly-coupled-binding.mjs';
 
 async function fixture(entries,options={}){
   const {snapshot}=coupledSnapshot(options),native=coupledNative(entries,options.dimensions),sourceHash=hash('synthetic-source');
@@ -64,4 +64,25 @@ test('cancelled or failed stream cannot fabricate a completed-set identity',asyn
   assert.throws(()=>prepareCoupledAssemblyBinding(f.plan,f.set,f.previews,f.source,{signal:c.signal}),{name:'AbortError'});
   let forged;await assert.rejects(streamCoupledAssemblyParts(f.plan,{onPart:async p=>{forged={...f.set,partHashes:[p.partHash]};throw Error('no receipt');}}),/no receipt/);
   assert.throws(()=>prepareCoupledAssemblyBinding(f.plan,forged,f.previews,f.source),/Original completed/);
+});
+
+test('streamed original preview receipts derive the same binding without retaining all geometry',async()=>{
+  const {entries,dimensions}=coupledBoundaryEntries(),f=await fixture(entries,{dimensions}),collector=collectCoupledAssemblyBinding(f.plan);
+  f.previews.forEach((p,i)=>collector.add(p,i,f.set.partHashes[i]));
+  assert.deepEqual(collector.finish(f.set,f.source),prepareCoupledAssemblyBinding(f.plan,f.set,f.previews,f.source));
+  assert.throws(()=>collector.finish(f.set,f.source),/already closed/);assert.throws(()=>collector.add(f.previews[0],0,f.set.partHashes[0]),/Consecutive/);
+});
+
+test('streamed preview receipts reject copies, foreign ownership, gaps and an incomplete original set',async()=>{
+  const f=await fixture(),g=await fixture(),collector=collectCoupledAssemblyBinding(f.plan);
+  assert.throws(()=>collector.add(f.previews[0],1,f.set.partHashes[0]),/Consecutive/);
+  for(const preview of [structuredClone(f.previews[0]),g.previews[0]])assert.throws(()=>collector.add(preview,0,f.set.partHashes[0]),/Original whole/);
+  assert.throws(()=>collector.finish(f.set,f.source),/All original/);
+  collector.add(f.previews[0],0,f.set.partHashes[0]);assert.throws(()=>collector.finish(g.set,f.source),/Original completed/);
+  assert.equal(collector.finish(f.set,f.source).candidateHash,f.source.candidateHash);
+});
+
+test('cancelled streamed binding collector cannot receive or finalize a preview',async()=>{
+  const f=await fixture(),c=new AbortController(),collector=collectCoupledAssemblyBinding(f.plan,{signal:c.signal});c.abort();
+  assert.throws(()=>collector.add(f.previews[0],0,f.set.partHashes[0]),{name:'AbortError'});assert.throws(()=>collector.finish(f.set,f.source),{name:'AbortError'});
 });
