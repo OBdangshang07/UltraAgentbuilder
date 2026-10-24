@@ -18,12 +18,15 @@ final class CoupledAssemblyUndoJournal {
         int prefixGroups(int count){int n=0,i=0;while(n<count&&i<groups.size())n+=groups.get(i++).writes.size();if(count<0||count>writes.size()||n!=count)throw new IllegalArgumentException("Undo receipt cannot split an original complete group");return i;}
     }
     static final class Plan {
-        private final UUID id;private final CoupledAssemblyExecution.UndoOrigin origin;private final List<Group> groups;private final List<WorldPatchCompiler.Write> writes;private final byte[] bytes;private final String hash;
+        private final UUID id;private final CoupledAssemblyExecution.UndoOrigin origin;private final List<Group> groups;private final List<WorldPatchCompiler.Write> writes;private final Map<SelectionRegion.Point,String> originalAfter;private final byte[] bytes;private final String hash;
         private Plan(CoupledAssemblyExecution.UndoOrigin origin){
             this.origin=origin;id=UUID.randomUUID();groups=inverted(origin.plan().compiled().groups().subList(0,origin.groups()),origin.prefix());writes=flatten(groups);
+            var after=new HashMap<SelectionRegion.Point,String>();for(var row:writes)if(after.put(row.position(),row.before())!=null)throw new IllegalStateException("Original inverse target duplicated");originalAfter=Map.copyOf(after);
             var v=planJson(id,origin.plan().id(),origin.plan().player(),origin.plan().hash(),writes.size(),groups.size());hash=SelectionBaseline.hash(v);v.addProperty("planHash",hash);bytes=bytes(v);
         }
         UUID id(){return id;}String hash(){return hash;}CoupledAssemblyJournal.Plan original(){return origin.plan();}List<Group> groups(){return groups;}List<WorldPatchCompiler.Write> writes(){return writes;}
+        boolean fromOriginalOrigin(CoupledAssemblyExecution.UndoOrigin value){return origin==value;}
+        Map<SelectionRegion.Point,String> originalAfter(){return originalAfter;}
         Packet packet(int groupOffset){return packetOf(groups,groupOffset);}
         boolean canAuthorizePlacement(){return false;}
         private void verify(Path directory)throws IOException{

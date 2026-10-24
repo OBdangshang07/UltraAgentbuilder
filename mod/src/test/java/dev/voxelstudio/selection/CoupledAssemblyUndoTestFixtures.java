@@ -10,15 +10,17 @@ import static org.junit.jupiter.api.Assertions.*;
 final class CoupledAssemblyUndoTestFixtures {
     static final class Clock implements LongSupplier{long now;public long getAsLong(){return now+=100;}}
     static final class Queue implements Executor{final ArrayDeque<Runnable> work=new ArrayDeque<>();boolean worker;public void execute(Runnable r){work.add(r);}void pump(){while(!work.isEmpty()){worker=true;try{work.remove().run();}finally{worker=false;}}}}
-    static final class Memory implements CoupledAssemblyExecution.Source {
+    static final class Memory implements CoupledAssemblyUndoExecution.Source {
         final CoupledAssemblyJournal.Plan plan;final Queue queue;final Map<SelectionRegion.Point,SelectionScan.BlockFact> changed=new HashMap<>();final Map<List<Integer>,Object> chunks=new HashMap<>();final List<WorldPatchCompiler.Write> attempts=new ArrayList<>();
-        long revision;boolean host=true,unloaded,replaced,undo,failLower,denyLower,denyUpper,throwAfterLower,extraRevision,support=true,afterSupport=true;Runnable upper=()->{};
+        final List<List<WorldPatchCompiler.Write>> preserved=new ArrayList<>();
+        long revision;boolean host=true,unloaded,replaced,undo,failLower,denyLower,denyUpper,throwAfterLower,extraRevision,support=true,afterSupport=true,preserve=true;Runnable upper=()->{};
         Memory(CoupledAssemblyJournal.Plan plan,Queue queue){this.plan=plan;this.queue=queue;revision=plan.binding().contextRevision();}
         private void thread(){assertFalse(queue.worker,"World access on disk worker");}
         public void beginStep(){thread();}public CoupledAssemblyExecution.Frame frame(){thread();var s=plan.binding().selection();return new CoupledAssemblyExecution.Frame(s.world().worldId(),s.world().dimension(),s.revision(),revision,host);}
         public Object loadedChunk(int x,int z){thread();return unloaded?null:replaced?new Object():chunks.computeIfAbsent(List.of(x,z),k->new Object());}
         public SelectionScan.BlockFact read(SelectionRegion.Point p){thread();return changed.getOrDefault(p,plan.compiled().baseline().at(p));}
         public boolean verifyGroup(List<WorldPatchCompiler.Write> group,boolean after){thread();return after?afterSupport:support;}
+        public boolean preserveGroup(List<WorldPatchCompiler.Write> group){thread();preserved.add(List.copyOf(group));return preserve;}
         public boolean set(WorldPatchCompiler.Write w){
             thread();attempts.add(w);assertEquals(w.before(),read(w.position()).state());assertFalse(plan.binding().selection().protectedAt(w.position()));
             boolean lower=undo&&w.before().contains("half=lower"),isUpper=undo&&w.before().contains("half=upper");if(lower&&failLower)throw new IllegalStateException("Synthetic inverse lower failed");if(lower&&denyLower||isUpper&&denyUpper)return false;

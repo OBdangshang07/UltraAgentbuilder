@@ -23,6 +23,11 @@ final class CoupledNativeWriteGate {
         if(!fullyWritten(rows)){revoke();throw new IllegalStateException("Half or different group cannot close");}
         int size=active.size();active=null;cursor=0;next++;return size;
     }
+    /** Inverse-only no-write disposition. It must name the exact next whole
+     * group while unarmed; a half-written group can never become preserved. */
+    void preserve(List<WorldPatchCompiler.Write> rows){
+        if(!expects(rows)){revoke();throw new IllegalStateException("Only the exact next unarmed complete inverse group may be preserved");}next++;
+    }
     int writtenInActiveGroup(){return active==null?0:cursor;}boolean broken(){return broken;}
     void revoke(){broken=true;active=null;cursor=0;}
 }

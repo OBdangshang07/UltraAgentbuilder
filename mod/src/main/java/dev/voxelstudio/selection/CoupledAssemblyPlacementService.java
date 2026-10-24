@@ -47,7 +47,7 @@ public final class CoupledAssemblyPlacementService {
     private record Prepared(CoupledAssemblyJournal.Plan plan,Summary summary){}
     private static final class Task {
         UUID player;Operation handle;CoupledAssemblyJournal.Plan plan;SelectionReadService.CoupledNativeWorld world;CoupledAssemblyNativeSource source;
-        CompletableFuture<CoupledAssemblyJournal.Live> worker;CoupledAssemblyJournal.Live journal;CoupledAssemblyExecution engine;long workerStarted;boolean cancelled,closed;
+        CompletableFuture<CoupledAssemblyJournal.Live> worker;CoupledAssemblyJournal.Live journal;CoupledAssemblyExecution engine;long workerStarted;boolean cancelled,closed,undoSubmitted;
     }
     private static void thread(MinecraftServer server){if(!server.isOnThread())throw new IllegalStateException("Coupled gateway requires original server thread");}
     private static boolean terminal(State state){return Set.of(State.COMPLETED,State.CANCELLED,State.CONFLICT,State.REVIEW_REQUIRED,State.FAILED).contains(state);}
@@ -55,10 +55,29 @@ public final class CoupledAssemblyPlacementService {
     private static void reapPlans(){RETIRING_PLANS.entrySet().removeIf(e->e.getValue().closed());}
     private static boolean diskBusy(){return DISK.getActiveCount()!=0||!DISK.getQueue().isEmpty();}
     /** Leaf only: no policy recursion, new Capture, world reads or waits. */
-    public static boolean busy(MinecraftServer server){thread(server);reapPlans();var t=TASKS.get(server);return RETIRING_PLANS.containsKey(server)||PREPARATIONS.containsKey(server)||t!=null&&!terminal(t.handle.status.state)||diskBusy();}
+    public static boolean busy(MinecraftServer server){thread(server);reapPlans();var t=TASKS.get(server);return RETIRING_PLANS.containsKey(server)||PREPARATIONS.containsKey(server)||t!=null&&!terminal(t.handle.status.state)||diskBusy()||CoupledAssemblyUndoService.busy(server);}
     private static void idle(MinecraftServer server){
         WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.COUPLED_ASSEMBLY);reapPlans();var t=TASKS.get(server);
-        if(RETIRING_PLANS.containsKey(server)||t!=null&&!terminal(t.handle.status.state)||diskBusy())throw new IllegalStateException("已有原成组事务或原 CPU/磁盘操作未封闭；不替换或重发");
+        if(RETIRING_PLANS.containsKey(server)||t!=null&&!terminal(t.handle.status.state)||diskBusy()||CoupledAssemblyUndoService.busy(server))throw new IllegalStateException("已有原成组事务/撤销或原 CPU/磁盘操作未封闭；不替换或重发");
+    }
+    /** Retained live identity, never a factory from public IDs or disk Review. */
+    static final class UndoSource {
+        private final Task task;private final CoupledAssemblyExecution.UndoOrigin original;
+        private UndoSource(Task task){this.task=task;original=task.engine.undoOrigin();}
+        CoupledAssemblyExecution.UndoOrigin original(){return original;}
+        void current(MinecraftServer server,UUID player){
+            thread(server);WorldOperationExclusion.require(server,WorldOperationExclusion.Kind.COUPLED_ASSEMBLY);
+            if(TASKS.get(server)!=task||!task.player.equals(player)||task.undoSubmitted||PREPARATIONS.containsKey(server)||!terminal(task.handle.status.state)||task.engine.undoOrigin()!=original)
+                throw new IllegalStateException("只能撤销仍持有的同一原 live 成组封闭前缀；不重绑其他任务");
+            task.world.currentUndo(server,player,original);
+        }
+        SelectionReadService.CoupledUndoNativeWorld open(MinecraftServer server,UUID player,Object confirmationOwner,CoupledAssemblyConsent.Ticket ticket){
+            current(server,player);var world=task.world.forUndo(server,player,original,confirmationOwner,ticket);task.undoSubmitted=true;return world;
+        }
+    }
+    static UndoSource undoSource(MinecraftServer server,UUID player,Operation operation){
+        thread(server);var task=TASKS.get(server);if(task==null||task.handle!=operation||task.engine==null)throw new IllegalStateException("公开事务 ID 或日志不能重建原成组撤销来源");
+        var source=new UndoSource(task);source.current(server,player);return source;
     }
     public static PrepareHandle prepare(MinecraftServer server,UUID player,SelectionReadService.Capture original,CoupledAssemblyPreview preview,CoupledAssemblyInput input){
         Objects.requireNonNull(server);Objects.requireNonNull(player);Objects.requireNonNull(original);Objects.requireNonNull(preview);Objects.requireNonNull(input);

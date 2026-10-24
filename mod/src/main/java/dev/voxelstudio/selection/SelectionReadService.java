@@ -572,9 +572,33 @@ public final class SelectionReadService {
      * required; neither archived bytes nor a public binding constructs it. */
     static final class CoupledNativeWorld {
         final ServerWorld world;final UUID player;final WorldSelection selection;final WorldChangeTracker.Watch watch;
-        final SelectionChunkFence chunks;final CoupledAssemblyInput input;final AssemblyCoupledCompiler.Compiled compiled;
+        final SelectionChunkFence chunks;final CoupledAssemblyInput input;final AssemblyCoupledCompiler.Compiled compiled;private boolean undoDetached;
         private CoupledNativeWorld(ServerWorld world,UUID player,WorldSelection selection,WorldChangeTracker.Watch watch,SelectionChunkFence chunks,CoupledAssemblyInput input,AssemblyCoupledCompiler.Compiled compiled){
             this.world=world;this.player=player;this.selection=selection;this.watch=watch;this.chunks=chunks;this.input=input;this.compiled=compiled;
+        }
+        CoupledUndoNativeWorld forUndo(MinecraftServer server,UUID user,CoupledAssemblyExecution.UndoOrigin undo,Object confirmationOwner,CoupledAssemblyConsent.Ticket ticket){
+            currentUndo(server,user,undo);
+            CoupledAssemblyConsent.consume(ticket,confirmationOwner,player,input.binding(),CoupledAssemblyConsent.Purpose.UNDO,System.nanoTime());undoDetached=true;
+            // A new inverse epoch is not a replacement Capture or AFTER.
+            // No chunks are loaded/retained and original target facts stay fixed.
+            return new CoupledUndoNativeWorld(world,player,selection,WorldChangeTracker.watch(world,selection.context()),new SelectionChunkFence(),input,compiled,undo);
+        }
+        void currentUndo(MinecraftServer server,UUID user,CoupledAssemblyExecution.UndoOrigin undo){
+            if(!server.isOnThread())throw new IllegalStateException("Original coupled inverse handoff requires server thread");
+            var current=server.getPlayerManager().getPlayer(user);
+            if(undoDetached||!player.equals(user)||world.getServer()!=server||server.isDedicated()||current==null||!current.isCreative()||!server.isHost(current.getGameProfile())||current.getServerWorld()!=world||busy(server)
+                    ||undo.plan().compiled()!=compiled||!undo.plan().player().equals(player)||!undo.plan().binding().selection().equals(selection)||!compiled.fromOriginalInput(input))
+                throw new IllegalStateException("撤销不是同一原 live 成组/当前创造房主，或来源已移交；不接管");
+        }
+    }
+    static final class CoupledUndoNativeWorld {
+        final ServerWorld world;final UUID player;final WorldSelection selection;final WorldChangeTracker.Watch watch;final SelectionChunkFence chunks;
+        final CoupledAssemblyInput input;final AssemblyCoupledCompiler.Compiled compiled;final CoupledAssemblyExecution.UndoOrigin original;final long initialRevision;private boolean sourceClaimed;
+        private CoupledUndoNativeWorld(ServerWorld world,UUID player,WorldSelection selection,WorldChangeTracker.Watch watch,SelectionChunkFence chunks,CoupledAssemblyInput input,AssemblyCoupledCompiler.Compiled compiled,CoupledAssemblyExecution.UndoOrigin original){
+            this.world=world;this.player=player;this.selection=selection;this.watch=watch;this.chunks=chunks;this.input=input;this.compiled=compiled;this.original=original;initialRevision=watch.revision();
+        }
+        void claim(CoupledAssemblyUndoJournal.Plan plan){
+            if(!world.getServer().isOnThread()||sourceClaimed||!plan.fromOriginalOrigin(original)||plan.original()!=original.plan()||plan.original().compiled()!=compiled||!compiled.fromOriginalInput(input))throw new IllegalStateException("Native inverse source must claim this exact original complete live plan once");sourceClaimed=true;
         }
     }
     static CoupledNativeLease coupledNativeLease(MinecraftServer server,UUID player,Capture original,CoupledAssemblyPreview preview,String auditId,String beforeId,Object confirmationOwner){

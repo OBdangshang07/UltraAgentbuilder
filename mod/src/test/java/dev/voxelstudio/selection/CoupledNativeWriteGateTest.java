@@ -35,4 +35,14 @@ final class CoupledNativeWriteGateTest {
             var rejected=new CoupledNativeWriteGate(1,i->invalid);assertThrows(IllegalStateException.class,()->rejected.arm(invalid));
         }
     }
+    @Test void preservedWholeInverseGroupAdvancesWithoutArmingOrWriting(){
+        var pair=List.of(row(1),row(2));var last=List.of(row(0));var gate=new CoupledNativeWriteGate(2,i->i==0?pair:last);
+        gate.preserve(pair);assertFalse(gate.permits(pair.get(0)));assertFalse(gate.arm(pair));assertEquals(0,gate.writtenInActiveGroup());
+        assertTrue(gate.arm(last));gate.applied(last.get(0));assertEquals(1,gate.complete(last));assertFalse(gate.arm(last));
+    }
+    @Test void preservedCannotHideWrongOrderArmedOrHalfWrittenGroup(){
+        var pair=List.of(row(1),row(2));
+        for(int kind=0;kind<3;kind++){var gate=new CoupledNativeWriteGate(1,i->pair);if(kind>0)gate.arm(pair);if(kind==2)gate.applied(pair.get(0));
+            final int value=kind;assertThrows(IllegalStateException.class,()->gate.preserve(value==0?List.of(row(3)):pair));assertTrue(gate.broken());assertFalse(gate.arm(pair));}
+    }
 }

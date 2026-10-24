@@ -51,4 +51,20 @@ final class CoupledAssemblyUndoExecutionTest {
     @Test void diskWorkerRejectionCannotStartWorldWritesAndOneWriteBudgetIsRejected()throws Exception{
         var r=undo(temp,"complete-new-door",64);Executor reject=work->{throw new RejectedExecutionException("Synthetic queue closed");};var disk=new CoupledAssemblyUndoExecution.Disk(r.live(),reject);var engine=new CoupledAssemblyUndoExecution(disk,r.forward().memory(),64,2_000_000,r.forward().clock());engine.step();engine.step();assertEquals(CoupledAssemblyUndoExecution.State.REVIEW_REQUIRED,engine.progress().state());assertTrue(r.forward().memory().attempts.isEmpty());assertThrows(IllegalArgumentException.class,()->new CoupledAssemblyUndoExecution(r.disk(),r.forward().memory(),1,2_000_000,r.forward().clock()));
     }
+    @Test void wholePreservationNotifiesSourceAndNeverInventsNativeWrites()throws Exception{
+        var r=undo(temp,"complete-new-door",64);r.forward().memory().editDoorHalf("upper");finish(r);
+        assertEquals(CoupledAssemblyUndoExecution.State.COMPLETED,r.engine().progress().state());assertEquals(2,r.forward().memory().preserved.size());
+        assertEquals(2,r.forward().memory().preserved.get(0).size());assertEquals(1,r.forward().memory().preserved.get(1).size());assertTrue(r.forward().memory().attempts.isEmpty());
+    }
+    @Test void rejectedPreservationStopsBeforeEvaluatingOrRestoringAnyLaterGroup()throws Exception{
+        var r=undo(temp,"complete-new-door",64);r.forward().memory().editDoorHalf("upper");r.forward().memory().preserve=false;finish(r);
+        assertEquals(CoupledAssemblyUndoExecution.State.CONFLICT,r.engine().progress().state());assertEquals(0,r.engine().progress().evaluatedWrites());
+        assertEquals(1,r.forward().memory().preserved.size());assertTrue(r.forward().memory().attempts.isEmpty());assertFalse(CoupledAssemblyUndoJournal.inspect(r.live().directory()).needsReview());
+    }
+    @Test void originalAfterIndexIsPreparedOffTickAndImmutableWithoutRefreshingEditedTargets()throws Exception{
+        var r=undo(temp,"complete-new-door",64);var plan=r.live().plan();var row=plan.writes().get(0);var expected=plan.originalAfter();
+        assertEquals(plan.writes().size(),expected.size());assertEquals(row.before(),expected.get(row.position()));assertTrue(plan.fromOriginalOrigin(r.forward().engine().undoOrigin()));
+        assertThrows(UnsupportedOperationException.class,()->expected.put(row.position(),"minecraft:diamond_block"));r.forward().memory().editDoorHalf("upper");
+        assertSame(expected,plan.originalAfter());assertEquals(row.before(),plan.originalAfter().get(row.position()));finish(r);assertEquals(CoupledAssemblyUndoExecution.State.COMPLETED,r.engine().progress().state());
+    }
 }

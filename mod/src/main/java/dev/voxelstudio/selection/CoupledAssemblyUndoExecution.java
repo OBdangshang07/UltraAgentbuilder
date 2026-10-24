@@ -8,6 +8,11 @@ import java.util.function.LongSupplier;
  * are still required. Preserve whole changed groups AND their supports;
  * never turn a possible half mutation into an evaluated receipt or retry. */
 final class CoupledAssemblyUndoExecution {
+    interface Source extends CoupledAssemblyExecution.Source {
+        /** An exact whole group kept without mutation still advances the
+         * native inverse cursor; it is never a half-group acknowledgement. */
+        boolean preserveGroup(List<WorldPatchCompiler.Write> rows);
+    }
     enum State { READY,WAIT_INTENT,APPLYING,WAIT_RECEIPT,WAIT_OUTCOME,WAIT_AMBIGUITY,COMPLETED,CANCELLED,CONFLICT,REVIEW_REQUIRED }
     interface Log {
         CoupledAssemblyUndoJournal.Plan plan();
@@ -27,14 +32,14 @@ final class CoupledAssemblyUndoExecution {
         public CompletableFuture<Void> ambiguous(CoupledAssemblyUndoJournal.Intent token,String reason){return submit(()->{live.ambiguous(token,reason);return null;});}
     }
     record Progress(State state,int evaluatedWrites,int evaluatedGroups,int restored,int preserved,int totalWrites,int steps,int maximumEntriesPerStep,long maximumStepNanos,String reason){boolean canAuthorizePlacement(){return false;}boolean worldDurabilityVerified(){return false;}}
-    private final Log log;private final CoupledAssemblyExecution.Source source;private final LongSupplier clock;private final int maximumEntries;private final long maximumNanos;
+    private final Log log;private final Source source;private final LongSupplier clock;private final int maximumEntries;private final long maximumNanos;
     private final SelectionBaseline baseline;private final WorldSelection selection;private final Map<SelectionRegion.Point,String> expected=new HashMap<>();private final Set<SelectionRegion.Point> preservedSupports=new HashSet<>();private final SelectionChunkFence chunks=new SelectionChunkFence();
     private final List<CoupledAssemblyUndoJournal.Entry> evaluated=new ArrayList<>(),batch=new ArrayList<>();
     private State state=State.READY;private String reason="等待原完整组撤销日志";private boolean cancelled;private long revision,pendingStarted,maxStepNanos;private int groups,batchGroups,steps,restored,maxEntriesPerStep;
     private CoupledAssemblyUndoJournal.Intent intent;private CompletableFuture<?> pending;private CoupledAssemblyJournal.ReceiptState receipt;private CoupledAssemblyJournal.Outcome outcome;
-    CoupledAssemblyUndoExecution(Log log,CoupledAssemblyExecution.Source source,int maximumEntries,long maximumNanos,LongSupplier clock){
+    CoupledAssemblyUndoExecution(Log log,Source source,int maximumEntries,long maximumNanos,LongSupplier clock){
         this.log=Objects.requireNonNull(log);this.source=Objects.requireNonNull(source);this.clock=Objects.requireNonNull(clock);if(maximumEntries<2||maximumEntries>128||maximumNanos<1||maximumNanos>2_000_000)throw new IllegalArgumentException("Bounded complete-group inverse budget required");this.maximumEntries=maximumEntries;this.maximumNanos=maximumNanos;
-        baseline=log.plan().original().compiled().baseline();selection=log.plan().original().binding().selection();revision=source.frame().contextRevision();if(!frame())throw new IllegalArgumentException("Original world/selection and current creative host required for undo");for(var w:log.plan().writes())expected.put(w.position(),w.before());
+        baseline=log.plan().original().compiled().baseline();selection=log.plan().original().binding().selection();revision=source.frame().contextRevision();if(!frame())throw new IllegalArgumentException("Original world/selection and current creative host required for undo");
     }
     Progress progress(){return new Progress(state,evaluated.size(),groups,restored,evaluated.size()-restored,log.plan().writes().size(),steps,maxEntriesPerStep,maxStepNanos,reason);}
     void cancel(){if(!terminal())cancelled=true;}
@@ -58,7 +63,7 @@ final class CoupledAssemblyUndoExecution {
     private CoupledAssemblyUndoJournal.Disposition preservation(CoupledAssemblyUndoJournal.Group group){
         // Targets of EVERY member are checked before ANY inverse member.
         for(var row:group.writes()){if(preservedSupports.contains(row.position()))return CoupledAssemblyUndoJournal.Disposition.PRESERVED_DEPENDENCY;var actual=read(row.position());if(actual==null||actual.blockEntity()||!actual.state().equals(row.before()))return CoupledAssemblyUndoJournal.Disposition.PRESERVED_TARGET;}
-        for(var row:group.writes())for(int axis=0;axis<3;axis++)for(int sign:new int[]{-1,1}){var p=row.position();int[] xyz={p.x(),p.y(),p.z()};xyz[axis]+=sign;var point=new SelectionRegion.Point(xyz[0],xyz[1],xyz[2]);var before=baseline.at(point);var actual=read(point);if(before==null||actual==null||actual.blockEntity()!=before.blockEntity()||!actual.state().equals(expected.getOrDefault(point,before.state())))return CoupledAssemblyUndoJournal.Disposition.PRESERVED_NEIGHBOR;}
+        for(var row:group.writes())for(int axis=0;axis<3;axis++)for(int sign:new int[]{-1,1}){var p=row.position();int[] xyz={p.x(),p.y(),p.z()};xyz[axis]+=sign;var point=new SelectionRegion.Point(xyz[0],xyz[1],xyz[2]);var before=baseline.at(point);var actual=read(point);if(before==null||actual==null||actual.blockEntity()!=before.blockEntity()||!actual.state().equals(expected.getOrDefault(point,log.plan().originalAfter().getOrDefault(point,before.state()))))return CoupledAssemblyUndoJournal.Disposition.PRESERVED_NEIGHBOR;}
         return null;
     }
     Progress step(){
@@ -83,7 +88,10 @@ final class CoupledAssemblyUndoExecution {
                     for(var row:rows){var actual=source.read(row.position());if(actual==null||actual.blockEntity()||!actual.state().equals(row.after())||!frame()){whole=false;break;}}
                     if(!whole||!source.verifyGroup(rows,true)||!frame()){uncertain("完整逆向组最终状态/支撑未知");break;}
                     for(var row:rows)expected.put(row.position(),row.after());restored+=size;keep=CoupledAssemblyUndoJournal.Disposition.RESTORED;
-                }else if(group.support()!=null){preservedSupports.add(group.support());}
+                }else{
+                    if(!source.preserveGroup(rows)||!frame()){reason="原完整逆向组保留游标不一致；不继续恢复其他组";receipt(CoupledAssemblyJournal.ReceiptState.CONFLICT);break;}
+                    if(group.support()!=null)preservedSupports.add(group.support());
+                }
                 for(var row:rows){var entry=new CoupledAssemblyUndoJournal.Entry(row,keep);batch.add(entry);evaluated.add(entry);}groups++;batchGroups++;work+=size;
             }
             if(state==State.APPLYING&&batchGroups==intent.packet().groups().size())receipt(CoupledAssemblyJournal.ReceiptState.COMPLETE);
