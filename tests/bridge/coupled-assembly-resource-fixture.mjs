@@ -1,0 +1,64 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {jointPixelFixture} from './joint-assembly-input-fixture.mjs';
+import {v4Request,v4Response} from './quality-v4-fixtures.mjs';
+import {stagedRequest,stagedResponse} from './decomposed-assembly-fixtures.mjs';
+import {selectionChunks,regionCells} from '../../contracts/world-selection.mjs';
+import {WorldContextStore} from '../../bridge/world-context-store.mjs';
+import {CoupledReferenceWorldAssemblyResources} from '../../bridge/coupled-reference-world-assembly-resources.mjs';
+import {hash} from '../../src/generation/compiler.mjs';
+import {readJobReferenceInput} from '../../bridge/reference-generation-binding.mjs';
+import {codexRequestFingerprint} from '../../bridge/codex-persistent-receipt.mjs';
+import {requestNativeEvidence,acceptNativeEvidence} from '../../bridge/native-evidence.mjs';
+import {fixtureUpload} from './native-evidence-fixtures.mjs';
+import {referenceBrief} from './reference-generation-fixture.mjs';
+
+export const coupledResourceBytes=value=>Buffer.from(JSON.stringify(value));
+export const coupledResourceSend=p=>({format:'CoupledReferenceWorldAssemblySend',version:1,purpose:'coupled-reference-world-assembly',confirmed:true,
+  preparationHash:p.preparationHash,maximumCalls:p.maximumCalls});
+// Authored synthetic provider answers; REAL new resource/registry/native paths.
+export async function coupledResourceFixture(t,{tier='lite',images=2,generationOverrides:overrides={},providerTurn}={}) {
+  const staged=tier==='ultra',{model,...generationOverrides}=staged?stagedRequest:v4Request;
+  const f=await jointPixelFixture(t,{images,generationOverrides:{...generationOverrides,qualityTier:tier,...overrides}});
+  const contextId=randomUUID(),size=staged?[32,224,32]:[16,10,16],origin=[-16,-40,-16];
+  const selection={format:'WorldSelection',version:1,world:{worldId:'joint_resource_synthetic',dimension:'minecraft:overworld',minY:-64,maxY:320},
+    revision:7,edit:{min:origin,max:origin.map((v,i)=>v+size[i])},context:{min:origin.map(v=>v-1),max:origin.map((v,i)=>v+size[i]+1)},protected:[]};
+  const capture={fence:{start:9,end:9},chunks:selectionChunks(selection).map(c=>({x:c.x,z:c.z,coverage:'known',
+    palette:[{state:'minecraft:air',blockEntity:false}],runs:[[0,regionCells(c.region)]]}))};
+  const contexts=new WorldContextStore({dataDir:f.dataDir}),resources=new CoupledReferenceWorldAssemblyResources({dataDir:f.dataDir});
+  t.after(()=>contexts.close());t.after(()=>resources.close());
+  const saved=await contexts.operation('capture',contextId,coupledResourceBytes({selection,capture}));
+  const selectedCapability={id:f.generation.model,supportsImages:true,efforts:['high','max']};
+  const input={contextId,referenceSetHash:f.manifest.setHash,generation:f.generation,selectedCapability};
+  const operation=(operation,value=input,options)=>resources.operation(operation,f.ownerId,coupledResourceBytes(value),options);
+  const prepared=await operation('prepare'),send=coupledResourceSend(prepared),calls=[];
+  async function executionOptions(bound) {
+    const reference=await readJobReferenceInput({directory:f.jobDirectory,input:bound.referenceInput,model:f.generation.model});
+    const adapter={models:async()=>[selectedCapability],generate:async request=>{
+      const index=calls.length+1;calls.push(request);
+      const data=JSON.parse(request.prompt.split('Assembly input (data):\n').at(-1));
+      assert.equal(data.worldContext.snapshotHash,saved.record.snapshotHash);assert.deepEqual(data.worldContext.origin,origin);
+      const call=JSON.parse(await fs.readFile(path.join(f.jobDirectory,'assembly-journal',`call-${index}.json`)));
+      assert.equal(call.value.state,'pending');
+      const answer=request.outputSchema.properties.format.enum[0]==='ArchitectureReferenceBrief'
+        ? referenceBrief(reference):(staged?stagedResponse:v4Response)(data,{outputSchema:request.outputSchema});
+      const kind=request.outputSchema.properties.format.enum[0],door={kind:'entry',id:'coupled_entry',host:'main',allowOverwrite:[],face:'north',u:3,feet:1,width:1,
+        door:'dark_oak_door',frame:'frame',threshold:true,thresholdMaterial:'floor',canopy:0,open:true};
+      if(kind==='SceneAssemblyPlan')answer.scene.components.push(door);
+      if(kind==='SceneAssemblyBlueprint')answer.sceneEdit.components.put.push(door);
+      if(providerTurn)return providerTurn({request,index,answer});
+      const imageHashes=request.referenceInput?reference.manifest.references.map(r=>r.sha256):await Promise.all(request.images.map(async file=>hash(await fs.readFile(file))));
+      const binding={version:1,provider:'codex',storage:'persistent-single-turn',threadId:'synthetic-resources-'+index,turnId:null,
+        model:request.model,effort:request.effort,requestHash:codexRequestFingerprint({prompt:request.prompt,model:request.model,effort:request.effort,
+          outputSchema:request.outputSchema,imageHashes,...(request.referenceInput?{referenceBindingHash:reference.binding.bindingHash}:{})})};
+      await request.onProviderBinding(binding);await request.onProviderBinding({...binding,turnId:'turn-'+index});
+      return {spec:answer};
+    }};
+    return {directory:f.jobDirectory,referenceInput:bound.referenceInput,preparationHash:prepared.preparationHash,adapter,
+      signal:new AbortController().signal,onStage:async()=>{},nativeEvidence:options=>requestNativeEvidence({...options,jobDirectory:f.jobDirectory,
+        timeoutMs:10000,onWaiting:async status=>{if(status.state==='waiting')await acceptNativeEvidence(f.jobDirectory,status.id,fixtureUpload(status.request));}})};
+  }
+  return {f,resources,contexts,contextId,selection,capture,saved,input,prepared,send,operation,executionOptions,calls};
+}

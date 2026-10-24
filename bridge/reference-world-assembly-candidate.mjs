@@ -8,6 +8,7 @@ import {readNativeBundle} from '../src/generation/bundle.mjs';
 import {assemblyWorldContextData,streamAssemblyWorldPatch,WORLD_ASSEMBLY_PATCH_LIMITS} from '../src/world/assembly-context.mjs';
 import {assemblyGenerationContext} from '../src/world/assembly-coupled-context.mjs';
 import {readCoupledReferenceAssemblyRunClaim} from './coupled-reference-world-assembly-run-claim.mjs';
+import {readCoupledReferenceWorldAssemblyExecutionStart} from './coupled-reference-world-assembly-execution.mjs';
 import {prepareWorldPatchPreview} from '../src/world/world-patch-preview-data.mjs';
 import {readNativeEvidence,readNativeRevisionComparison} from './native-evidence.mjs';
 import {assemblyCorrectionInput} from '../src/design/correction-feedback.mjs';
@@ -148,7 +149,10 @@ async function terminalEvidence(directory,original,branch,records,signal) {
   const identity=await checkedEnvelope('identity.json');
   if (hash(identity)!==hash({version:1,requestHash:p.preparationHash,policyHash:hash(original.reference.preparation.policy),
     runtimeHash:p.runtimeHash,maximumCalls:p.maximumCalls}) || hash(await checkedEnvelope('dispatched.json'))!==hash({count:records.length})) fail('Original joint ledger request/count differs');
-  if(world.format==='CoupledAssemblyWorldContext')await readCoupledReferenceAssemblyRunClaim({directory,original});
+  if(world.format==='CoupledAssemblyWorldContext'){
+    await readCoupledReferenceAssemblyRunClaim({directory,original});
+    await readCoupledReferenceWorldAssemblyExecutionStart({directory,prepared:p});
+  }
   else await readReferenceWorldAssemblyExecutionStart({directory,prepared:p});
   const journalNames=(await fs.readdir(path.join(directory,'assembly-journal'))).filter(n=>/^call-\d+\.json$/.test(n)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]));
   if (hash(journalNames)!==hash(records.map((_,i)=>`call-${i+1}.json`))) fail('Original joint call history missing/truncated');

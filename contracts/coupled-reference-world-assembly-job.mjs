@@ -2,6 +2,7 @@ import {exactKeys} from './world-selection.mjs';
 import {REFERENCE_OWNER} from './reference-attachments.mjs';
 
 export const COUPLED_REFERENCE_ASSEMBLY_PURPOSE='coupled-reference-world-assembly';
+export const COUPLED_REFERENCE_WORLD_ASSEMBLY_JOB_LIMITS=Object.freeze({records:8,requestBytes:32768,recordBytes:131072,dispatchBytes:4096});
 export function validateCoupledReferenceWorldAssemblyJobRequest(value){
   exactKeys(value,['format','version','purpose','contextId','referenceOwnerId','referenceSetHash','generation','send'],'new coupled full task request');
   if(value.format!=='CoupledReferenceWorldAssemblyJobRequest'||value.version!==1||value.purpose!==COUPLED_REFERENCE_ASSEMBLY_PURPOSE
