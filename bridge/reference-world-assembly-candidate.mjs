@@ -23,6 +23,11 @@ export const REFERENCE_ASSEMBLY_CANDIDATE_LIMITS = Object.freeze({
 });
 const digest = /^[a-f0-9]{64}$/, branchName = /^assembly-run-[A-Za-z0-9_-]{6,32}$/;
 const raw = value => Buffer.from(JSON.stringify(value));
+// Equal uint16 indices do not mean equal blocks or coordinates when palette
+// order or dimensions drift. Ignore intentionally different diagnostic/quality
+// status metadata, but retain the exact reviewed native index interpretation.
+const nativeIndexSpace = manifest => ({schemaVersion:manifest.schemaVersion,minecraft:manifest.minecraft,dataVersion:manifest.dataVersion,
+  dimensions:manifest.dimensions,palette:manifest.palette,setCount:manifest.setCount,clearCount:manifest.clearCount});
 const freeze = value => {
   if (value && typeof value === 'object') {for (const child of Object.values(value)) freeze(child);Object.freeze(value);}
   return value;
@@ -230,6 +235,7 @@ async function prepare(directory,original,branch,records,signal,{retainParts=tru
   const diagnostic=await json(directory,diagnosticRelative+'/manifest.json'),diagnosticCells=await member(directory,diagnosticRelative+'/cells.bin',16*1024**2);
   if (native.manifest.scene?.sourceHash!==summary.sourceHash || hash(native.scene)!==summary.sourceHash
     || diagnostic.scene?.sourceHash!==summary.sourceHash || diagnostic.assetHash!==evidence.assetHash
+    || hash(nativeIndexSpace(diagnostic))!==hash(nativeIndexSpace(native.manifest))
     || hash(diagnosticCells)!==diagnostic.cellsHash || diagnostic.cellsHash!==native.manifest.cellsHash
     || !diagnosticCells.equals(native.binary)) fail('Final original native asset differs from reviewed geometry');
   // Production retains one current part/preview, never all patch trees and

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import {readFileSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {Worker} from 'node:worker_threads';
@@ -75,6 +76,33 @@ async function setup(t,{tier='lite',staged=false,images=2,protect=false,independ
       if(s.state==='waiting')await acceptNativeEvidence(f.jobDirectory,s.id,fixtureUpload(s.request));}})};
   return {f,referenceInput,reference,store,saved,contextId,selectedCapability,prepareOptions,prepared,send,calls,observations,adapter,runOptions};
 }
+
+for(const drift of ['palette','dimension'])test('initial candidate cannot publish a final '+drift+' drift hidden by identical native cell indices',async t=>{
+  const h=await setup(t,{independent:true});await freezeReferenceWorldAssembly({...h.prepareOptions,send:h.send});let observed=null;
+  await assert.rejects(runReferenceWorldAssembly({...h.runOptions,onLocalPhase:phase=>{
+    if(phase!=='candidate-publication')return;
+    // ONLY this fresh synthetic task's generated bundle is changed. This
+    // reproduces an internally consistent final-compiler/material drift,
+    // not tampering with a paid task, the review, or an existing candidate.
+    const root=path.join(h.f.jobDirectory,'reference-world-assembly-final'),file=path.join(root,'manifest.json');
+    const manifest=JSON.parse(readFileSync(file)),beforePaletteHash=hash(manifest.palette),beforeDimensions=structuredClone(manifest.dimensions),binary=readFileSync(path.join(root,'cells.bin'));
+    if(drift==='palette'){
+      const index=manifest.palette.findIndex((state,i)=>i>=2&&!state.includes('['));assert.ok(index>=2);
+      manifest.palette[index]=manifest.palette[index]==='minecraft:glass'?'minecraft:stone':'minecraft:glass';
+    }else{
+      const {width,height,length}=manifest.dimensions;assert.notEqual(width,height);manifest.dimensions={width:height,height:width,length};
+    }
+    const {assetHash,...metadata}=manifest;manifest.assetHash=hash(metadata);writeFileSync(file,JSON.stringify(manifest));
+    observed={drift,beforePaletteHash,afterPaletteHash:hash(manifest.palette),beforeDimensions,afterDimensions:manifest.dimensions,sameCellBytes:binary.equals(readFileSync(path.join(root,'cells.bin'))),
+      sourceHash:manifest.scene.sourceHash,syntheticReservedCalls:h.calls.length,actualModelCalls:0};
+    t.diagnostic('Synthetic final native palette counterexample: '+JSON.stringify(observed));
+  }}),/Final original native asset differs from reviewed/);
+  assert.ok(observed);if(drift==='palette')assert.notEqual(observed.beforePaletteHash,observed.afterPaletteHash);
+  else assert.notDeepEqual(observed.beforeDimensions,observed.afterDimensions);assert.equal(observed.sameCellBytes,true);
+  assert.equal(h.calls.length,8);assert.equal(observed.actualModelCalls,0);
+  await assert.rejects(fs.lstat(path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_CANDIDATE_DIRECTORY)),e=>e.code==='ENOENT');
+  await assert.rejects(fs.lstat(path.join(h.f.jobDirectory,REFERENCE_ASSEMBLY_CANDIDATE_CLAIM)),e=>e.code==='ENOENT');
+});
 
 for(const independent of [false,true])for(const tier of ['lite','pro','max','ultra'])test((independent?'independent pixel-only ':'legacy separately bound ')+tier+' joint task runs the REAL shared component/native orchestration with one budget and original environment',async t=>{
   const h=await setup(t,{tier,staged:tier==='ultra',images:tier==='lite'?1:4,independent});
