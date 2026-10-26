@@ -1,8 +1,10 @@
 package dev.voxelstudio.selection;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Consumer;
 import net.minecraft.block.*;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.command.argument.BlockArgumentParser;
@@ -25,15 +27,40 @@ final class CoupledAssemblyNativeCheck {
     }
     private BlockState read(SelectionRegion.Point point){if(point.y()<minY||point.y()>=maxY)throw new IllegalStateException("Native group read outside original world height");var value=Objects.requireNonNull(reader.apply(point),"Unknown/unloaded native group read");if(value.hasBlockEntity())throw new IllegalStateException("Native group read reached protected block entity");return value;}
     private static SelectionRegion.Point point(BlockPos pos){return new SelectionRegion.Point(pos.getX(),pos.getY(),pos.getZ());}
+    /** Typed calls are remapped by Loom. Reflection method-name strings are
+     * not; they would reject legal reads in an installed intermediary JAR. */
+    private enum Query { BOTTOM,HEIGHT,TOP,BLOCK,FLUID,OUTSIDE_POINT,OUTSIDE_Y }
+    private static final Map<Method,Query> QUERIES=queries();
+    private static void admit(Map<Method,Query> allowed,Query query,Consumer<WorldView> call){
+        var seen=new java.util.concurrent.atomic.AtomicReference<Method>();
+        var probe=(WorldView)Proxy.newProxyInstance(WorldView.class.getClassLoader(),new Class<?>[]{WorldView.class},(proxy,method,args)->{
+            if(!seen.compareAndSet(null,method))throw new IllegalStateException("Exactly one typed native query required");
+            if(method.getReturnType()==int.class)return 0;
+            if(method.getReturnType()==boolean.class)return false;
+            return null;
+        });
+        call.accept(probe);
+        if(allowed.putIfAbsent(Objects.requireNonNull(seen.get(),"Typed native query missing"),query)!=null)throw new IllegalStateException("Repeated native query identity");
+    }
+    private static Map<Method,Query> queries(){
+        var allowed=new LinkedHashMap<Method,Query>();
+        admit(allowed,Query.BOTTOM,v->v.getBottomY());admit(allowed,Query.HEIGHT,v->v.getHeight());admit(allowed,Query.TOP,v->v.getTopY());
+        admit(allowed,Query.BLOCK,v->v.getBlockState(BlockPos.ORIGIN));admit(allowed,Query.FLUID,v->v.getFluidState(BlockPos.ORIGIN));
+        admit(allowed,Query.OUTSIDE_POINT,v->v.isOutOfHeightLimit(BlockPos.ORIGIN));admit(allowed,Query.OUTSIDE_Y,v->v.isOutOfHeightLimit(0));
+        return Map.copyOf(allowed);
+    }
     private WorldView pending(Map<SelectionRegion.Point,BlockState> after){
-        // Intentionally NOT a forwarding view. Unknown native world methods
-        // fail closed instead of falling through to a chunk-loading API.
+        // Exact runtime Method identity, NOT name/arity/return-type guessing.
+        // Unknown methods never forward to the world or a chunk-loading API.
         return (WorldView)Proxy.newProxyInstance(WorldView.class.getClassLoader(),new Class<?>[]{WorldView.class},(proxy,method,args)->{
-            String name=method.getName();int count=args==null?0:args.length;
-            if(count==0){if(name.equals("getBottomY"))return minY;if(name.equals("getHeight"))return maxY-minY;if(name.equals("getTopY"))return maxY;}
-            if(count==1&&args[0] instanceof BlockPos pos&&(name.equals("getBlockState")||name.equals("getFluidState"))){var p=point(pos);var value=after.get(p);if(value==null)value=read(p);return name.equals("getBlockState")?value:value.getFluidState();}
-            if(count==1&&name.equals("isOutOfHeightLimit")){int y;if(args[0] instanceof BlockPos pos)y=pos.getY();else if(args[0] instanceof Integer value)y=value;else throw new IllegalStateException("Unknown native height read");return y<minY||y>=maxY;}
-            throw new IllegalStateException("Native group requested an unadmitted world method: "+name);
+            var query=QUERIES.get(method);
+            if(query==null)throw new IllegalStateException("Native group requested an unadmitted world method: "+method.getName());
+            return switch(query){
+                case BOTTOM->minY;case HEIGHT->maxY-minY;case TOP->maxY;
+                case BLOCK,FLUID->{var p=point((BlockPos)args[0]);var value=after.get(p);if(value==null)value=read(p);yield query==Query.BLOCK?value:value.getFluidState();}
+                case OUTSIDE_POINT->{int y=((BlockPos)args[0]).getY();yield y<minY||y>=maxY;}
+                case OUTSIDE_Y->{int y=(Integer)args[0];yield y<minY||y>=maxY;}
+            };
         });
     }
     boolean check(List<WorldPatchCompiler.Write> rows,boolean after){

@@ -56,4 +56,23 @@ final class CoupledAssemblyNativeCheckTest {
         // Check exact enumeration, not an invented >1000 non-door threshold.
         assertEquals(1128,fixtures.size());assertEquals(931,count);assertEquals(96,trapdoors);assertEquals(680,stairs);assertEquals(54,slabs);
     }
+    private static WorldView pending(CoupledAssemblyNativeCheck oracle,Map<SelectionRegion.Point,BlockState> targets)throws Exception{
+        var method=CoupledAssemblyNativeCheck.class.getDeclaredMethod("pending",Map.class);method.setAccessible(true);return (WorldView)method.invoke(oracle,targets);
+    }
+    @Test void typedRuntimeQueryIdentitiesPreserveBothHeightOverloadsAndPendingStates()throws Exception{
+        var world=new HashMap<SelectionRegion.Point,BlockState>();world.put(SUPPORT,Blocks.STONE.getDefaultState());
+        var view=pending(check(world,CoupledAssemblyNativeCheck.Mode.FORWARD),Map.of(LOW,state(LOWER),HIGH,state(UPPER)));
+        assertEquals(-64,view.getBottomY());assertEquals(384,view.getHeight());assertEquals(320,view.getTopY());
+        assertFalse(view.isOutOfHeightLimit(-64));assertTrue(view.isOutOfHeightLimit(320));
+        assertFalse(view.isOutOfHeightLimit(new BlockPos(0,319,0)));assertTrue(view.isOutOfHeightLimit(new BlockPos(0,-65,0)));
+        assertEquals(state(LOWER),view.getBlockState(new BlockPos(0,1,0)));assertEquals(Blocks.STONE.getDefaultState(),view.getBlockState(BlockPos.ORIGIN));
+        assertTrue(view.getFluidState(new BlockPos(0,1,0)).isEmpty());
+    }
+    @Test void unadmittedWorldQueryCannotReadProtectedDataOrFallThroughToTheWorld()throws Exception{
+        int[] reads={0};var oracle=new CoupledAssemblyNativeCheck(CoupledAssemblyNativeCheck.Mode.FORWARD,-64,320,p->{reads[0]++;return Blocks.STONE.getDefaultState();});
+        var view=pending(oracle,Map.of());assertThrows(IllegalStateException.class,()->view.getBlockEntity(BlockPos.ORIGIN));assertEquals(0,reads[0]);
+        assertEquals(Blocks.STONE.getDefaultState(),view.getBlockState(BlockPos.ORIGIN));assertEquals(1,reads[0]);
+        assertThrows(IllegalStateException.class,()->view.getBlockState(new BlockPos(0,320,0)));assertEquals(1,reads[0]);
+    }
 }
+
