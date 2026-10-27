@@ -20,9 +20,11 @@ UltraAgentbuilder 是一个开发中的 Minecraft Fabric 模组：在游戏中�
 
 ## 安装与使用
 
+现在提供 [0.4.10 可安装预览包与快速说明](docs/PREVIEW_20261027.md)。包内有主 JAR、配套 Fabric API 和许可说明；内置 Bridge、Node 与生成规则，无需单独部署。该包是 Alpha 预览，完整 Ultra 流程的偶发原生崩溃、真实质量及最新整组事务仍待继续验收，不作为稳定正式版。
+
 当前目标平台为 Windows x64、Minecraft Java 1.20.1、Fabric Loader 0.16.10 或兼容版本、Fabric API 0.92.5 加 1.20.1。开发构建使用 Java 17、Node.js 22.19.0 和 Gradle 8.12.1。
 
-本仓库首次公开的是开发源码，不是已认证的正式二进制发行版。构建方法见 [开发指南](docs/DEVELOPMENT.md)。候选 JAR 内置本地 Bridge 和 Windows Node 运行时，玩家无需另外启动 Bridge；Minecraft、Fabric API 和制作所用 Agent 仍须自行安装，Agent 须完成自己的登录或 API 配置。
+本仓库同时提供开发源码和上述预览包，不是已认证的正式二进制发行版。构建方法见 [开发指南](docs/DEVELOPMENT.md)。主 JAR 内置本地 Bridge 和 Windows Node 运行时，玩家无需另外启动 Bridge；Minecraft、Java、Fabric Loader 和制作所用 Agent 仍须自行安装，Agent 须完成自己的登录或 API 配置。预览 ZIP 另附 Fabric API，已有兼容版本时不要重复安装。
 
 将构建得到的用户 JAR 和 Fabric API 放入实例的 `mods` 目录，启动单机创造模式世界，在控制设置中找到本模组的打开面板按键。先加载不调用模型的示例，检查投影和确认流程，再使用自己的 Agent。AI 生成可能消耗所选账户额度；图片和选区内容只应在确认接收模型与发送内容后发送。
 
