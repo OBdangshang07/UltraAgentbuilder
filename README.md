@@ -20,7 +20,9 @@ UltraAgentbuilder 是一个开发中的 Minecraft Fabric 模组：在游戏中�
 
 ## 安装与使用
 
-现在提供 [0.4.10 可安装预览包与快速说明](docs/PREVIEW_20261027.md)。包内有主 JAR、配套 Fabric API 和许可说明；内置 Bridge、Node 与生成规则，无需单独部署。该包是 Alpha 预览，完整 Ultra 流程的偶发原生崩溃、真实质量及最新整组事务仍待继续验收，不作为稳定正式版。
+界面按“描述 → 生成 → 摆放 → 建造”操作；页面与常用入口见 [界面使用说明](docs/UI_GUIDE.md)。
+
+推荐使用 [0.4.11 界面优化预览包](https://github.com/OBdangshang07/UltraAgentbuilder/releases/tag/v0.4.11-preview.20261028)。包内有主 JAR、配套 Fabric API、中文说明和许可；内置 Bridge、Node 与生成规则，无需单独部署。它仍是 Alpha 预览，完整 Ultra 流程的原生崩溃、真实质量及最新整组事务仍待继续验收，不作为稳定正式版。旧包说明见 [0.4.10 预览记录](docs/PREVIEW_20261027.md)。
 
 当前目标平台为 Windows x64、Minecraft Java 1.20.1、Fabric Loader 0.16.10 或兼容版本、Fabric API 0.92.5 加 1.20.1。开发构建使用 Java 17、Node.js 22.19.0 和 Gradle 8.12.1。
 

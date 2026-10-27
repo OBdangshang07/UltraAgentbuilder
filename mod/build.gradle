@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
 }
 
-version = '0.4.10-alpha'
+version = '0.4.11-alpha'
 group = 'dev.voxelstudio'
 base { archivesName = 'UltraAgentbuilder' }
 repositories { mavenCentral() }
@@ -84,6 +84,19 @@ processResources.dependsOn tasks.named('prepareBuiltin')
 tasks.named('prepareJavaFixtures') { dependsOn tasks.named('prepareBuiltin') }
 tasks.named('sourcesJar') { dependsOn tasks.named('prepareBuiltin'); exclude 'voxelstudio-bundle/**' }
 loom { runs { client { runDir 'run'; programArgs '--width', '1280', '--height', '800' }; server { runDir 'run-server' } } }
+// A bounded UI-only native render test. It never opens a world or calls a model.
+if (project.hasProperty('studioUiWorkflowTest')) {
+    loom.runs {
+        uiWorkflow {
+            client()
+            runDir 'build/ui-workflow-game'
+            programArgs '--width', '1280', '--height', '960'
+            vmArg '-Dvoxelstudio.uitest=true'
+            vmArg '-Dvoxelstudio.uiworkflowtest=true'
+            vmArg "-Dvoxelstudio.uiWorkflowSource=${projectDir.parentFile.canonicalPath}"
+        }
+    }
+}
 if (project.hasProperty('studioTestJob')) {
     loom.runs.client.vmArg '-Dvoxelstudio.selftest=true'
     loom.runs.client.vmArg "-Dvoxelstudio.testJob=${project.property('studioTestJob')}"

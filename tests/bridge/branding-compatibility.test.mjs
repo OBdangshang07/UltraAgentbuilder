@@ -38,8 +38,9 @@ test('Java checks use own processed metadata and regenerate expiring fixtures', 
 
 test('installed QA loads the formal product JAR without changing its compatibility ID or shadowing production', async () => {
   const source = await read('mod/src/installedQa/java/dev/voxelstudio/client/InstalledCompanionAcceptance.java');
-  assert.match(source, /mods\/UltraAgentbuilder-0\.4\.10-alpha\.jar/);
-  assert.ok(!source.includes('mods/voxel-studio-0.4.10-alpha.jar'));
+  const {RELEASE_VERSION}=await import('../../bridge/release.mjs');
+  assert.ok(source.includes(`mods/UltraAgentbuilder-${RELEASE_VERSION}.jar`));
+  assert.ok(!source.includes(`mods/voxel-studio-${RELEASE_VERSION}.jar`));
   assert.match(source, /getModContainer\("voxel_studio"\)/);
   assert.match(source, /mod\.getOrigin\(\)\.getPaths\(\)\.equals\(List\.of\(jar\)\)/);
   assert.match(source, /Production class was shadowed by development classes/);

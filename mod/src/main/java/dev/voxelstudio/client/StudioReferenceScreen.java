@@ -27,9 +27,9 @@ final class StudioReferenceScreen extends Screen {
     private final WorldPatchPageState pixelPage=new WorldPatchPageState();
     private final List<Row> rows=new ArrayList<>();
     private String selected,path="",caption="",purpose="exterior",view="unknown",scaleDimension="height",meters="";
-    private String status="仅本机图片草稿；先在创作页选择建筑提示词、支持图片的 Codex 模型与组件化档位。";
+    private String status="导入图片 → 补充说明 → 检查发送效果 → 确认。编辑图片不调用模型。";
     private int statusColor=StudioTheme.MUTED,sideWidth,cursor,scroll,bodyTop=112,bodyBottom;
-    private boolean busy,cropMode,dragging,previewPending;
+    private boolean busy,cropMode,dragging,previewPending,extraTools,detailedAnnotations;
     private double dragX0,dragY0,dragX1,dragY1;
     private int imageX,imageY,imageWidth,imageHeight,previewTicket;
     private TextFieldWidget pathField,scaleField;
@@ -63,7 +63,7 @@ final class StudioReferenceScreen extends Screen {
         rows.clear();captionField=null;scaleField=null;cursor=0;sideWidth=Math.max(130,Math.min(264,(width-36)*42/100));bodyBottom=height-68;
         var photos=draft.photos();if(selected!=null&&photos.stream().noneMatch(p->p.id().equals(selected)))selected=null;
         if(selected==null&&!photos.isEmpty()){selected=photos.get(0).id();loadAnnotation();}
-        pathField=addDrawableChild(new TextFieldWidget(textRenderer,12,43,Math.max(80,width-128),22,Text.literal("本机图片文件的绝对路径")));pathField.setMaxLength(2048);pathField.setText(path);pathField.setChangedListener(s->path=s);pathField.active=!busy;
+        pathField=addDrawableChild(new TextFieldWidget(textRenderer,12,43,Math.max(80,width-128),22,Text.literal("本机图片文件的绝对路径")));pathField.setMaxLength(2048);pathField.setText(path);pathField.setSuggestion(path.isEmpty()?"粘贴本机图片的完整路径…":null);pathField.setChangedListener(s->{path=s;pathField.setSuggestion(s.isEmpty()?"粘贴本机图片的完整路径…":null);});pathField.active=!busy;
         var importButton=addDrawableChild(new StudioTheme.Button(width-108,43,96,22,"导入 PNG / JPEG",StudioTheme.Kind.NORMAL,this::importImage));importButton.active=!busy&&photos.size()<4;
         int slotWidth=(width-30)/4;
         for(int i=0;i<4;i++){
@@ -73,22 +73,31 @@ final class StudioReferenceScreen extends Screen {
         rowButton("参考方式："+modeLabel(draft.mode()),()->true,()->choice("参考图的设计用途",ReferenceImageDraft.MODES,draft.mode(),v->{draft.mode(v);message("参考方式已更改；旧准备和确认失效。");},StudioReferenceScreen::modeLabel));
         if(selected!=null){
             rowButton("用途："+purposeLabel(purpose),()->true,()->choice("图片用途",ReferenceImageDraft.PURPOSES,purpose,v->{purpose=v;saveAnnotation();},StudioReferenceScreen::purposeLabel));
-            rowButton("视向："+viewLabel(view),()->true,()->choice("图片视向",ReferenceImageDraft.VIEWS,view,v->{view=v;saveAnnotation();},StudioReferenceScreen::viewLabel));
             captionField=row(new StudioEditBoxWidget(textRenderer,12,bodyTop+cursor,sideWidth,60,Text.literal("可见细节、希望保留或改造的部分"),Text.literal("图片说明（最多 500 字）")),()->true);captionField.setMaxLength(500);captionField.setText(caption);captionField.setChangeListener(s->{caption=s;saveAnnotation();});cursor+=66;
+            rowButton(detailedAnnotations?"收起视向与已知尺寸 ▴":"视向与已知尺寸（可选）▾",()->true,()->{detailedAnnotations=!detailedAnnotations;clearAndInit();});
+            if(detailedAnnotations){
+            rowButton("视向："+viewLabel(view),()->true,()->choice("图片视向",ReferenceImageDraft.VIEWS,view,v->{view=v;saveAnnotation();},StudioReferenceScreen::viewLabel));
             rowButton("尺度："+dimensionLabel(scaleDimension)+"（米）",()->true,()->choice("已知尺度锚点（非估计）",ReferenceImageDraft.DIMENSIONS,scaleDimension,v->{scaleDimension=v;saveAnnotation();},StudioReferenceScreen::dimensionLabel));
             scaleField=row(new TextFieldWidget(textRenderer,12,bodyTop+cursor,sideWidth,22,Text.literal("米；留空表示未知")),()->true);scaleField.setMaxLength(24);scaleField.setText(meters);scaleField.setSuggestion("留空表示未知尺度");scaleField.setChangedListener(s->{meters=s;saveAnnotation();});cursor+=28;
+            }
             rowButton("顺时针旋转 90°",()->true,()->transform(photo().crop(),(photo().turns()+1)%4));
             rowButton("恢复完整原图裁剪",()->true,()->transform(null,photo().turns()));
+
+        }
+        rowButton(extraTools?"收起草稿与更多操作 ▴":"草稿与更多操作 ▾",()->true,()->{extraTools=!extraTools;clearAndInit();});
+        if(extraTools){
+            if(selected!=null){
             rowButton("向前排列",()->draft.photos().indexOf(photo())>0,()->{if(saveAnnotation()){draft.move(selected,-1);clearAndInit();}});
             rowButton("向后排列",()->draft.photos().indexOf(photo())<draft.photos().size()-1,()->{if(saveAnnotation()){draft.move(selected,1);clearAndInit();}});
             rowButton("移除当前图片（仅草稿）",()->true,()->{draft.remove(selected);selected=null;clearAndInit();message("已从本地草稿移除；不会删除原文件或已保存的任务图片。");});
-        }
+            }
         rowButton("保存图片编辑到本机",()->!draft.photos().isEmpty(),this::confirmSave);
         rowButton("恢复本机已保存的图片编辑",this::targetEditable,this::confirmRestore);
         rowButton("删除本机已保存的图片草稿",()->true,this::confirmForget);
         rowButton("服务器准备草稿 · 归档与原操作",()->true,()->{if(saveAnnotation())client.setScreen(new StudioReferenceArchiveScreen(this));});
         rowButton("清空当前内存图片草稿",()->!draft.photos().isEmpty(),()->client.setScreen(new StudioInfoScreen(this,"清空当前内存草稿？","仅释放本次内存中的图片，不删除磁盘保存的图片草稿、源图、Bridge 准备记录或任务原图。未明确保存的编辑会在游戏退出时丢失。","确认清空内存",true,()->{draft.clear();selected=null;client.setScreen(this);message("内存图片草稿已清空；磁盘草稿、原文件和任务记录保留。");})));
-        addDrawableChild(new StudioTheme.Button(12,height-34,96,23,pixelTarget==null?"返回创作页":"返回选区任务",StudioTheme.Kind.NORMAL,this::close));
+        }
+        addDrawableChild(new StudioTheme.Button(12,height-34,96,23,pixelTarget==null?"返回工作室":"返回选区任务",StudioTheme.Kind.NORMAL,this::close));
         prepare=addDrawableChild(new StudioTheme.Button(width-180,height-34,168,23,pixelTarget==null?"免费检查 · 准备发送":"准备图片 · 返回改造页",StudioTheme.Kind.PRIMARY,this::prepare));
         var mode=addDrawableChild(new StudioTheme.Button(sideWidth+24,bodyTop,width-sideWidth-36,23,cropMode?"原图裁剪 · 拖选范围":"实际发送效果 · 点击裁剪",StudioTheme.Kind.NORMAL,()->{cropMode=!cropMode;dragging=false;clearAndInit();}));mode.active=selected!=null&&!busy;
         scroll=StudioLayout.clampScroll(scroll,cursor,Math.max(1,bodyBottom-bodyTop));layoutRows();refreshPreview();setInitialFocus(pathField);

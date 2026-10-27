@@ -46,6 +46,7 @@ public final class StudioClient implements ClientModInitializer {
             StudioSelfTest.tick(c);
             StudioFlowSelfTest.tick(c);
             StudioUiSelfTest.tick(c);
+            StudioWorkflowUiSelfTest.tick(c);
             StudioAssetRenderSelfTest.tick(c);
             StudioEvidenceSelfTest.tick(c);
             StudioOnboardingSelfTest.tick(c);

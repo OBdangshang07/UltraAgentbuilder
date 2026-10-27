@@ -24,9 +24,11 @@ final class StudioInfoScreen extends Screen {
     }
     @Override public void render(DrawContext d,int mx,int my,float delta){
         d.fill(0,0,width,height,StudioTheme.BG);StudioTheme.panel(d,x,14,w,height-28);
-        d.drawText(textRenderer,title,x+12,26,danger?StudioTheme.WARN:StudioTheme.ACCENT,false);
+        d.drawText(textRenderer,StudioTheme.fit(textRenderer,title.getString(),w-24),x+12,26,danger?StudioTheme.WARN:StudioTheme.ACCENT,false);
         d.enableScissor(x+10,47,x+w-10,height-(requireAcknowledgement?83:53));
         int y=49-scroll;for(var line:lines){d.drawText(textRenderer,line,x+14,y,StudioTheme.TEXT,false);y+=14;}d.disableScissor();
+        int bodyHeight=height-bodyReserved(),contentHeight=lines.size()*14;
+        if(contentHeight>bodyHeight){int track=Math.max(1,bodyHeight),thumb=Math.min(track,Math.max(16,track*track/contentHeight));int top=49+(track-thumb)*scroll/StudioLayout.maxScroll(contentHeight,bodyHeight);d.fill(x+w-7,49,x+w-5,49+track,StudioTheme.BORDER);d.fill(x+w-7,top,x+w-5,top+thumb,StudioTheme.ACCENT);}
         if(lines.size()*14>height-bodyReserved())d.drawText(textRenderer,"滚轮查看完整内容",x+12,height-(requireAcknowledgement?83:53),StudioTheme.MUTED,false);
         super.render(d,mx,my,delta);
     }

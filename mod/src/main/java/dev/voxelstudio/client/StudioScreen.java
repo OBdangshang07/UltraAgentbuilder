@@ -17,12 +17,12 @@ import java.util.function.*;
 
 /** Native workspace: scrollable tools, persistent preview, explicit world confirmation. */
 public final class StudioScreen extends Screen {
-    enum Tab { CREATE("创作"), PLACE("定位"), HISTORY("历史"); final String label;Tab(String label){this.label=label;} }
+    enum Tab { CREATE("创作"), PLACE("摆放"), HISTORY("作品"), TOOLS("工具"); final String label;Tab(String label){this.label=label;} }
     private record Notice(String summary,String details,int color) {}
     private record Row(ClickableWidget widget,int y) {}
     private record Label(OrderedText text,int y,int color) {}
     private record Binding(StudioTheme.Button button,Supplier<String> label,BooleanSupplier enabled,Supplier<String> hint) {}
-    private static String description="河边的现代小屋，有可进入的室内、玻璃窗，晚上亮灯",activeJob,selectedModel,selectedEffort="default";
+    private static String description="",activeJob,selectedModel,selectedEffort="default";
     private static Notice notice=new Notice("先体验示例，或连接本机 Agent 开始创作","示例不调用 AI。自然语言生成使用你选择的模型和账户额度。",StudioTheme.MUTED);
     private static JsonArray models=new JsonArray(),history=new JsonArray();
     private static String selectedAgent="codex",manualClaudeModel="";
@@ -61,6 +61,9 @@ public final class StudioScreen extends Screen {
     private static boolean recovering,recoveryAttempted;
     private static boolean checkingPlacement;
     private Tab tab=Tab.CREATE;
+    private boolean advancedGeneration,advancedPlacement;
+    private final EnumMap<Tab,Integer> savedScroll=new EnumMap<>(Tab.class);
+    private String controlsSignature;
     private StudioLayout layout;
     private final List<Row> rows=new ArrayList<>();private final List<Label> labels=new ArrayList<>();
     private final List<ClickableWidget> fixed=new ArrayList<>();private final List<Binding> bindings=new ArrayList<>();
@@ -187,18 +190,23 @@ public final class StudioScreen extends Screen {
     @Override protected void init(){
         if(coordinates!=null&&coordinatesDirty)coordinateDraft=Arrays.stream(coordinates).map(TextFieldWidget::getText).toArray(String[]::new);
         layout=StudioLayout.of(width,height);rows.clear();labels.clear();fixed.clear();bindings.clear();cursor=0;prompt=null;coordinates=null;
-        var side=layout.sidebar();int tabWidth=(side.width()-12)/3;
+        var side=layout.sidebar();int tabWidth=(side.width()-12)/Tab.values().length;
         for(Tab choice:Tab.values())fixedButton(side.x()+6+choice.ordinal()*tabWidth,side.y()+6,tabWidth-2,22,()->choice.label,choice==tab?StudioTheme.Kind.SELECTED:StudioTheme.Kind.NORMAL,()->true,()->"切换到"+choice.label+"，不会提交任务",()->switchTab(choice));
         fixedButton(width-61,10,53,23,()->"返回游戏",StudioTheme.Kind.NORMAL,()->true,()->"关闭面板；已显示的世界投影继续保留",this::close);
-        switch(tab){case CREATE->createTools();case PLACE->placementTools();case HISTORY->historyTools();}
+        switch(tab){case CREATE->createTools();case PLACE->placementTools();case HISTORY->historyTools();case TOOLS->utilityTools();}
         contentHeight=cursor+4;scroll=StudioLayout.clampScroll(scroll,contentHeight,layout.content().height());
         createPreviewControls();createBottomActions();
         fixedButton(width-58,height-29,47,20,()->"详情",StudioTheme.Kind.NORMAL,()->true,()->"查看完整状态与操作说明",()->client.setScreen(new StudioInfoScreen(this,"工作室 · 状态详情",notice.details+"\n\n世界投影\n"+projection().status+"\n\n"+projection().placementBlockReason()+"\n\n"+(projection().renderer.error==null?"":projection().renderer.error+"\n\n")+helpText())));
         layoutRows();updateBindings();
+        controlsSignature=controlsSignature();
         if(!discoveryAttempted&&!testMode())startLocalDiscovery(false);
         if(!recoveryAttempted&&!Boolean.getBoolean("voxelstudio.uitest")){recoveryAttempted=true;recoverTask();}
     }
-    private void switchTab(Tab next){tab=next;scroll=0;setFocused(null);clearAndInit();if(next==Tab.HISTORY)refreshHistory();}
+    private void switchTab(Tab next){savedScroll.put(tab,scroll);tab=next;scroll=savedScroll.getOrDefault(next,0);setFocused(null);clearAndInit();if(next==Tab.HISTORY&&!Boolean.getBoolean("voxelstudio.uiworkflowtest"))refreshHistory();}
+    private void foldGeneration(){advancedGeneration=!advancedGeneration;clearAndInit();}
+    private void foldPlacement(){advancedPlacement=!advancedPlacement;clearAndInit();}
+    private String controlsSignature(){return selectedAgent+":"+(projection().asset!=null)+":"+(activeJob!=null)+":"+(pendingKey!=null)+":"+loading+":"+projection().restoring;}
+    private StudioWorkflow.Guidance guidance(){return StudioWorkflow.guidance(new StudioWorkflow.State(pendingKey!=null&&activeJob==null,taskBusy(),projection().busy,projection().asset!=null,projection().locked,agentReady&&model()!=null,!description.isBlank()));}
     private StudioTheme.Button fixedButton(int x,int y,int w,int h,Supplier<String> label,StudioTheme.Kind kind,BooleanSupplier enabled,Supplier<String> hint,Runnable action){
         var b=addDrawableChild(new StudioTheme.Button(x,y,w,h,label.get(),kind,action));fixed.add(b);bindings.add(new Binding(b,label,enabled,hint));return b;
     }
@@ -215,37 +223,38 @@ public final class StudioScreen extends Screen {
     private void paragraph(String text,int color){for(var line:textRenderer.wrapLines(Text.literal(text),layout.content().width())){labels.add(new Label(line,cursor,color));cursor+=12;}cursor+=4;}
 
     private void createTools(){
-        sideButton(()->"环境选区 · 外层 / 内层 / 保护区",StudioTheme.Kind.NORMAL,()->!projection().busy,()->"只读世界范围，不调用模型、不修改世界；B 可直接打开",()->client.setScreen(new SelectionScreen(this)));
-        sideButton(()->localScanMessage,StudioTheme.Kind.NORMAL,()->!taskBusy(),()->"自动检查 Codex / Claude Code / DeepSeek Harness；不安装、不登录、不生成。\n"+StudioClient.BRIDGE.preparationStatus(),this::chooseAgent);
-        section("01  描述你的建筑");
-        paragraph("只需描述建筑；体素结构和材料规则由工作室补全。",StudioTheme.MUTED);
+        section("描述建筑");
         var c=layout.content();
-        prompt=row(new StudioEditBoxWidget(textRenderer,c.x(),c.y()+cursor,c.width(),72,Text.literal("例如：三层中式酒楼，有庭院和夜景灯光"),Text.literal("建筑描述，多行输入")),cursor);
-        prompt.setMaxLength(4000);prompt.setText(description);prompt.setChangeListener(s->description=s);cursor+=78;
-        paragraph("Enter 换行 · Ctrl+Enter 生成\n可写尺寸、风格、室内和灯光需求。",StudioTheme.MUTED);
-        sideButton(()->"参考图片 · 导入 / 裁剪 / 标注",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"本机 PNG/JPEG，最多四图；编辑和准备不调用模型。生成须先明确选择组件化及支持图片的 Codex 模型，再独立 SEND 确认。",()->client.setScreen(new StudioReferenceScreen(this,referenceDraft)));
-        sideButton(()->projection().asset!=null&&projection().asset.sceneDesign?"局部精修当前构件 · 1 次":"修改当前建筑",StudioTheme.Kind.NORMAL,()->idle()&&projection().asset!=null&&model()!=null&&!description.isBlank(),()->"设计层资产须先选构件并确认修改范围；原版本保留，不自动精修",()->{if(projection().asset.sceneDesign)sceneRefinement(false);else generate(false,true);});
-        sideButton(()->selectedComponent==null?"选择 / 定位设计构件":"当前构件："+selectedComponent,StudioTheme.Kind.NORMAL,()->idle()&&projection().asset!=null&&projection().asset.sceneDesign,()->"按源构件 ID 定位其实际几何范围；只读，不调用模型、不改变世界",this::chooseDesignComponent);
-        sideButton(()->"原版 / 新版切换",StudioTheme.Kind.NORMAL,()->idle()&&compareOriginal!=null&&compareRevised!=null&&projection().asset!=null&&(projection().asset.hash.equals(compareOriginal.hash)||projection().asset.hash.equals(compareRevised.hash)),()->"保持面板相机，对比这次修订前后；切换后世界建造确认失效，须重新检查",StudioScreen::toggleComparison);
-        sideButton(()->"看图精修 · 4 视角 / 1 次调用",StudioTheme.Kind.NORMAL,()->idle()&&projection().asset!=null&&supportsVisualReview()&&!description.isBlank(),()->"仅支持已声明图片能力的 Codex 模型；资产专用四视图，不含世界和桌面。再次确认后调用 1 次，0 自动修复。",this::visualReview);
-        section("02  本机制作 Agent");
-        sideButton(()->"制作来源："+(!userSelectedAgent&&!agentReady?"请选择":agentName()),StudioTheme.Kind.NORMAL,()->!taskBusy()&&!discovering,()->"选择 Codex、Claude Code 或 DeepSeek Harness；不会提交生成",this::chooseAgent);
-        sideButton(()->localScanActive?"正在自动检测全部 Agent…":"重新检测全部 Agent",StudioTheme.Kind.NORMAL,()->!localScanPending&&!localScanActive&&!taskBusy(),()->"按已知安装目录和 PATH 检查；一个慢来源不会阻塞其他检测结果",()->startLocalDiscovery(true));
-        sideButton(()->"连接诊断 / 手动 Agent 路径",StudioTheme.Kind.NORMAL,()->!taskBusy()&&!discovering,()->"检查内置配套或指定 CLI 路径；自动检测找不到时使用",()->client.setScreen(new StudioDiagnosticsScreen(this,StudioScreen::refreshAgent,selectedAgent)));
-        sideButton(()->discovering?"正在检测 "+agentName()+"…":!agentReady?"连接 "+agentName()+" / 重试":agentName()+" 已连接 · 重新检测",StudioTheme.Kind.NORMAL,()->!discovering&&!taskBusy(),()->"仅检测登录与可用模型，不发起生成",()->{userSelectedAgent=true;StudioClient.BRIDGE.reconnect();refreshAgent();});
+        int promptHeight=Math.max(44,Math.min(80,c.height()/2));
+        prompt=row(new StudioEditBoxWidget(textRenderer,c.x(),c.y()+cursor,c.width(),promptHeight,Text.literal("例如：三层中式酒楼，有庭院和夜景灯光"),Text.literal("描述你想建造的建筑")),cursor);
+        prompt.setMaxLength(4000);prompt.setText(description);prompt.setChangeListener(s->description=s);cursor+=promptHeight+6;
+        paragraph(c.width()<190?"Ctrl+Enter 生成":"Enter 换行 · Ctrl+Enter 生成",StudioTheme.MUTED);
+        sideButton(()->"参考图片 · "+(referenceDraft.photos().isEmpty()?"可选":referenceDraft.photos().size()+" 张"),StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"本机 PNG/JPEG，最多四图；编辑和准备不调用模型。生成须先明确选择组件化及支持图片的 Codex 模型，再独立 SEND 确认。",()->client.setScreen(new StudioReferenceScreen(this,referenceDraft)));
+        section("生成设置");
+        sideButton(()->!userSelectedAgent&&!agentReady?"选择本机 Agent":"来源："+agentName()+(agentReady?" ✓":" · 选择"),StudioTheme.Kind.NORMAL,()->!taskBusy()&&!discovering,()->localScanMessage+"；选择本机已安装并登录的 Agent，不会调用模型。",this::chooseAgent);
         if(selectedAgent.equals("claude")){
             paragraph("Claude Code 实验接入：CLI 没有公开账户模型列表，请填写你已知可用的模型 ID/别名。尚未验证真实 Claude 生成，不自动回退模型。",StudioTheme.WARN);
             var manual=row(new TextFieldWidget(textRenderer,c.x(),c.y()+cursor,c.width(),22,Text.literal("Claude 模型 ID 或 CLI 别名")),cursor);manual.setMaxLength(200);manual.setText(manualClaudeModel);manual.setChangedListener(s->manualClaudeModel=s.trim());cursor+=28;
         }else sideButton(()->"模型："+modelLabel(),StudioTheme.Kind.NORMAL,()->!models.isEmpty()&&!taskBusy(),()->"打开可搜索的真实模型列表",this::chooseModel);
         sideButton(()->"推理："+StudioMessages.effort(selectedEffort),StudioTheme.Kind.NORMAL,()->!models.isEmpty()&&!taskBusy(),()->"选择该模型实际支持的推理级别",this::chooseEffort);
+        sideButton(()->"方案："+creationPlanLabel(),StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"快速单次，或 Lite / Pro / Max / Ultra 四档组件制作。选择时可查看调用上限。",this::chooseCreationPlan);
+        if(generationMode.equals("components")){
+            sideButton(()->"组件化总预算：最多 "+assemblyCalls+" 次",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"总纲、组件、纠错、复核与精修都计入；可主动降低，生成前必须确认",this::chooseAssemblyCalls);
+        }
+        if(generationMode.equals("checkpoints"))sideButton(()->"调用上限："+checkpointCalls+" 次",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"布局、细化和纠错共享预算，生成前再次确认。",this::chooseCheckpointCalls);
+        sideButton(()->advancedGeneration?"收起高级设置 ▴":"高级设置 ▾",StudioTheme.Kind.NORMAL,()->true,()->"可选：质量实验、图像复核、恢复策略和输出预算；展开不会改变设置。",this::foldGeneration);
+        if(advancedGeneration)advancedGenerationTools();
+        if(activeJob!=null||pendingKey!=null||loading||projection().restoring){section("当前任务");taskTools();}
+    }
+    private void advancedGenerationTools(){
+        section("高级生成设置");
+        paragraph("保留你已选择的参数；展开和收起都不会修改模型、预算或任务。",StudioTheme.MUTED);
+        sideButton(()->"其他生成方式 / 兼容模式",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"可选：分层制作、实验设计层、检查点；不会自动切换。",this::chooseGenerationMode);
         if(selectedAgent.equals("deepseek")){
             paragraph("模型来自 Harness 本机配置目录，不代表账号实时授权。独立无工具运行；不加载个人插件、不自动重试。",StudioTheme.MUTED);
             sideButton(()->outputBudget==0?"输出预算：跟随 Harness / 模型":"每阶段输出预算："+outputBudget+" tokens",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"模组不设固定 token 上限；可跟随本机模型配置或手填预算。服务端仍有自身限制；不自动重试。",this::chooseOutputBudget);
         }
-        sideButton(()->generationMode.equals("components")?"生成方式：组件化 · "+qualityTier:generationMode.equals("checkpoints")?"生成方式：设计检查点（最多 "+checkpointCalls+" 次）":generationMode.equals("scene")?"生成方式：实验设计层（1 次）":generationMode.equals("layered")?"生成方式：外壳 → 内饰（2 次）":"生成方式：完整建筑（1 次）",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"组件化有四档制作深度，先设计总纲再分工拼装；检查点与旧单次入口仍保留。",this::chooseGenerationMode);
         if(generationMode.equals("components")){
-            sideButton(()->"制作精度："+qualityTier,StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"档位控制拆分深度与复核轮数，不缩小建筑，不保证每次质量达标",this::chooseQualityTier);
-            sideButton(()->"组件化总预算：最多 "+assemblyCalls+" 次",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"总纲、组件、纠错、复核与精修都计入；可主动降低，生成前必须确认",this::chooseAssemblyCalls);
             sideButton(()->assemblyProviderRecovery?"容量恢复：开启 · 原预算内":"容量恢复：关闭（默认）",StudioTheme.Kind.NORMAL,()->idle()&&(assemblyProviderRecovery||canSelectProviderRecovery()),()->"仅 Codex 和明确已声明推理强度可选。最多两次等待 10 / 30 秒，失败不退预算；不换模型、不删功能、未知不重发。生成前单独列入费用确认。",()->{assemblyProviderRecovery=!assemblyProviderRecovery;tell(assemblyProviderRecovery?"本次制作设置已开启有限容量恢复":"容量恢复已关闭",assemblyProviderRecovery?StudioProviderRecovery.WARNING:"下一次预检将使用零提供方重试；没有改动原任务或调用模型。",StudioTheme.WARN);});
             sideButton(()->assemblyQualityVersion==4?"质量 v4：前后对照 + 分项复核":assemblyQualityVersion==3?"质量 v3：实景候选 + 自动选案":assemblyQualityVersion==2?"质量 v2：代表原型 + 协调精修":"质量流程：稳定旧版",StudioTheme.Kind.NORMAL,()->idle(),()->"点击切换：旧版 / v2 / v3 / v4。v4 增加同角度修改前后对照、入口与顶部近景，并逐项追踪设计问题；至少 7 次，需支持图片的模型。",this::cycleAssemblyQuality);
             sideButton(()->assemblyImageReview?(assemblyQualityVersion>=2?"整体复核：原生材质 / 内饰切层":"整体复核：四视角几何图")+(supportsVisualReview()?"":"（需要支持图片的模型）"):"整体复核：仅文本",StudioTheme.Kind.NORMAL,()->idle()&&assemblyQualityVersion<3&&(assemblyImageReview||supportsVisualReview()),()->"v3 / v4 使用原生图像比较；v2 可选择文本。原生图只含建筑资产，不含世界、玩家、界面和桌面；生成前确认。",()->assemblyImageReview=!assemblyImageReview);
@@ -254,28 +263,53 @@ public final class StudioScreen extends Screen {
             if(assemblyQualityVersion==4&&assemblyPrototypeMode.equals("staged"))sideButton(()->assemblyExpandedRoutes?"通路校验：完整展开后比较":"通路校验：旧版种子先比较",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->StudioPrototypeValidation.WARNING,this::togglePrototypeValidation);
             paragraph((assemblyPrototypeMode.equals("staged")?"3 次独立概念 + 差量蓝图 + 4 次角色原型；"+StudioAssembly.stagedBudgetSummary(assemblyCalls)+"。":"最多 "+assemblyPackageLimit()+" 个制作任务 / "+StudioAssembly.tier(qualityTier).reviewRounds()+" 轮最终复核；候选、选案和整体改稿也占预算。")+"图像反馈不等于审美认证，中间稿不可建造。",StudioTheme.WARN);
         }
-        if(generationMode.equals("checkpoints")){
-            sideButton(()->"检查点总预算：最多 "+checkpointCalls+" 次",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"包含布局、细化和预算内纠错；每次均可能计费，生成前再次确认",this::chooseCheckpointCalls);
-            paragraph("实验检查点：中间稿不可建造。至少 2 次调用；纠错消耗总预算，不会无限重试。",StudioTheme.WARN);
-        }
         paragraph("1 格≈1 米；最高 384 格，总体积仍有限制。实验设计层可重复楼层/窗组并显式保留核心筒；不承诺所有生成均成功。",StudioTheme.MUTED);
         if(!generationMode.equals("checkpoints")&&!generationMode.equals("components"))sideButton(()->"额外自动修复预算："+repairBudget+" 次",StudioTheme.Kind.NORMAL,()->idle()&&generationMode.equals("single"),()->"原有单次模式的额外调用；其他模式不增加额外修复调用。",()->repairBudget=(repairBudget+1)%3);
-        paragraph("生成使用所选账户额度。未连接时仍可使用示例；不会自动替换模型或重复提交中断任务。",StudioTheme.MUTED);
-        sideButton(()->cancelling?"正在取消…":"取消生成",StudioTheme.Kind.DANGER,()->activeJob!=null&&!cancelling,()->"停止当前生成，保留之前已经完成的建筑",StudioScreen::cancelGeneration);
+    }
+    private void taskTools(){
+        if(activeJob!=null)sideButton(()->cancelling?"正在取消…":"取消生成",StudioTheme.Kind.DANGER,()->activeJob!=null&&!cancelling,()->"停止当前生成，保留之前已经完成的建筑",StudioScreen::cancelGeneration);
         sideButton(()->recovering?"正在查找原任务…":"查询 / 恢复中断任务",StudioTheme.Kind.NORMAL,()->!recovering&&!submitting&&!loading,()->"只按保存的身份查询；绝不重新提交生成",StudioScreen::recoverTask);
-        sideButton(()->"归档未确认任务",StudioTheme.Kind.DANGER,()->pendingKey!=null&&activeJob==null&&!submitting&&!recovering,()->"归档不代表任务取消；原任务可能仍运行，新生成可能再次计费",()->client.setScreen(new StudioInfoScreen(this,"归档状态未知的任务？","无法确定原任务是否已生成。归档不会取消它；再次生成可能重复计费。建议先查询原任务或检查历史。原身份会保留在本机归档中。","确认归档",true,()->{if(taskIdentity!=null){recovering=true;STATE.archiveTask(taskIdentity).whenComplete((v,e)->onClient(()->{recovering=false;if(e!=null){fail(e);return;}pendingKey=null;taskIdentity=null;tell("任务身份已归档，未取消原任务","新生成会创建新任务，请确认原任务状态。",StudioTheme.WARN);}));}client.setScreen(this);})));
-        section("03  预览后再建造");
-        sideButton(()->"取消建筑下载 / 草稿恢复",StudioTheme.Kind.NORMAL,()->loading||projection().restoring,()->"停止下载，保留已完成历史版本",()->{StudioClient.BRIDGE.cancelLoad();loadTicket++;loading=false;projection().restoring=false;projection().coordinates(projection().anchor);tell("下载已停止，历史版本仍保留","不会取消已有的完成版本。",StudioTheme.MUTED);});
-        paragraph("右侧拖动旋转，右键拖动平移。进入世界投影后可以自由绕行，确认前不会写入任何方块。",StudioTheme.MUTED);
+        if(pendingKey!=null&&activeJob==null)sideButton(()->"归档未确认任务",StudioTheme.Kind.DANGER,()->pendingKey!=null&&activeJob==null&&!submitting&&!recovering,()->"归档不代表任务取消；原任务可能仍运行，新生成可能再次计费",()->client.setScreen(new StudioInfoScreen(this,"归档状态未知的任务？","无法确定原任务是否已生成。归档不会取消它；再次生成可能重复计费。建议先查询原任务或检查历史。原身份会保留在本机归档中。","确认归档",true,()->{if(taskIdentity!=null){recovering=true;STATE.archiveTask(taskIdentity).whenComplete((v,e)->onClient(()->{recovering=false;if(e!=null){fail(e);return;}pendingKey=null;taskIdentity=null;tell("任务身份已归档，未取消原任务","新生成会创建新任务，请确认原任务状态。",StudioTheme.WARN);}));}client.setScreen(this);})));
+        if(loading||projection().restoring)sideButton(()->"取消建筑下载 / 草稿恢复",StudioTheme.Kind.NORMAL,()->loading||projection().restoring,()->"停止下载，保留已完成历史版本",()->{StudioClient.BRIDGE.cancelLoad();loadTicket++;loading=false;projection().restoring=false;projection().coordinates(projection().anchor);tell("下载已停止，历史版本仍保留","不会取消已有的完成版本。",StudioTheme.MUTED);});
+    }
+    private void utilityTools(){
+        section("选区与参考图");
+        sideButton(()->"环境选区与区域改造",StudioTheme.Kind.NORMAL,()->!projection().busy,()->"先选周围环境，再选改造范围；进入后分步准备和确认。B 可直接打开。",()->client.setScreen(new SelectionScreen(this)));
+        sideButton(()->"参考图片 · "+(referenceDraft.photos().isEmpty()?"可选":referenceDraft.photos().size()+" 张"),StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"本机 PNG/JPEG，最多四图；编辑和准备不调用模型。生成须先明确选择组件化及支持图片的 Codex 模型，再独立 SEND 确认。",()->client.setScreen(new StudioReferenceScreen(this,referenceDraft)));
+        section("修改当前建筑");
+        paragraph(projection().asset==null?"先生成建筑，或在作品页加载已有成品。":"在创作页填写修改要求，再选择下面的修改方式。原版本会保留。",StudioTheme.MUTED);
+        if(projection().asset!=null){
+            sideButton(()->"编辑修改要求",StudioTheme.Kind.NORMAL,()->true,()->"返回创作页修改描述，不调用模型。",()->switchTab(Tab.CREATE));
+        sideButton(()->projection().asset!=null&&projection().asset.sceneDesign?"局部精修当前构件 · 1 次":"修改当前建筑",StudioTheme.Kind.NORMAL,()->idle()&&projection().asset!=null&&model()!=null&&!description.isBlank(),()->"设计层资产须先选构件并确认修改范围；原版本保留，不自动精修",()->{if(projection().asset.sceneDesign)sceneRefinement(false);else generate(false,true);});
+        sideButton(()->selectedComponent==null?"选择 / 定位设计构件":"当前构件："+selectedComponent,StudioTheme.Kind.NORMAL,()->idle()&&projection().asset!=null&&projection().asset.sceneDesign,()->"按源构件 ID 定位其实际几何范围；只读，不调用模型、不改变世界",this::chooseDesignComponent);
+        sideButton(()->"原版 / 新版切换",StudioTheme.Kind.NORMAL,()->idle()&&compareOriginal!=null&&compareRevised!=null&&projection().asset!=null&&(projection().asset.hash.equals(compareOriginal.hash)||projection().asset.hash.equals(compareRevised.hash)),()->"保持面板相机，对比这次修订前后；切换后世界建造确认失效，须重新检查",StudioScreen::toggleComparison);
+        sideButton(()->"看图精修 · 4 视角 / 1 次调用",StudioTheme.Kind.NORMAL,()->idle()&&projection().asset!=null&&supportsVisualReview()&&!description.isBlank(),()->"仅支持已声明图片能力的 Codex 模型；资产专用四视图，不含世界和桌面。再次确认后调用 1 次，0 自动修复。",this::visualReview);
+        }
+        section("任务与连接");
+        if(activeJob!=null)sideButton(()->cancelling?"正在取消…":"取消生成",StudioTheme.Kind.DANGER,()->activeJob!=null&&!cancelling,()->"停止当前生成，保留之前已经完成的建筑",StudioScreen::cancelGeneration);
+        sideButton(()->recovering?"正在查找原任务…":"查询 / 恢复中断任务",StudioTheme.Kind.NORMAL,()->!recovering&&!submitting&&!loading,()->"只按保存的身份查询；绝不重新提交生成",StudioScreen::recoverTask);
+        if(pendingKey!=null&&activeJob==null)sideButton(()->"归档未确认任务",StudioTheme.Kind.DANGER,()->pendingKey!=null&&activeJob==null&&!submitting&&!recovering,()->"归档不代表任务取消；原任务可能仍运行，新生成可能再次计费",()->client.setScreen(new StudioInfoScreen(this,"归档状态未知的任务？","无法确定原任务是否已生成。归档不会取消它；再次生成可能重复计费。建议先查询原任务或检查历史。原身份会保留在本机归档中。","确认归档",true,()->{if(taskIdentity!=null){recovering=true;STATE.archiveTask(taskIdentity).whenComplete((v,e)->onClient(()->{recovering=false;if(e!=null){fail(e);return;}pendingKey=null;taskIdentity=null;tell("任务身份已归档，未取消原任务","新生成会创建新任务，请确认原任务状态。",StudioTheme.WARN);}));}client.setScreen(this);})));
+        if(loading||projection().restoring)sideButton(()->"取消建筑下载 / 草稿恢复",StudioTheme.Kind.NORMAL,()->loading||projection().restoring,()->"停止下载，保留已完成历史版本",()->{StudioClient.BRIDGE.cancelLoad();loadTicket++;loading=false;projection().restoring=false;projection().coordinates(projection().anchor);tell("下载已停止，历史版本仍保留","不会取消已有的完成版本。",StudioTheme.MUTED);});
+        sideButton(()->localScanActive?"正在检测本机来源…":"重新检测本机 Agent",StudioTheme.Kind.NORMAL,()->!localScanPending&&!localScanActive&&!taskBusy(),()->"检查安装与登录状态，不生成建筑。",()->startLocalDiscovery(true));
+        sideButton(()->"连接诊断 / 手动设置路径",StudioTheme.Kind.NORMAL,()->!taskBusy()&&!discovering,()->"检测不到 Agent 或连接失败时使用。",()->client.setScreen(new StudioDiagnosticsScreen(this,StudioScreen::refreshAgent,selectedAgent)));
+        section("世界操作");
+        sideButton(()->"恢复上次投影位置",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"只恢复匹配当前世界和建筑的草稿，不会建造。",()->projection().restore(StudioClient.BRIDGE));
+        sideButton(()->"世界操作与恢复记录",StudioTheme.Kind.NORMAL,()->client.getServer()!=null&&!projection().busy,()->"检查本工具的放置记录，不自动恢复世界写入。",()->client.setScreen(new StudioRecoveryScreen(this)));
     }
     private void placementTools(){
         var p=projection();BooleanSupplier editable=()->p.asset!=null&&!p.busy&&!loading;
-        section("01  世界投影");
-        sideButton(()->p.visible?"隐藏投影":"显示世界投影",StudioTheme.Kind.NORMAL,editable,()->"只切换客户端可视化，不会修改世界",()->{if(p.visible)p.visible=false;else p.enterWorld();});
-        sideButton(()->p.locked?"已锁定 · 切换为跟随":"视线跟随 · 锁定位置",StudioTheme.Kind.NORMAL,editable,()->"跟随时滚轮推远/拉近；锁定后滚轮沿面朝主轴微调",p::toggleLock);
-        sideButton(()->"重新选址（视线跟随）",StudioTheme.Kind.NORMAL,editable,()->"返回游戏，重新在面朝方向定位；不会建造",()->{p.beginPosition();close();});
-        sideButton(()->"吸附准星表面并锁定",StudioTheme.Kind.NORMAL,editable,()->"以准星命中的表面作为建筑底部中心；G 为游戏内快捷键",p::snapToSurface);
-        pair("旋转 90°","X 轴镜像",editable,p::rotate,p::mirror);
+        section("摆放建筑");
+        paragraph(p.asset==null?"先在创作页生成建筑，或加载示例。":"先到世界中摆放；滚轮调距离，K 锁定，再确认建造。",StudioTheme.MUTED);
+        sideButton(()->p.locked?"位置已锁定 · 改为跟随":"跟随视线 · 锁定位置",StudioTheme.Kind.NORMAL,editable,()->"锁定只确定投影位置，不会放置方块。",p::toggleLock);
+        pair("旋转 90°","镜像",editable,p::rotate,p::mirror);
+        sideButton(()->"吸附准星表面",StudioTheme.Kind.NORMAL,editable,()->"对齐准星命中的表面并锁定，游戏内快捷键 G。",p::snapToSurface);
+        sideButton(()->p.replace?"覆盖策略：覆盖与挖空":"覆盖策略：仅填空气",StudioTheme.Kind.NORMAL,editable,()->"仅填空气不会挖地形；覆盖与挖空会修改已有方块，仍跳过受保护对象",()->{p.replace=!p.replace;p.coordinates(p.anchor);});
+        paragraph("仅填空气：保留已有建筑和地形。\n覆盖与挖空：按建筑掩码修改地形，保留区始终不变。",StudioTheme.WARN);
+        sideButton(()->advancedPlacement?"收起精确调整 ▴":"精确调整与显示 ▾",StudioTheme.Kind.NORMAL,()->true,()->"可选：坐标、步长、定位撤回、楼层剖切与透明度。",this::foldPlacement);
+        if(advancedPlacement)advancedPlacementTools();
+    }
+    private void advancedPlacementTools(){
+        var p=projection();BooleanSupplier editable=()->p.asset!=null&&!p.busy&&!loading;
         sideButton(()->"撤回定位（不撤销方块）",StudioTheme.Kind.NORMAL,p::canUndoDraft,()->"仅撤回投影的坐标/旋转/镜像，最多 32 步",()->{p.undoDraft();syncCoordinates();});
         sideButton(()->"重做定位",StudioTheme.Kind.NORMAL,p::canRedoDraft,()->"只重做投影定位；不会重做世界建造",()->{p.redoDraft();syncCoordinates();});
         sideButton(()->"锁定时滚轮："+p.axisLabel(),StudioTheme.Kind.NORMAL,editable,()->"切换面朝主轴 / X / Y / Z；Ctrl ×8，H 隐藏后恢复物品栏滚轮",p::cycleAxis);
@@ -300,8 +334,6 @@ public final class StudioScreen extends Screen {
             @Override protected void updateMessage(){setMessage(Text.literal("投影透明度 "+Math.round((.15+value*.7)*100)+"%"));}
             @Override protected void applyValue(){p.opacity=(float)(.15+value*.7);}
         },cursor);opacity.setMessage(Text.literal("投影透明度 "+Math.round(p.opacity*100)+"%"));cursor+=28;
-        sideButton(()->p.replace?"覆盖策略：覆盖与挖空":"覆盖策略：仅填空气",StudioTheme.Kind.NORMAL,editable,()->"仅填空气不会挖地形；覆盖与挖空会修改已有方块，仍跳过受保护对象",()->{p.replace=!p.replace;p.coordinates(p.anchor);});
-        paragraph("仅填空气：保留已有建筑和地形。\n覆盖与挖空：按建筑掩码修改地形，保留区始终不变。",StudioTheme.WARN);
         sideButton(()->"恢复上次投影草稿",StudioTheme.Kind.NORMAL,()->!p.busy&&!loading,()->"只恢复匹配当前世界、维度和建筑哈希的草稿",()->p.restore(StudioClient.BRIDGE));
         paragraph("橙色轮廓表示覆盖/挖空，紫色表示不可用。所有世界写入仍需二次确认。",StudioTheme.MUTED);
     }
@@ -339,26 +371,43 @@ public final class StudioScreen extends Screen {
     private void createBottomActions(){
         var s=layout.sidebar();int x=s.x()+9,y=s.bottom()-31,w=(s.width()-24)/2;
         if(tab==Tab.CREATE){
-            fixedButton(x,y,w,23,()->submitting?"提交中…":"生成建筑",StudioTheme.Kind.PRIMARY,()->idle()&&model()!=null&&!description.isBlank(),()->model()==null?"请先连接所选 Agent 并选择模型；也可点示例体验":taskBusy()?"请等待或取消当前生成":"模型："+modelLabel()+"\n推理："+selectedEffort+"\n生成会使用该账户额度；Ctrl+Enter",()->generate(false,false));
-            fixedButton(x+w+6,y,w,23,()->"加载示例",StudioTheme.Kind.NORMAL,StudioScreen::idle,()->"无需 AI，无账户用量；只加载一个可预览的小屋",()->generate(true,false));
+            fixedButton(x,y,w,23,()->submitting?"提交中…":taskBusy()?"处理中…":referenceDraft.photos().isEmpty()?"生成建筑":"检查参考图",projection().asset==null?StudioTheme.Kind.PRIMARY:StudioTheme.Kind.NORMAL,this::canBeginCreation,this::creationHint,this::beginCreation);
+            fixedButton(x+w+6,y,w,23,()->activeJob!=null?(cancelling?"取消中…":"取消生成"):"加载示例",activeJob!=null?StudioTheme.Kind.DANGER:StudioTheme.Kind.NORMAL,()->activeJob!=null?!cancelling:idle(),()->activeJob!=null?"停止当前制作，保留原成品和已完成记录。":"免费加载示例，没有模型调用。",()->{if(activeJob!=null)cancelGeneration();else generate(true,false);});
         }else if(tab==Tab.PLACE){
             fixedButton(x,y,w,23,()->"建造确认",StudioTheme.Kind.PRIMARY,()->projection().canPlace()&&!taskBusy(),()->projection().placementBlockReason(),StudioScreen::confirmPlacement);
             fixedButton(x+w+6,y,w,23,()->projection().busy?"停止操作":"撤销上次",StudioTheme.Kind.DANGER,()->projection().busy||(client.getServer()!=null&&client.player!=null&&client.player.isCreative()&&!taskBusy()),()->projection().busy?"停止后续批次，已完成部分仍可撤销":"只撤销本工具的直接修改，并保留后续编辑",()->{if(projection().busy)projection().cancelPlacement();else confirmUndo();});
-        }else{
+        }else if(tab==Tab.HISTORY){
             fixedButton(x,y,w,23,()->"导出 .schem",StudioTheme.Kind.PRIMARY,()->projection().asset!=null&&!loading,()->"导出当前完成版本，经过严格复核",this::exportAsset);
             fixedButton(x+w+6,y,w,23,()->historyLoading?"读取中…":"刷新列表",StudioTheme.Kind.NORMAL,()->!historyLoading,()->"读取所有已完成版本，不调用 AI",this::refreshHistory);
+        }else{
+            fixedButton(x,y,w,23,()->"返回创作",StudioTheme.Kind.NORMAL,()->true,()->"继续描述建筑。",()->switchTab(Tab.CREATE));
+            fixedButton(x+w+6,y,w,23,()->"使用帮助",StudioTheme.Kind.NORMAL,()->true,()->"查看从生成到建造的操作步骤。",()->client.setScreen(new StudioInfoScreen(this,"如何建造",helpText())));
         }
+    }
+    private boolean canBeginCreation(){return idle()&&agentReady&&model()!=null&&!description.isBlank()&&(referenceDraft.photos().isEmpty()||generationMode.equals("components")&&supportsVisualReview());}
+    private String creationHint(){
+        if(!idle())return "当前任务未结束；请等待，或到工具页查询原任务。";
+        if(!agentReady||model()==null)return "先选择已连接的制作来源和模型，或加载免费示例。";
+        if(description.isBlank())return "先填写建筑描述。";
+        if(!referenceDraft.photos().isEmpty()&&!generationMode.equals("components"))return "已添加参考图：请选择 Lite / Pro / Max / Ultra 组件制作方案。";
+        if(!referenceDraft.photos().isEmpty()&&!supportsVisualReview())return "已添加参考图：请选择明确支持图片的 Codex 模型。";
+        return "模型："+modelLabel()+"\n推理："+StudioMessages.effort(selectedEffort)+"\n"+(referenceDraft.photos().isEmpty()?"下一步检查并确认调用预算。":"下一步检查参考图片，再独立确认发送；不会忽略图片改为纯文本生成。")+"\nCtrl+Enter";
+    }
+    private void beginCreation(){
+        if(!canBeginCreation()){tell("先完成生成设置",creationHint(),StudioTheme.WARN);return;}
+        if(!referenceDraft.photos().isEmpty()){client.setScreen(new StudioReferenceScreen(this,referenceDraft));return;}
+        generate(false,false);
     }
     private void createPreviewControls(){
         var r=layout.preview();int half=(r.width()-22)/2;
         fixedButton(r.x()+8,r.y()+7,half,20,()->projection().materials?"MC 材质":"建筑形体",StudioTheme.Kind.NORMAL,()->projection().asset!=null,()->"切换真实方块材质 / 形体；不会改变导出内容",()->projection().materials=!projection().materials);
         fixedButton(r.x()+14+half,r.y()+7,half,20,()->"重置视角",StudioTheme.Kind.NORMAL,()->true,()->"恢复相机旋转、缩放和平移",this::resetCamera);
-        fixedButton(r.x()+8,r.bottom()-29,r.width()-16,22,()->projection().busy?"正在修改世界…":projection().visible?"返回当前世界投影":"进入世界投影",StudioTheme.Kind.PRIMARY,()->projection().asset!=null&&!projection().busy&&!loading&&!projection().restoring,()->"跟随时滚轮推远/拉近，K 锁定；H 退出投影并恢复物品栏滚轮",()->{projection().enterWorld();close();});
+        fixedButton(r.x()+8,r.bottom()-29,r.width()-16,22,()->projection().busy?"正在建造…":projection().asset==null?"生成后可摆放":projection().locked?"回到世界查看位置":"到世界中摆放",tab==Tab.PLACE&&projection().locked?StudioTheme.Kind.NORMAL:StudioTheme.Kind.PRIMARY,()->projection().asset!=null&&!projection().busy&&!loading&&!projection().restoring,()->"先在游戏中看实际大小和位置，滚轮调整距离，K 锁定；锁定后 Enter 打开建造确认。",()->{projection().enterWorld();close();});
     }
     private void updateBindings(){for(var b:bindings){b.button.setMessage(Text.literal(b.label.get()));b.button.active=b.enabled.getAsBoolean();b.button.setTooltip(Tooltip.of(Text.literal(b.hint.get())));}if(coordinates!=null)for(var f:coordinates)f.active=projection().asset!=null&&!projection().busy;}
     private void layoutRows(){var c=layout.content();for(var r:rows){r.widget.setY(c.y()+r.y-scroll);r.widget.visible=r.widget.getY()+r.widget.getHeight()>c.y()&&r.widget.getY()<c.bottom();}}
     private void scroll(int amount){scroll=StudioLayout.clampScroll(scroll+amount,contentHeight,layout.content().height());layoutRows();}
-    @Override public void tick(){if(prompt!=null)prompt.tick();for(var r:rows)if(r.widget instanceof TextFieldWidget field)field.tick();if(coordinates!=null&&!coordinatesDirty&&!projection().anchor.equals(shownAnchor))syncCoordinates();updateBindings();}
+    @Override public void tick(){if(!Objects.equals(controlsSignature,controlsSignature())){clearAndInit();}if(prompt!=null)prompt.tick();for(var r:rows)if(r.widget instanceof TextFieldWidget field)field.tick();if(coordinates!=null&&!coordinatesDirty&&!projection().anchor.equals(shownAnchor))syncCoordinates();updateBindings();}
     private void syncCoordinates(){coordinateDraft=null;if(coordinates==null)return;var p=projection().anchor;int[] values={p.getX(),p.getY(),p.getZ()};for(int i=0;i<3;i++)coordinates[i].setText(Integer.toString(values[i]));coordinatesDirty=false;shownAnchor=p;}
     private void applyCoordinates(){try{projection().coordinates(new BlockPos(StudioLayout.coordinate(coordinates[0].getText()),StudioLayout.coordinate(coordinates[1].getText()),StudioLayout.coordinate(coordinates[2].getText())));coordinatesDirty=false;syncCoordinates();tell("坐标已应用，投影已锁定",projection().anchor.toShortString(),StudioTheme.ACCENT);}catch(Exception e){tell("坐标无效，请输入三个整数",e.getMessage(),StudioTheme.ERROR);}}
     private void move(int x,int y,int z){int amount=hasControlDown()?8:step;projection().move(x*amount,y*amount,z*amount);syncCoordinates();}
@@ -548,6 +597,17 @@ public final class StudioScreen extends Screen {
     private void chooseEffort(){var choices=efforts().stream().map(e->new StudioChoiceScreen.Choice(e,StudioMessages.effort(e)+" · "+e,"所选模型支持的推理选项；不是生成质量或速度保证")).toList();client.setScreen(new StudioChoiceScreen(this,"选择推理级别",choices,selectedEffort,e->selectedEffort=e));}
     private void chooseOutputBudget(){var m=model();String configured=m!=null&&m.has("configuredOutputBudget")&&!m.get("configuredOutputBudget").isJsonNull()?m.get("configuredOutputBudget").getAsString():"由 Harness 决定";client.setScreen(new StudioOutputBudgetScreen(this,outputBudget,configured,v->outputBudget=v));}
     private void chooseGenerationMode(){client.setScreen(new StudioChoiceScreen(this,"生成方式与调用次数",List.of(new StudioChoiceScreen.Choice("components","组件化制作 · lite / pro / max / ultra","整体设计 → 分组件拼装 → 文本复核；调用总上限单独确认"),new StudioChoiceScreen.Choice("single","原有完整建筑 · 1 次","保留兼容入口；自动修复预算另计"),new StudioChoiceScreen.Choice("scene","实验设计层 · 1 次 + 本地编译","通用体块/立面/模块/楼梯；0 自动修复，质量待真实评审"),new StudioChoiceScreen.Choice("checkpoints","实验设计检查点 · 最多 2–4 次","布局 → 编译反馈 → 细化；纠错包含在总预算内，只有新设计可用"),new StudioChoiceScreen.Choice("layered","原有外壳 → 内饰 · 最多 2 次","任一阶段失败即停止，完整合并校验后才可预览")),generationMode,v->{generationMode=v;if(!v.equals("single"))repairBudget=0;if(!v.equals("components")){assemblyProviderRecovery=false;assemblyCompletionReserve=false;}if(!v.equals("components"))assemblyExpandedRoutes=false;}));}
+    private static String creationPlanLabel(){return switch(generationMode){case "components"->qualityTier.toUpperCase(Locale.ROOT)+" · 组件制作";case "checkpoints"->"检查点 · 自定义";case "scene"->"设计层 · 实验";case "layered"->"外壳 + 内饰";default->"快速单次";};}
+    private void chooseCreationPlan(){
+        if(!idle())return;var choices=new ArrayList<StudioChoiceScreen.Choice>();
+        choices.add(new StudioChoiceScreen.Choice("single","快速单次 · 1 次生成","适合先尝试简单建筑；额外修复预算在高级设置中单独选择。"));
+        for(var tier:StudioAssembly.tiers())choices.add(new StudioChoiceScreen.Choice(tier.id(),tier.id().toUpperCase(Locale.ROOT)+" · 最多 "+tier.maximumCalls()+" 次调用",switch(tier.id()){case "lite"->"基础制作：较少的组件与复核，适合先体验，调用量较低。";case "pro"->"常规建筑：细分楼层、立面与家具，兼顾细节和调用量。";case "max"->"复杂建筑：入口、转角、立面与内饰做更多专项设计。";default->"大型方案：更细的组件拆分和多轮复核，调用量较高。";}));
+        client.setScreen(new StudioChoiceScreen(this,"选择制作方案",choices,generationMode.equals("components")?qualityTier:generationMode,value->{
+            if(!idle())return;
+            if(value.equals("single")){generationMode="single";assemblyProviderRecovery=false;assemblyCompletionReserve=false;assemblyExpandedRoutes=false;}
+            else{generationMode="components";repairBudget=0;selectAssemblyTier(value);}
+        }));
+    }
     private static int assemblyPackageLimit(){return assemblyPrototypeMode.equals("staged")?StudioAssembly.stagedPackageLimit(assemblyCalls):Math.min(StudioAssembly.tier(qualityTier).maxPackages(),assemblyCalls-(assemblyQualityVersion>=3?5:3));}
     private void choosePrototypeWorkflow(){
         List<StudioChoiceScreen.Choice> choices=new ArrayList<>();
@@ -726,13 +786,13 @@ public final class StudioScreen extends Screen {
     @Override public void render(DrawContext d,int mx,int my,float delta){
         d.fill(0,0,width,height,StudioTheme.BG);d.fill(8,11,11,32,StudioTheme.ACCENT);
         d.drawText(textRenderer,StudioTheme.fit(textRenderer,dev.voxelstudio.StudioBrand.NAME,Math.max(0,width-90)),17,11,StudioTheme.TEXT,false);
-        d.drawText(textRenderer,discovering?"正在检测本机 Agent…":!agentReady?"本机生成 · 先预览，再建造":agentName()+" 已连接 · 本机生成",17,25,StudioTheme.MUTED,false);
+        d.drawText(textRenderer,StudioTheme.fit(textRenderer,guidance().heading()+" · 描述 → 生成 → 摆放 → 建造",width-90),17,25,StudioTheme.MUTED,false);
         var s=layout.sidebar();StudioTheme.panel(d,s.x(),s.y(),s.width(),s.height());renderSidebar(d,mx,my,delta);renderPreview(d,mx,my,delta);
-        String context=tab==Tab.CREATE?modelLabel()+" · "+StudioMessages.effort(selectedEffort):tab==Tab.PLACE?(projection().replace?"覆盖与挖空 · 请先备份":"仅填空气 · 保留地形"):"仅导出当前选中的版本";
+        String context=tab==Tab.CREATE?(!canBeginCreation()?creationHint():modelLabel()+" · "+StudioMessages.effort(selectedEffort)):tab==Tab.PLACE?(projection().replace?"覆盖与挖空 · 请先备份":"仅填空气 · 保留地形"):tab==Tab.HISTORY?"加载只预览，不会直接建造":"高级功能按需使用";
         d.drawText(textRenderer,StudioTheme.fit(textRenderer,context,s.width()-18),s.x()+9,s.bottom()-42,tab==Tab.PLACE&&projection().replace?StudioTheme.WARN:StudioTheme.MUTED,false);
         for(var widget:fixed)widget.render(d,mx,my,delta);
         int limit=width-83;d.drawText(textRenderer,StudioTheme.fit(textRenderer,notice.summary,limit),12,height-30,notice.color,false);
-        String secondary=notice.color==StudioTheme.ERROR?(projection().asset==null?"没有新的可用建筑；点击详情查看具体原因":"当前预览仍是原建筑："+projection().asset.id+"；不是本次失败结果"):tab==Tab.PLACE?projection().placementBlockReason():taskBusy()?"后台任务进行中 · 可关闭面板继续游戏":projection().status;
+        String secondary=notice.color==StudioTheme.ERROR?(projection().asset==null?"没有新的可用建筑；点击详情查看具体原因":"当前预览仍是原建筑："+projection().asset.id+"；不是本次失败结果"):tab==Tab.PLACE?projection().placementBlockReason():guidance().next();
         d.drawText(textRenderer,StudioTheme.fit(textRenderer,secondary,limit),12,height-17,StudioTheme.MUTED,false);
     }
     private void renderSidebar(DrawContext d,int mx,int my,float delta){
@@ -756,12 +816,15 @@ public final class StudioScreen extends Screen {
             if(p.asset.navigationAcknowledgementRequired&&!p.renderer.building)d.drawText(textRenderer,"通行未验证 · 建造前须确认",v.x()+7,v.y()+7,StudioTheme.WARN,false);
             if(p.renderer.error!=null){d.fill(v.x()+4,v.y()+4,v.right()-4,v.y()+31,0xed3f202a);d.drawText(textRenderer,"预览加载失败",v.x()+8,v.y()+8,StudioTheme.ERROR,false);d.drawText(textRenderer,"请打开状态详情",v.x()+8,v.y()+20,StudioTheme.MUTED,false);}
         }else{
-            String title=loading?"正在加载建筑…":"建筑将在这里出现";d.drawText(textRenderer,title,v.x()+(v.width()-textRenderer.getWidth(title))/2,v.y()+v.height()/2-13,StudioTheme.TEXT,false);
-            String hint="生成或加载示例后预览";d.drawText(textRenderer,hint,v.x()+(v.width()-textRenderer.getWidth(hint))/2,v.y()+v.height()/2+3,StudioTheme.MUTED,false);
+            String title=loading?"正在加载建筑…":taskBusy()?"建筑制作中":"你的建筑预览";
+            title=StudioTheme.fit(textRenderer,title,v.width()-16);d.drawText(textRenderer,title,v.x()+(v.width()-textRenderer.getWidth(title))/2,v.y()+v.height()/2-22,StudioTheme.TEXT,false);
+            var hints=textRenderer.wrapLines(Text.literal(taskBusy()?"完成后在这里查看，再到世界中摆放。":"先描述建筑并生成，或点击加载示例免费体验。"),v.width()-24);
+            int hintY=v.y()+v.height()/2-4;for(var hint:hints){d.drawText(textRenderer,hint,v.x()+12,hintY,StudioTheme.MUTED,false);hintY+=12;}
         }
+        if(p.asset!=null&&notice.color==StudioTheme.ERROR)d.drawText(textRenderer,StudioTheme.fit(textRenderer,"当前为已有建筑 · 错误见详情",v.width()-14),v.x()+7,v.bottom()-14,StudioTheme.WARN,false);
         d.disableScissor();String summary=p.asset==null?"预览不会修改世界":p.placement().width()+" × "+p.asset.height+" × "+p.placement().length()+" · "+String.format(Locale.ROOT,"%,d",p.asset.setCount)+" 方块";
         d.drawText(textRenderer,StudioTheme.fit(textRenderer,summary,r.width()-16),r.x()+8,v.bottom()+6,StudioTheme.TEXT,false);
-        d.drawText(textRenderer,StudioTheme.fit(textRenderer,"拖动旋转 · 右键平移 · 滚轮缩放",r.width()-16),r.x()+8,v.bottom()+19,StudioTheme.MUTED,false);
+        d.drawText(textRenderer,StudioTheme.fit(textRenderer,p.asset==null?"描述 → 生成 → 摆放 → 建造":"拖动旋转 · 右键平移 · 滚轮缩放",r.width()-16),r.x()+8,v.bottom()+19,StudioTheme.MUTED,false);
     }
     private void drawDesignBounds(DrawContext d,Matrix4f matrix){
         var p=projection();if(p.asset==null||designSources==null||!p.asset.revision.equals(designRevision)||selectedComponent==null)return;
@@ -790,15 +853,81 @@ public final class StudioScreen extends Screen {
         if(layout.sidebar().contains(mx,my)){if(prompt!=null&&prompt.visible&&prompt.isMouseOver(mx,my)&&prompt.getContentsHeight()>prompt.getHeight()-8&&prompt.mouseScrolled(mx,my,amount))return true;scroll(-(int)(amount*26));return true;}return false;
     }
     @Override public boolean keyPressed(int key,int scan,int mods){
+        if(key==GLFW.GLFW_KEY_TAB&&!hasControlDown()&&!hasAltDown()){focusNext(hasShiftDown());return true;}
         boolean editing=getFocused() instanceof TextFieldWidget||getFocused() instanceof EditBoxWidget;
-        if(key==GLFW.GLFW_KEY_ENTER&&hasControlDown()&&tab==Tab.CREATE){generate(false,false);return true;}
+        if(key==GLFW.GLFW_KEY_ENTER&&hasControlDown()&&tab==Tab.CREATE){beginCreation();return true;}
         if(!editing){if(key==GLFW.GLFW_KEY_T){projection().materials=!projection().materials;return true;}if(key==GLFW.GLFW_KEY_O){projection().opacity=projection().opacity>=.8f?.2f:projection().opacity+.15f;return true;}if(key==GLFW.GLFW_KEY_PAGE_DOWN||key==GLFW.GLFW_KEY_PAGE_UP){scroll((key==GLFW.GLFW_KEY_PAGE_DOWN?1:-1)*Math.max(30,layout.content().height()-18));return true;}}
         return super.keyPressed(key,scan,mods);
+    }
+    private void focusNext(boolean backwards){
+        var order=new ArrayList<ClickableWidget>();int navigation=Math.min(Tab.values().length+1,fixed.size());
+        order.addAll(fixed.subList(0,navigation));for(var row:rows)order.add(row.widget);order.addAll(fixed.subList(navigation,fixed.size()));
+        order.removeIf(widget->!widget.active);if(order.isEmpty())return;
+        int current=order.indexOf(getFocused());int next=current<0?(backwards?order.size()-1:0):Math.floorMod(current+(backwards?-1:1),order.size());
+        var widget=order.get(next);for(var row:rows)if(row.widget==widget){scroll=StudioLayout.reveal(scroll,row.y,widget.getHeight(),contentHeight,layout.content().height());layoutRows();break;}
+        setFocused(widget);setDragging(false);
     }
     private static String helpText(){return "面板：Enter 换行；Ctrl+Enter 生成；滚轮滚动设置或缩放预览；右键拖动预览平移；T 切换材质；O 切换透明度。\n世界：滚轮沿视线推远/拉近；K 或 Enter 锁定后，滚轮沿面朝主轴微调；G 吸附准星表面；方向键移动 X/Z；PageUp/Down 升降；Ctrl 粗调；R 旋转；M 镜像；H 隐藏并恢复物品栏滚轮；锁定后 Enter 打开建造确认；V 返回面板。\n世界按键可在 Minecraft 控制设置中重新绑定。";}
     @Override public boolean shouldPause(){return false;}
 
     // Package-private assertions used only by the explicitly enabled development harness.
+    private static dev.voxelstudio.Asset workflowUiAsset;
+    static void prepareWorkflowUiFixture(){
+        if(!net.fabricmc.loader.api.FabricLoader.getInstance().isDevelopmentEnvironment()||!Boolean.getBoolean("voxelstudio.uiworkflowtest")||!idle())throw new IllegalStateException("Explicit idle UI-only fixture required");
+        discoveryAttempted=true;recoveryAttempted=true;agentReady=true;selectedAgent="codex";selectedEffort="max";selectedModel="test-model-2";
+        models=new JsonArray();for(int i=0;i<30;i++){var model=new JsonObject();model.addProperty("id","test-model-"+i);model.addProperty("supportsImages",true);model.add("efforts",JsonParser.parseString("[\"max\"]"));models.add(model);}
+    }
+    JsonObject auditWorkflowUi(int variant){
+        if(!net.fabricmc.loader.api.FabricLoader.getInstance().isDevelopmentEnvironment()||!Boolean.getBoolean("voxelstudio.uiworkflowtest")||!idle())throw new IllegalStateException("Explicit UI-only fixture required");
+        if(workflowUiAsset==null)workflowUiAsset=projection().asset;
+        projection().asset=variant<=1?null:workflowUiAsset;agentReady=variant!=0;advancedGeneration=false;advancedPlacement=false;
+        description=variant==0?"":"一座现代图书馆，有庭院、通透的玻璃立面和安静的阅览室";
+        generationMode=variant==5?"components":"single";qualityTier="ultra";assemblyCalls=26;assemblyQualityVersion=1;assemblyPrototypeMode="off";assemblyImageReview=false;
+        Tab requested=switch(variant){case 2,6->Tab.PLACE;case 3->Tab.TOOLS;case 4->Tab.HISTORY;default->Tab.CREATE;};
+        var report=auditUi(requested);advancedPlacement=variant==6;advancedGeneration=variant==5;scroll=0;clearAndInit();
+        var settings=generationRequest("ui-settings-only",false);String draft=description;
+        if(requested==Tab.CREATE){
+            int basicRows=rows.size();foldGeneration();foldGeneration();
+            if(!settings.equals(generationRequest("ui-settings-only",false))||!draft.equals(description))throw new IllegalStateException("Folding changed generation settings or prompt");
+            if(!advancedGeneration&&variant<2&&basicRows>8)throw new IllegalStateException("Basic creation form became cluttered");
+        }
+        for(int i=0;i<rows.size()+fixed.size()+1;i++){
+            focusNext(false);for(var row:rows)if(row.widget==getFocused()&&(row.widget.getY()<layout.content().y()||row.widget.getY()+row.widget.getHeight()>layout.content().bottom()))throw new IllegalStateException("Keyboard focus is hidden by scrolling");
+        }
+        setFocused(null);scroll=0;layoutRows();
+        String name=switch(variant){case 0->"first-use";case 1->"create";case 2->"place";case 3->"tools";case 4->"library";case 5->"advanced-generation";case 6->"precise-placement";case 7->"creation-plan";case 8->"agent-picker";case 9->"choice-followup";case 10->"model-search";case 11->"reference-image";case 12->"build-confirmation";default->"selection-no-world";};
+        if(variant==7)chooseCreationPlan();
+        if(variant==8)chooseAgent();
+        if(variant==9){
+            Screen followup=new StudioInfoScreen(this,"下一步测试","只验证选择后进入下一步，没有模型调用。中文说明可见。");
+            var picker=new StudioChoiceScreen(this,"选择后继续",List.of(new StudioChoiceScreen.Choice("next","继续下一步","点击后应保留后续页面，而不是跳回主界面。")),null,id->client.setScreen(followup));client.setScreen(picker);
+            for(var child:List.copyOf(picker.children()))if(child instanceof StudioTheme.ChoiceButton button)button.onPress();
+            if(client.currentScreen!=followup)throw new IllegalStateException("Choice discarded follow-up page");
+        }
+        if(variant==10){chooseModel();var picker=(StudioChoiceScreen)client.currentScreen;picker.auditSelection();if(!"test-model-27".equals(selectedModel))throw new IllegalStateException("Wrong model chosen");client.setScreen(picker);}
+        if(variant==11){
+            referenceDraft=workflowImageDraft();generationMode="single";
+            if(canBeginCreation()||!creationHint().contains("组件制作"))throw new IllegalStateException("Image draft silently accepted a text-only workflow");
+            generationMode="components";selectedAgent="deepseek";if(canBeginCreation())throw new IllegalStateException("Image capability was not checked");
+            selectedAgent="codex";if(!canBeginCreation())throw new IllegalStateException("Explicit image workflow was blocked");beginCreation();
+            if(!(client.currentScreen instanceof StudioReferenceScreen))throw new IllegalStateException("Primary creation ignored attached pictures");referenceDraft=new ReferenceImageDraft();
+        }
+        if(variant==12){
+            var confirmation=new StudioInfoScreen(this,"确认建造 · 通行未验证","确认页测试：此实例没有加载世界。\n\n位置：12, 64, -24\n策略：仅填空气\n\n楼梯与室内通行未验证；确认只代表接受本次风险。","确认建造",true,true,()->{throw new IllegalStateException("UI fixture must not place blocks");});
+            client.setScreen(confirmation);confirmation.auditAcknowledgement();confirmation.keyPressed(GLFW.GLFW_KEY_ENTER,0,0);if(client.currentScreen!=this)throw new IllegalStateException("Default Enter must return safely");client.setScreen(confirmation);
+        }
+        if(variant==13)client.setScreen(new SelectionScreen(this));
+        if(activeJob!=null||pendingKey!=null||submitting||preflighting)throw new IllegalStateException("UI inspection submitted a task");
+        report.addProperty("view",name);report.addProperty("keyboardFocusVisible",true);report.addProperty("foldPreservesSettingsAndDraft",true);report.addProperty("noGenerationSubmitted",true);return report;
+    }
+    private static ReferenceImageDraft workflowImageDraft(){
+        try{
+            var image=new java.awt.image.BufferedImage(128,96,java.awt.image.BufferedImage.TYPE_INT_RGB);
+            for(int y=0;y<96;y++)for(int x=0;x<128;x++)image.setRGB(x,y,y>72?0x8ca48c:x>38&&x<89&&y>18?((x%12<3)?0xdbe6e8:0x587f99):0xc9dbe5);
+            var bytes=new java.io.ByteArrayOutputStream();try(var output=new javax.imageio.stream.MemoryCacheImageOutputStream(bytes)){javax.imageio.ImageIO.write(image,"png",output);}
+            var draft=new ReferenceImageDraft();draft.add(new ReferenceImageDraft.Source(bytes.toByteArray()),draft.revision());return draft;
+        }catch(java.io.IOException error){throw new IllegalStateException("Synthetic UI image failed",error);}
+    }
     JsonObject auditSceneUi(int variant)throws Exception{
         if(!net.fabricmc.loader.api.FabricLoader.getInstance().isDevelopmentEnvironment()||!Boolean.getBoolean("voxelstudio.uitest"))throw new IllegalStateException("Development only");
         var root=net.fabricmc.loader.api.FabricLoader.getInstance().getGameDir().resolve("../build/test-fixtures/"+(variant>=4?"scene-instance-study":"scene-courtyard")).normalize();
@@ -837,7 +966,7 @@ public final class StudioScreen extends Screen {
     }
     JsonObject auditUi(Tab requested){
         if(!net.fabricmc.loader.api.FabricLoader.getInstance().isDevelopmentEnvironment()||!Boolean.getBoolean("voxelstudio.uitest"))throw new IllegalStateException("Development UI test only");
-        switchTab(requested);for(var widget:fixed)if(widget.getX()<0||widget.getY()<0||widget.getX()+widget.getWidth()>width||widget.getY()+widget.getHeight()>height)throw new IllegalStateException("Fixed UI control outside viewport: "+widget.getMessage().getString());
+        if(requested==Tab.PLACE)advancedPlacement=true;switchTab(requested);for(var widget:fixed)if(widget.getX()<0||widget.getY()<0||widget.getX()+widget.getWidth()>width||widget.getY()+widget.getHeight()>height)throw new IllegalStateException("Fixed UI control outside viewport: "+widget.getMessage().getString());
         float oldZoom=zoom,oldYaw=yaw;var content=layout.content();mouseScrolled(content.x()+1,content.y()+1,-1);
         if(oldZoom!=zoom)throw new IllegalStateException("Sidebar scroll changed preview zoom");
         mouseDragged(layout.viewport().x()+1,layout.viewport().y()+1,0,12,8);

@@ -34,9 +34,9 @@ final class StudioHud {
         }
         if(!p.visible&&!p.busy)return;
         int w=Math.min(448,c.getWindow().getScaledWidth()-16);
-        String hints=p.busy?key(keys,"open")+" 面板中可停止当前操作":key(keys,"lock")+" 锁定/跟随  ·  "+key(keys,"rotate")+" 旋转  ·  "+key(keys,"mirror")+" 镜像  ·  "+key(keys,"confirm")+" 确认  ·  "+key(keys,"open")+" 面板";
-        String movement=key(keys,"west")+"/"+key(keys,"east")+" X  ·  "+key(keys,"north")+"/"+key(keys,"south")+" Z  ·  "+key(keys,"up")+"/"+key(keys,"down")+" Y  ·  Ctrl ×8  ·  "+key(keys,"hide")+" 隐藏";
-        var lines=c.textRenderer.wrapLines(Text.literal(hints+(p.busy?"":"\n"+movement+"\n滚轮："+(p.locked?p.axisLabel()+"微调":"推远 / 拉近 · 距离 "+Math.round(p.followDistance)+" 格")+" · "+key(keys,"snap")+" 贴准星表面\n"+p.layerLabel()+" · H 退出后恢复物品栏滚轮")),w-18);
+        String hints=p.busy?key(keys,"open")+" 查看进度 / 停止":p.locked?"滚轮微调 · "+key(keys,"confirm")+" 确认建造":"滚轮推远 / 拉近 · "+key(keys,"lock")+" 锁定位置";
+        String secondary=key(keys,"rotate")+" 旋转 · "+key(keys,"mirror")+" 镜像 · "+key(keys,"open")+" 更多操作";
+        var lines=c.textRenderer.wrapLines(Text.literal(hints+(p.busy?"":"\n"+secondary)),w-18);
         int h=51+lines.size()*12;draw.fill(8,8,8+w,8+h,0xd9101d28);draw.fill(8,8,11,8+h,StudioTheme.ACCENT);
         draw.drawText(c.textRenderer,"体素投影 · "+(p.busy?"正在修改世界":p.locked?"锁定微调":"视线距离跟随"),17,15,StudioTheme.ACCENT,false);
         String position=p.anchor.toShortString()+"  ·  "+p.rotation*90+"°"+(p.mirror?"  ·  镜像":"");

@@ -9,7 +9,7 @@ public record StudioLayout(Rect sidebar, Rect content, Rect preview, Rect viewpo
     }
     public static StudioLayout of(int width, int height) {
         int margin=8, gap=8, top=43, bottom=height-39;
-        int left=Math.min(300,Math.max(142,(width-24)*43/100));
+        int left=Math.min(330,Math.max(166,(width-24)*42/100));
         Rect sidebar=new Rect(margin,top,left,Math.max(60,bottom-top));
         Rect content=new Rect(margin+9,top+34,left-22,Math.max(24,bottom-top-76));
         Rect preview=new Rect(sidebar.right()+gap,top,Math.max(80,width-sidebar.right()-gap-margin),sidebar.height());
@@ -18,6 +18,10 @@ public record StudioLayout(Rect sidebar, Rect content, Rect preview, Rect viewpo
     }
     public static int maxScroll(int contentHeight,int viewportHeight) { return Math.max(0,contentHeight-viewportHeight); }
     public static int clampScroll(int scroll,int contentHeight,int viewportHeight) { return Math.max(0,Math.min(scroll,maxScroll(contentHeight,viewportHeight))); }
+    public static int reveal(int scroll,int top,int height,int contentHeight,int viewportHeight) {
+        int next=top<scroll?top:top+height>scroll+viewportHeight?top+height-viewportHeight:scroll;
+        return clampScroll(next,contentHeight,viewportHeight);
+    }
     public static int coordinate(String text) {
         if(text==null || !text.matches("-?\\d{1,10}")) throw new IllegalArgumentException("坐标必须是整数");
         try { return Integer.parseInt(text); } catch(NumberFormatException e) { throw new IllegalArgumentException("坐标超出整数范围"); }

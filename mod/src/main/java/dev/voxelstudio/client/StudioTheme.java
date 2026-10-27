@@ -23,14 +23,30 @@ final class StudioTheme {
             setTooltip(Tooltip.of(Text.literal(text)));setTooltipDelay(350);
         }
         @Override protected void renderButton(DrawContext d,int mx,int my,float delta) {
+            int ink=surface(d);
+            var r=MinecraftClient.getInstance().textRenderer;
+            String label=fit(r,getMessage().getString(),width-8);
+            d.drawText(r,label,getX()+(width-r.getWidth(label))/2,getY()+(height-8)/2,ink,false);
+        }
+        protected int surface(DrawContext d) {
             boolean hot=isHovered()||isFocused();
             int fill=!active?0xff182631:kind==Kind.PRIMARY?(hot?0xff8debd5:ACCENT):kind==Kind.DANGER?(hot?0xff683c46:0xff3e2834):kind==Kind.SELECTED?0xff234b4d:hot?0xff304657:0xff203342;
             int ink=!active?0xff627b8c:kind==Kind.PRIMARY?0xff102d2a:kind==Kind.DANGER?ERROR:kind==Kind.SELECTED?ACCENT:TEXT;
             d.fill(getX(),getY(),getX()+width,getY()+height,fill);
             border(d,getX(),getY(),width,height,isFocused()?0xfff1fafb:hot?ACCENT:BORDER);
-            var r=MinecraftClient.getInstance().textRenderer;
-            String label=fit(r,getMessage().getString(),width-12);
-            d.drawText(r,label,getX()+(width-r.getWidth(label))/2,getY()+(height-8)/2,ink,false);
+            return ink;
+        }
+    }
+    static final class ChoiceButton extends Button {
+        private final String detail;
+        ChoiceButton(int x,int y,int w,String label,String detail,Kind kind,Runnable action) {
+            super(x,y,w,42,label,kind,action);this.detail=detail;
+            setTooltip(Tooltip.of(Text.literal(label+"\n"+detail)));
+        }
+        @Override protected void renderButton(DrawContext d,int mx,int my,float delta) {
+            int ink=surface(d);var r=MinecraftClient.getInstance().textRenderer;
+            d.drawText(r,fit(r,getMessage().getString(),width-20),getX()+10,getY()+8,ink,false);
+            d.drawText(r,fit(r,detail,width-20),getX()+10,getY()+25,MUTED,false);
         }
     }
 }

@@ -18,7 +18,7 @@ final class StudioUiSelfTest {
     private static JsonObject current;
     private static Asset beforeDiagnostic;
     static void tick(MinecraftClient c){
-        if(!FabricLoader.getInstance().isDevelopmentEnvironment()||!Boolean.getBoolean("voxelstudio.uitest")||stage==99)return;
+        if(!FabricLoader.getInstance().isDevelopmentEnvironment()||!Boolean.getBoolean("voxelstudio.uitest")||Boolean.getBoolean("voxelstudio.uiworkflowtest")||stage==99)return;
         try{
             Path game=FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize();
             if(!game.toString().replace('\\','/').endsWith("/voxel/mod/run"))throw new IllegalStateException("Not the isolated UI fixture directory");

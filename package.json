@@ -1,6 +1,6 @@
 {
   "name": "ultraagentbuilder",
-  "version": "0.4.10-alpha",
+  "version": "0.4.11-alpha",
   "private": true,
   "type": "module",
   "description": "Minecraft Fabric mod for local-agent building generation, world projection and bounded environment-aware editing.",
